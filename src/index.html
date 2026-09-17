@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cutting Order &amp; Tracklist Generator</title>
+<!--
+  vinyl-toolkit — Tracklist / Cutting Order module (source, not the
+  distributable file). This loads app.js as ES modules for development;
+  `node build/build.js` inlines everything into a single self-contained
+  dist/index.html with no external requests, for actual use in the field.
+  Studio-specific settings (playing-time recommendations, default RPM,
+  studio email) live in src/config.js — edit values there.
+-->
+<style>
+  :root{
+    --paper:   #eeece3;
+    --paper-2: #e4e1d5;
+    --ink:     #1c1b18;
+    --ink-dim: #5c584e;
+    --line:    #bdb7a4;
+    --line-lo: #d3cebd;
+    --accent:  #d1470f;
+    --accent-2:#8a3308;
+    --ok:      #2f6844;
+    --warn:    #93650b;
+    --danger:  #b3261e;
+    --mono: ui-monospace, "JetBrains Mono", "IBM Plex Mono", "Cascadia Code",
+            "Fira Code", "SF Mono", Consolas, "Roboto Mono", monospace;
+    --mono-head: "Space Mono", ui-monospace, "JetBrains Mono", Consolas, monospace;
+  }
+
+  *{ box-sizing:border-box; }
+  html{ background:var(--paper-2); }
+  body{
+    margin:0; padding:32px 20px 80px;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:13px;
+    line-height:1.5;
+  }
+  .sheet{ max-width:1040px; margin:0 auto; }
+
+  a{ color:var(--accent-2); }
+
+  /* ---------- groove rule — the one signature flourish ---------- */
+  .groove{
+    height:14px; margin:22px 0;
+    background-image: repeating-linear-gradient(
+      to right, var(--line) 0 1px, transparent 1px 7px);
+    background-position:center;
+    background-size:100% 2px;
+    background-repeat:no-repeat;
+    opacity:.8;
+  }
+  .groove.tight{ background-size:100% 1px; height:8px; margin:14px 0; }
+
+  h1,h2,h3{ font-family:var(--mono-head); font-weight:700; margin:0; }
+  h1{ font-size:19px; letter-spacing:.02em; }
+  h2{ font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); }
+  .eyebrow{
+    font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent-2); font-weight:700; margin-bottom:4px;
+  }
+
+  header.top{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+  header.top .idline{ font-size:11px; color:var(--ink-dim); text-align:right; }
+
+  fieldset{ border:1px solid var(--line); border-radius:2px; padding:14px 16px 16px; margin:0; }
+  legend{ padding:0 6px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); }
+
+  label{ display:block; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:3px; }
+  label .req{ color:var(--accent); }
+
+  input[type=text], input[type=number], textarea, select{
+    width:100%; font-family:var(--mono); font-size:13px; color:var(--ink);
+    background:#fff; border:1px solid var(--line); border-radius:2px;
+    padding:6px 7px; outline:none;
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible{
+    outline:2px solid var(--accent); outline-offset:1px;
+  }
+  input[type=text]::placeholder, input[type=number]::placeholder{ color:#a8a291; }
+  textarea{ resize:vertical; min-height:64px; }
+  .field{ margin-bottom:10px; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; }
+  .row > .field{ flex:1; min-width:120px; }
+
+  .grid-head{
+    display:grid;
+    grid-template-columns: 42px 26px 1fr 1fr 84px 150px 24px;
+    gap:6px; align-items:end;
+    font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-dim);
+    padding:0 4px 4px; border-bottom:1px solid var(--line);
+  }
+  .track-row{
+    display:grid;
+    grid-template-columns: 42px 26px 1fr 1fr 84px 150px 24px;
+    gap:6px; align-items:center;
+    padding:6px 4px; border-bottom:1px solid var(--line-lo);
+  }
+  .track-row:last-child{ border-bottom:none; }
+  .pos{ font-family:var(--mono-head); font-weight:700; font-size:13px; }
+  .pickbtn{
+    width:26px; height:26px; border:1px solid var(--line); background:#fff;
+    border-radius:2px; cursor:pointer; font-size:13px; color:var(--ink-dim);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .pickbtn:hover{ border-color:var(--accent); color:var(--accent); }
+  .pickbtn.has-file{ border-color:var(--ok); color:var(--ok); }
+  .filemeta{ grid-column:1 / -1; font-size:10px; color:var(--ink-dim); margin:-3px 0 2px 32px; }
+  .filemeta.empty{ display:none; }
+  .filemeta.warn{ color:var(--danger); font-weight:700; }
+  .len-wrap{ display:flex; align-items:center; gap:4px; }
+  .len-wrap input{ text-align:center; }
+  .autoflag{ font-size:9px; color:var(--ok); white-space:nowrap; }
+  .gap-wrap{ display:flex; gap:4px; align-items:center; }
+  .gap-wrap select{ flex:1; }
+  .gap-wrap input{ width:44px; display:none; text-align:center; }
+  .gap-wrap.custom input{ display:block; }
+  .rmbtn{
+    width:22px; height:22px; border:1px solid var(--line-lo); background:transparent;
+    color:var(--ink-dim); border-radius:2px; cursor:pointer; font-size:13px; line-height:1;
+  }
+  .rmbtn:hover{ border-color:var(--danger); color:var(--danger); }
+
+  .side-box{ border:1px solid var(--line); border-radius:2px; padding:16px; }
+  .side-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .side-head h2{ margin:0; }
+  .side-opts{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11px; }
+  .chk{ display:flex; align-items:center; gap:5px; cursor:pointer; color:var(--ink-dim); text-transform:none; letter-spacing:0; }
+  .chk input{ width:auto; }
+  select#{ width:auto; }
+  .rpm-select{ width:auto; }
+
+  .addbtn{
+    margin-top:8px; font-family:var(--mono); font-size:11px; letter-spacing:.04em;
+    background:transparent; border:1px dashed var(--line); color:var(--ink-dim);
+    padding:6px 10px; border-radius:2px; cursor:pointer;
+  }
+  .addbtn:hover{ border-color:var(--accent); color:var(--accent); }
+
+  .side-total{
+    margin-top:12px; padding-top:10px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
+  }
+  .total-fig{ font-family:var(--mono-head); font-size:18px; }
+  .badge{
+    font-size:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:700;
+    padding:3px 8px; border-radius:2px; border:1px solid currentColor;
+  }
+  .badge.ok{ color:var(--ok); }
+  .badge.warn{ color:var(--warn); }
+  .badge.danger{ color:var(--danger); }
+  .meter{ height:6px; background:var(--line-lo); border-radius:3px; overflow:hidden; margin-top:6px; }
+  .meter > span{ display:block; height:100%; background:var(--ok); }
+  .meter.warn > span{ background:var(--warn); }
+  .meter.danger > span{ background:var(--danger); }
+  .limits-note{ font-size:10px; color:var(--ink-dim); margin-top:4px; }
+
+  .blank-note{ color:var(--ink-dim); font-style:italic; font-size:12px; }
+
+  .cols2{ display:grid; grid-template-columns:1fr; gap:18px; }
+
+  .summary{ display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
+  .summary .big{ font-family:var(--mono-head); font-size:26px; }
+  .checklist{ list-style:none; margin:0; padding:0; font-size:11.5px; }
+  .checklist li{ display:flex; gap:6px; align-items:baseline; padding:2px 0; }
+  .checklist .mark{ width:12px; text-align:center; font-weight:700; }
+  .checklist .ok .mark{ color:var(--ok); }
+  .checklist .bad .mark{ color:var(--danger); }
+
+  .actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  button.btn{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.03em;
+    background:var(--ink); color:var(--paper); border:1px solid var(--ink);
+    padding:9px 14px; border-radius:2px; cursor:pointer;
+  }
+  button.btn:hover{ background:var(--accent); border-color:var(--accent); }
+  button.btn.ghost{ background:transparent; color:var(--ink); }
+  button.btn.ghost:hover{ background:transparent; color:var(--accent); border-color:var(--accent); }
+  button.btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+  details.panel{ border:1px solid var(--line); border-radius:2px; }
+  details.panel > summary{
+    cursor:pointer; padding:10px 14px; font-size:12px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--ink-dim); list-style:none;
+  }
+  details.panel > summary::-webkit-details-marker{ display:none; }
+  details.panel > summary::before{ content:"▸ "; color:var(--accent); }
+  details.panel[open] > summary::before{ content:"▾ "; }
+  .panel-body{ padding:0 16px 16px; font-size:12px; }
+  .panel-body p{ color:var(--ink-dim); margin:6px 0 12px; }
+  .log{
+    background:#fff; border:1px solid var(--line); border-radius:2px; padding:8px;
+    font-size:11px; max-height:140px; overflow:auto; white-space:pre-wrap; margin-top:8px;
+  }
+
+  .hidden{ display:none !important; }
+
+  .foot{
+    margin-top:24px; padding-top:12px; border-top:1px solid var(--line-lo);
+    font-size:10px; color:var(--ink-dim); letter-spacing:.03em;
+  }
+
+  /* ---------------- print ---------------- */
+  @media print{
+    body{ background:#fff; padding:0; font-size:11px; }
+    .no-print{ display:none !important; }
+    .sheet{ max-width:none; }
+    .groove{ opacity:.5; }
+    fieldset, .side-box, details.panel{ border-color:#999; break-inside:avoid; }
+    input[type=text], input[type=number], select, textarea{
+      background:transparent; border:none; border-bottom:1px solid #999; border-radius:0;
+      padding:2px 1px; color:#000;
+      -webkit-appearance:none; appearance:none; box-shadow:none; outline:none;
+    }
+    .pickbtn, .rmbtn, .addbtn{ display:none !important; }
+    .filemeta{ margin-left:4px; }
+    a{ color:#000; text-decoration:none; }
+    details.panel{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="top">
+    <div>
+      <h1>Tracklist / Cutting Order <span class="no-print">Generator</span></h1>
+    </div>
+    <div class="idline" id="stamp">— unsaved —</div>
+  </header>
+
+  <div class="groove"></div>
+
+  <!-- ============ RELEASE INFO ============ -->
+  <fieldset>
+    <legend>Release</legend>
+    <div class="row">
+      <div class="field">
+        <label>Catalogue Number <span class="req">*</span></label>
+        <input type="text" id="catalogue" placeholder="e.g. AV-0142">
+      </div>
+      <div class="field">
+        <label>Format</label>
+        <select id="format">
+          <option value="12">12" LP</option>
+          <option value="10">10" EP</option>
+          <option value="7">7" SP</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="chk" style="margin-top:20px;">
+          <input type="checkbox" id="soundsystem"> Soundsystem cut (shorter recommended times)
+        </label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Album / Release Title</label>
+        <input type="text" id="albumTitle" placeholder="optional">
+      </div>
+      <div class="field">
+        <label>Album Artist</label>
+        <input type="text" id="albumArtist" placeholder="optional">
+      </div>
+    </div>
+  </fieldset>
+
+  <div class="groove tight"></div>
+
+  <!-- ============ SIDES ============ -->
+  <div class="cols2" id="sides"></div>
+
+  <div class="groove tight"></div>
+
+  <!-- ============ RECORD SUMMARY ============ -->
+  <fieldset>
+    <legend>Record Summary</legend>
+    <div class="summary">
+      <div>
+        <div class="eyebrow">Total playing time</div>
+        <div class="big" id="recordTotal">0:00</div>
+      </div>
+      <ul class="checklist" id="checklist"></ul>
+    </div>
+  </fieldset>
+
+  <!-- ============ NOTES ============ -->
+  <fieldset>
+    <legend>Notes to the Cutting Engineer</legend>
+    <textarea id="notes"></textarea>
+  </fieldset>
+
+  <div class="groove tight"></div>
+
+  <!-- ============ ACTIONS ============ -->
+  <div class="actions no-print">
+    <button class="btn" id="btnPrint">Print / Save as PDF</button>
+    <button class="btn ghost" id="btnSaveJson">Save Order (.json)</button>
+    <button class="btn ghost" id="btnLoadJson">Load Order (.json)</button>
+    <input type="file" id="loadJsonInput" accept="application/json" class="hidden">
+    <button class="btn ghost" id="btnZip">Download Audio Package (.zip)</button>
+    <button class="btn ghost" id="btnSwissTransfer">Send Files via SwissTransfer</button>
+  </div>
+
+  <footer class="foot">© <span id="copyYear"></span> amei.se</footer>
+
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
