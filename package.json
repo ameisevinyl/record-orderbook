@@ -1,5 +1,5 @@
 {
-  "name": "vinyl-toolkit",
+  "name": "record-orderbook",
   "version": "0.1.0",
   "description": "Self-contained browser tools for vinyl record production (cutting orders, labels, covers, shipping).",
   "type": "module",

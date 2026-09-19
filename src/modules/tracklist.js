@@ -11,6 +11,10 @@ import { formatTime, parseTime } from "../lib/time.js";
 import { readAudioDuration, compressionWarning } from "../lib/audio-duration.js";
 import { buildZip } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
+import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
+import { collectCoverSleeveFiles, collectCoverSleeve, applyCoverSleeve } from "./cover-sleeve.js";
+import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
+import { collectShippingBilling, applyShippingBilling, buildShippingBillingSummary } from "./shipping-billing.js";
 
 function createTrackRow(side){
   const row = document.createElement("div");
@@ -328,6 +332,26 @@ function sideTemplate(side){
    Init
    ============================================================ */
 
+// The dropdown's option list is driven by CONFIG.formatCatalogue rather
+// than hardcoded in index.html, so disabling a format is a one-line
+// config change that takes effect on the next build.
+function firstEnabledFormat(){
+  const { order, enabled } = CONFIG.formatCatalogue;
+  const first = order.find(f => enabled[f]);
+  if(first === undefined) throw new Error("CONFIG.formatCatalogue: at least one format must be enabled");
+  return first;
+}
+
+function populateFormatOptions(){
+  firstEnabledFormat(); // throws early if the config disabled every format
+  const { order, labels, enabled } = CONFIG.formatCatalogue;
+  const select = document.getElementById("format");
+  select.innerHTML = order
+    .filter(f => enabled[f])
+    .map(f => `<option value="${f}">${labels[f]}</option>`)
+    .join("");
+}
+
 function applyDefaultRpm(){
   const format = parseInt(document.getElementById("format").value, 10);
   const def = CONFIG.defaultRpm[format];
@@ -336,8 +360,24 @@ function applyDefaultRpm(){
   recompute();
 }
 
+// Every module renders its own checklist the same way (<ul class="checklist">
+// with <li class="ok"|"bad">) — tracklist.js, as the page's thin router,
+// checks all of them at once rather than importing each module's own
+// completeness check. Refuses to print while anything is flagged, so a
+// half-filled order can't go out as a finished-looking PDF.
+function printOrder(){
+  const missing = document.querySelectorAll(".checklist li.bad");
+  if(missing.length > 0){
+    missing[0].scrollIntoView({behavior:"smooth", block:"center"});
+    alert(`Can't print yet — ${missing.length} item${missing.length===1?"":"s"} still need attention (marked "!"), starting with:\n\n${missing[0].textContent.trim()}`);
+    return;
+  }
+  window.print();
+}
+
 export function initTracklist(){
   document.getElementById("copyYear").textContent = new Date().getFullYear();
+  populateFormatOptions();
   document.getElementById("sides").innerHTML = sideTemplate("A") + sideTemplate("B");
   ["A","B"].forEach(side=>{
     addTrack(side);
@@ -357,11 +397,11 @@ export function initTracklist(){
   applyDefaultRpm();
   recompute();
 
-  document.getElementById("btnPrint").addEventListener("click", ()=> window.print());
+  document.getElementById("btnPrint").addEventListener("click", printOrder);
   document.getElementById("btnSaveJson").addEventListener("click", saveJson);
   document.getElementById("btnLoadJson").addEventListener("click", ()=> document.getElementById("loadJsonInput").click());
   document.getElementById("loadJsonInput").addEventListener("change", loadJson);
-  document.getElementById("btnZip").addEventListener("click", downloadZip);
+  document.getElementById("btnZip").addEventListener("click", saveProjectPackage);
   document.getElementById("btnSwissTransfer").addEventListener("click", sendViaSwissTransfer);
 }
 
@@ -397,7 +437,11 @@ function buildProjectObject(){
     albumTitle: document.getElementById("albumTitle").value,
     albumArtist: document.getElementById("albumArtist").value,
     notes: document.getElementById("notes").value,
-    sides: { A: serializeSide("A"), B: serializeSide("B") }
+    sides: { A: serializeSide("A"), B: serializeSide("B") },
+    vinylColor: collectVinylColor(),
+    shippingBilling: collectShippingBilling(),
+    labels: collectLabels(),
+    coverSleeve: collectCoverSleeve()
   };
 }
 
@@ -419,11 +463,19 @@ function loadJson(e){
     let p;
     try{ p = JSON.parse(reader.result); } catch(err){ alert("Not a valid order file."); return; }
     document.getElementById("catalogue").value = p.catalogue || "";
-    document.getElementById("format").value = p.format || "12";
+    document.getElementById("format").value = p.format || String(firstEnabledFormat());
+    // Formats drive label/cover-sleeve sizing and visibility (big center
+    // hole options, preview dimensions) — dispatch so those modules'
+    // format-change handlers run before we apply their saved state below.
+    document.getElementById("format").dispatchEvent(new Event("change"));
     document.getElementById("soundsystem").checked = !!p.soundsystem;
     document.getElementById("albumTitle").value = p.albumTitle || "";
     document.getElementById("albumArtist").value = p.albumArtist || "";
     document.getElementById("notes").value = p.notes || "";
+    applyVinylColor(p.vinylColor);
+    applyShippingBilling(p.shippingBilling);
+    applyLabels(p.labels);
+    applyCoverSleeve(p.coverSleeve);
 
     ["A","B"].forEach(side=>{
       const s = (p.sides && p.sides[side]) || {tracks:[]};
@@ -480,13 +532,14 @@ async function collectPackageFiles(){
       let i=1;
       for(const row of rows){
         if(row._file){
-          const ext = row._file.name.includes(".") ? row._file.name.slice(row._file.name.lastIndexOf(".")) : "";
           files.push({name: `${side}${i}_${row._file.name}`, data: await row._file.arrayBuffer()});
         }
         i++;
       }
     }
   }
+  files.push(...await collectLabelFiles());
+  files.push(...await collectCoverSleeveFiles());
   return files;
 }
 
@@ -521,13 +574,21 @@ function buildSummaryText(){
   });
   const notes = document.getElementById("notes").value.trim();
   if(notes) out += `NOTES TO CUTTING ENGINEER:\n${notes}\n`;
+  out += "\n" + buildShippingBillingSummary();
   return out;
 }
 
-let zipDownloaded = false;
+// Filesystem-safe folder/zip name — the catalogue number with any path
+// separators or reserved Windows/macOS filename characters stripped, so
+// it works as both the zip's own filename and the folder name inside it.
+function sanitizeFileName(name){
+  return name.trim().replace(/[\\/:*?"<>|]+/g, "-") || "untitled-release";
+}
+
+let projectSaved = false;
 let zipFileName = null;
 
-async function downloadZip(){
+async function saveProjectPackage(){
   const files = await collectPackageFiles();
   if(files.length === 0){
     alert("No audio files attached yet — only the order summary and JSON will be packaged.");
@@ -536,14 +597,21 @@ async function downloadZip(){
   files.push({name:"order-summary.txt", data: new TextEncoder().encode(summary).buffer});
   const project = buildProjectObject();
   files.push({name:"cutting-order.json", data: new TextEncoder().encode(JSON.stringify(project, null, 2)).buffer});
-  const blob = await buildZip(files);
-  zipFileName = (document.getElementById("catalogue").value || "cutting-order") + ".zip";
+
+  // Nest everything under one folder inside the zip, named after the
+  // catalogue number, so unzipping drops a single tidy folder rather
+  // than scattering files loose wherever it's extracted.
+  const folderName = sanitizeFileName(document.getElementById("catalogue").value || "cutting-order");
+  const foldered = files.map(f => ({name: folderName + "/" + f.name, data: f.data}));
+
+  const blob = await buildZip(foldered);
+  zipFileName = folderName + ".zip";
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = zipFileName;
   a.click();
   URL.revokeObjectURL(a.href);
-  zipDownloaded = true;
+  projectSaved = true;
 }
 
 /* ============================================================
@@ -553,8 +621,8 @@ async function downloadZip(){
    the person which file to upload and where to send it.
    ============================================================ */
 function sendViaSwissTransfer(){
-  if(!zipDownloaded){
-    alert("Download the audio package (.zip) first, then click \u201cSend Files via SwissTransfer\u201d again.");
+  if(!projectSaved){
+    alert("Save the project (.zip) first, then click \u201cSend Files via SwissTransfer\u201d again.");
     return;
   }
   const cat = document.getElementById("catalogue").value.trim() || "(no catalogue number)";

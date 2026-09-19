@@ -1,4 +1,4 @@
-# vinyl-toolkit
+# record-orderbook
 
 Self-contained, offline-capable order/production tools for vinyl record
 manufacturing. Runs entirely in the browser — no server, no build step

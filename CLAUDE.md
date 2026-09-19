@@ -4,22 +4,22 @@ Project brief for Claude Code. Read this before making changes.
 
 ## What this is
 
-Browser-based, self-contained production tooling for a vinyl record
-pressing plant (mastering → electroforming → pressing). Each tool covers
-one artifact of a release: right now, the cutting/tracklist order. Labels,
-covers/sleeves, and shipping/billing are planned as further modules
-sharing the same release record (catalogue number, format, title, artist).
+Browser-based, self-contained production tooling for a music record
+pressing plant (mastering → electroforming → pressing). So called vinyl pressing plant. Each tool covers one artifact of a release: the tracklist and playing time for each side, choosing tracks and assembling each side for the mastering studio. printed parts of the production: Labels, innersleeves (printed or plain), covers (usually printed), billing address and shipping address (can be multiple destinations), vinyl colours (default: black).
+All sharing the same release record (catalogue number, format, title, artist).
 
 The end users are non-developers: customer service staff taking phone/email
 orders, and a cutting/mastering engineer reading a printed or PDF order
 sheet at a lathe. The tool must stay usable with zero setup — open the
 HTML file, it works.
 
+The maintainer is a programmer, preferring minimalistic, simple, low-level style. Use modern solution when these are simple and widely accepted. Comments are short and assume everybody can read the code.
+
 ## Hard constraints — do not relax these without asking
 
 - **No runtime dependencies.** No CDN scripts, no npm packages shipped to
   the browser. If something needs a capability (ZIP writing, WAV/AIFF
-  header parsing, etc.), implement it directly — see `src/lib/zip.js` and
+  header parsing, graphic file format checks (PDF or TIFF) etc.), implement it directly — see `src/lib/zip.js` and
   `src/lib/audio-duration.js` for the existing style.
 - **`dist/index.html` must remain a single, self-contained file.** No
   external requests at runtime (fonts, scripts, images). It has to work
@@ -60,12 +60,12 @@ configured on purpose — keep it that way unless asked.
 ## Domain glossary (so you don't have to ask)
 
 - **Catalogue number** — the release's unique order ID; required on every
-  artifact type.
+  artifact type. Example: PNKRCK007
 - **Side A / Side B** — vinyl has two playable sides; B may be blank.
-  Tracks are numbered A1, A2… / B1, B2… in play order.
+  Tracks are numbered A1, A2… / B1, B2… in play order. 
 - **RPM** — 33⅓ or 45. Default by format: 7"→45, 10"→33, 12"→33.
 - **Format** — 7" single, 10" EP, 12" LP — physical disc diameter.
-- **Soundsystem cut** — a hotter, shorter cutting style (club/soundsystem
+- **Soundsystem cut** — a hotter, louder cutting style (club/soundsystem
   pressings); shortens the recommended max playing time per side.
 - **Lacquer / cutting** — the mastering engineer cuts a lacquer disc from
   the audio; playing time and groove pitch trade off against each other,

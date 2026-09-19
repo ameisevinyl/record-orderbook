@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cutting Order &amp; Tracklist Generator</title>
+<title>Record Orderbook</title>
 <!--
-  vinyl-toolkit — Tracklist / Cutting Order module (source, not the
+  record-orderbook — Tracklist / Cutting Order module (source, not the
   distributable file). This loads app.js as ES modules for development;
   `node build/build.js` inlines everything into a single self-contained
   dist/index.html with no external requests, for actual use in the field.
@@ -126,6 +126,8 @@
   .rmbtn:hover{ border-color:var(--danger); color:var(--danger); }
 
   .side-box{ border:1px solid var(--line); border-radius:2px; padding:16px; }
+  #shipAddrs .ship-addr + .ship-addr{ margin-top:14px; }
+  .colourQtyShip.warn-qty{ border-color:var(--danger); color:var(--danger); }
   .side-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
   .side-head h2{ margin:0; }
   .side-opts{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11px; }
@@ -161,7 +163,52 @@
 
   .blank-note{ color:var(--ink-dim); font-style:italic; font-size:12px; }
 
+  /* ---------------- labels ---------------- */
+  /* preview/canvas sizing is set inline by labels.js, in mm, at the
+     format's actual data size — an approximation of true print size
+     (accurate to how the browser maps CSS absolute units to the
+     display, which varies a little by device). */
+  .label-preview-wrap{ position:relative; margin:10px 0; }
+  .label-preview{ overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  .label-preview iframe, .label-preview img{ width:100%; height:100%; border:0; object-fit:contain; display:block; }
+  .label-placeholder{ color:var(--ink-dim); font-size:10.5px; text-align:center; padding:10px; line-height:1.5; }
+  .label-simcanvas{ position:absolute; top:0; left:0; pointer-events:none; }
+  .labelwarnings{ list-style:none; margin:8px 0 0; padding:0; font-size:11px; }
+  .labelwarnings li{ padding:2px 0; color:var(--warn); }
+  .labelwarnings li.err{ color:var(--danger); font-weight:700; }
+
+  /* ---------------- expert info toggles ---------------- */
+  /* A native <details> — collapsed by default, no JS needed to open
+     it. Used to tuck technical/reference detail behind an "i" icon so
+     the everyday UI (customer service, cutting engineer) stays terse;
+     see src/lib/info-text.js and CONFIG.infoText. */
+  details.info{ display:inline-block; vertical-align:middle; }
+  details.info > summary{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:15px; height:15px; border:1px solid var(--line); border-radius:50%;
+    cursor:pointer; list-style:none; font-size:10px; font-weight:700; font-style:italic;
+    color:var(--ink-dim); user-select:none;
+  }
+  details.info > summary::-webkit-details-marker{ display:none; }
+  details.info:hover > summary, details.info[open] > summary{ border-color:var(--accent); color:var(--accent); }
+  details.info .info-body{
+    margin-top:6px; padding:8px 10px; max-width:320px;
+    background:#fff; border:1px solid var(--line); border-radius:2px;
+    font-size:11px; line-height:1.5; color:var(--ink-dim);
+    font-style:normal; text-transform:none; letter-spacing:0;
+  }
+
+  /* cover / inner sleeve flat spreads reuse the .label-preview-wrap /
+     .label-preview / .label-simcanvas / .labelwarnings rules above —
+     only the back/front caption below the spread is new. */
+  .spread-caption{
+    display:flex; justify-content:space-between; max-width:100%;
+    font-size:9.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-dim); margin-top:4px;
+  }
+
   .cols2{ display:grid; grid-template-columns:1fr; gap:18px; }
+  .label-cols2{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
 
   .summary{ display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
   .summary .big{ font-family:var(--mono-head); font-size:26px; }
@@ -205,21 +252,60 @@
   }
 
   /* ---------------- print ---------------- */
+  /* @page (not @media print — it's its own at-rule) pins the printed
+     PDF to ISO A4 with tight margins. Chrome's "Save as PDF" reads
+     this; other browsers that ignore @page size just fall back to
+     whatever paper the print dialog has selected. */
+  @page{
+    size: A4;
+    margin: 10mm;
+  }
   @media print{
-    body{ background:#fff; padding:0; font-size:11px; }
+    body{ background:#fff; padding:0; font-size:10px; line-height:1.35; }
     .no-print{ display:none !important; }
     .sheet{ max-width:none; }
-    .groove{ opacity:.5; }
+
+    /* Tight — every rule below only shrinks spacing that's generous
+       for on-screen editing, so the printed sheet reads as one dense
+       reference document (with artwork previews and billing/shipping
+       info) rather than a stack of loosely-padded panels. */
+    .groove{ margin:6px 0; height:8px; opacity:.5; }
+    .groove.tight{ margin:4px 0; height:5px; }
+    h1{ font-size:15px; }
+    fieldset{ padding:6px 8px 7px; }
+    legend{ font-size:10px; padding:0 4px; }
+    .side-box{ padding:8px 10px; }
+    .side-head{ margin-bottom:5px; }
+    .field{ margin-bottom:4px; }
+    .row{ gap:6px; }
+    label{ font-size:9px; margin-bottom:1px; }
+    .cols2, .label-cols2{ gap:8px; }
     fieldset, .side-box, details.panel{ border-color:#999; break-inside:avoid; }
     input[type=text], input[type=number], select, textarea{
       background:transparent; border:none; border-bottom:1px solid #999; border-radius:0;
-      padding:2px 1px; color:#000;
+      padding:1px; color:#000; font-size:10px;
       -webkit-appearance:none; appearance:none; box-shadow:none; outline:none;
     }
+    textarea{ min-height:30px; }
     .pickbtn, .rmbtn, .addbtn{ display:none !important; }
     .filemeta{ margin-left:4px; }
     a{ color:#000; text-decoration:none; }
     details.panel{ display:none; }
+    .checklist{ font-size:9.5px; }
+    .checklist li{ padding:1px 0; }
+
+    /* Record labels are shown near true print size on screen for
+       proofing (see labels.js) — true size for two side-by-side
+       columns doesn't fit an A4 page (2 × up to 106mm > usable
+       width). Cover/inner-sleeve/inlay previews already scale
+       responsively (percentage width + aspect-ratio, capped at
+       640px/~169mm — see cover-sleeve.js) and fit as-is; only the
+       literal-mm label preview needs a print-specific override. This
+       is a reference sheet, not a calibrated proof, same caveat the
+       on-screen preview already carries. */
+    #labelSides .label-preview-wrap, #labelSides .label-preview, #labelSides .label-simcanvas{
+      width:80mm !important; height:80mm !important; margin:4px 0 !important;
+    }
   }
 </style>
 </head>
@@ -228,7 +314,7 @@
 
   <header class="top">
     <div>
-      <h1>Tracklist / Cutting Order <span class="no-print">Generator</span></h1>
+      <h1>Record Orderbook</h1>
     </div>
     <div class="idline" id="stamp">— unsaved —</div>
   </header>
@@ -245,15 +331,11 @@
       </div>
       <div class="field">
         <label>Format</label>
-        <select id="format">
-          <option value="12">12" LP</option>
-          <option value="10">10" EP</option>
-          <option value="7">7" SP</option>
-        </select>
+        <select id="format"><!-- options populated from CONFIG.formatCatalogue at init --></select>
       </div>
-      <div class="field">
-        <label class="chk" style="margin-top:20px;">
-          <input type="checkbox" id="soundsystem"> Soundsystem cut (shorter recommended times)
+      <div class="field" id="bigCenterWrap" style="flex:0 0 auto;display:flex;align-items:center;gap:6px;margin-top:20px;">
+        <label class="chk">
+          <input type="checkbox" id="bigCenter"> Big center
         </label>
       </div>
     </div>
@@ -276,6 +358,17 @@
 
   <div class="groove tight"></div>
 
+  <!-- ============ NOTES ============ -->
+  <fieldset>
+    <legend>Notes to the Cutting Engineer</legend>
+    <label class="chk">
+      <input type="checkbox" id="soundsystem"> Soundsystem cut (shorter recommended times)
+    </label>
+    <textarea id="notes"></textarea>
+  </fieldset>
+
+  <div class="groove tight"></div>
+
   <!-- ============ RECORD SUMMARY ============ -->
   <fieldset>
     <legend>Record Summary</legend>
@@ -288,10 +381,209 @@
     </div>
   </fieldset>
 
-  <!-- ============ NOTES ============ -->
+  <div class="groove tight"></div>
+
+  <!-- ============ LABELS ============ -->
   <fieldset>
-    <legend>Notes to the Cutting Engineer</legend>
-    <textarea id="notes"></textarea>
+    <legend>Labels</legend>
+    <div class="label-cols2" id="labelSides"></div>
+  </fieldset>
+
+  <div class="groove tight"></div>
+
+  <!-- ============ INNER SLEEVE ============ -->
+  <fieldset>
+    <legend>Inner Sleeve</legend>
+    <div class="row">
+      <div class="field" style="flex:0 0 auto;">
+        <label class="chk" style="margin-top:20px;">
+          <input type="radio" name="innersleevemode" id="innersleeve-printed"> printed
+        </label>
+      </div>
+      <div class="field" style="flex:0 0 auto;">
+        <label class="chk" style="margin-top:20px;">
+          <input type="radio" name="innersleevemode" id="innersleeve-unprinted" checked> unprinted
+        </label>
+      </div>
+      <div class="field" id="innersleeveColorWrap" style="flex:0 0 auto;">
+        <label>Colour</label>
+        <select id="innersleeveColor">
+          <option value="black">black</option>
+          <option value="brown">brown</option>
+          <option value="white" selected>white</option>
+        </select>
+      </div>
+      <div class="field" style="flex:0 0 auto;">
+        <label class="chk" style="margin-top:20px;">
+          <input type="checkbox" id="innersleeveCutout" checked> center cut-out
+        </label>
+      </div>
+    </div>
+
+    <div id="innersleevePrintedBody">
+      <div class="row" style="align-items:end;">
+        <div class="field" style="flex:0 0 auto;">
+          <label>&nbsp;</label>
+          <button type="button" class="pickbtn no-print" id="innersleevepick" title="Choose inner sleeve artwork">⏏</button>
+        </div>
+        <div class="field">
+          <label>Artwork file — flat, opened, front on the right, back on the left (PDF, JPG, or TIFF)</label>
+          <div class="filemeta empty" id="innersleevemeta"></div>
+        </div>
+        <div class="field" style="flex:0 0 auto;">
+          <label class="chk" style="margin-top:20px;"><input type="checkbox" id="innersleevesimprint"> simulate print</label>
+        </div>
+      </div>
+      <input type="file" id="innersleeveinput" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+      <div class="label-preview-wrap" id="innersleevepreviewwrap">
+        <div class="label-preview" id="innersleevepreview"><div class="label-placeholder">no artwork selected</div></div>
+        <canvas class="label-simcanvas" id="innersleevesim"></canvas>
+      </div>
+      <div class="spread-caption" id="innersleevecaption"><span>back</span><span>front</span></div>
+      <ul class="labelwarnings" id="innersleevewarnings"></ul>
+    </div>
+  </fieldset>
+
+  <div class="groove tight"></div>
+
+  <!-- ============ OUTER COVER ============ -->
+  <fieldset>
+    <legend>Outer Cover</legend>
+    <div class="row">
+      <div class="field" style="flex:0 0 auto;">
+        <label class="chk" style="margin-top:20px;">
+          <input type="radio" name="covermode" id="cover-printed"> printed
+        </label>
+      </div>
+      <div class="field" style="flex:0 0 auto;">
+        <label class="chk" style="margin-top:20px;">
+          <input type="radio" name="covermode" id="cover-unprinted"> unprinted
+        </label>
+      </div>
+      <div class="field" style="flex:0 0 auto;">
+        <label class="chk" style="margin-top:20px;">
+          <input type="radio" name="covermode" id="cover-none" checked> none
+        </label>
+      </div>
+      <div class="field" id="coverColorWrap" style="flex:0 0 auto;">
+        <label>Colour</label>
+        <select id="coverColor">
+          <option value="black">black</option>
+          <option value="brown">brown</option>
+          <option value="white" selected>white</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="coverPrintedBody">
+      <div class="row" style="align-items:end;">
+        <div class="field" style="flex:0 0 auto;">
+          <label>&nbsp;</label>
+          <button type="button" class="pickbtn no-print" id="coverpick" title="Choose cover artwork">⏏</button>
+        </div>
+        <div class="field">
+          <label>Artwork file — flat, opened, front on the right, back on the left (PDF, JPG, or TIFF)</label>
+          <div class="filemeta empty" id="covermeta"></div>
+        </div>
+        <div class="field" style="flex:0 0 auto;">
+          <label class="chk" style="margin-top:20px;"><input type="checkbox" id="coversimprint"> simulate print</label>
+        </div>
+      </div>
+      <input type="file" id="coverinput" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+      <div class="label-preview-wrap" id="coverpreviewwrap">
+        <div class="label-preview" id="coverpreview"><div class="label-placeholder">no artwork selected</div></div>
+        <canvas class="label-simcanvas" id="coversim"></canvas>
+      </div>
+      <div class="spread-caption" id="covercaption"><span>back</span><span>front</span></div>
+      <ul class="labelwarnings" id="coverwarnings"></ul>
+    </div>
+  </fieldset>
+
+  <div class="groove tight"></div>
+
+  <!-- ============ INLAY ============ -->
+  <fieldset>
+    <legend>Inlay <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional, printed both sides, 170gsm)</span></legend>
+    <div class="row">
+      <div class="field" style="flex:0 0 auto;">
+        <label class="chk" style="margin-top:20px;"><input type="checkbox" id="inlayInclude"> include inlay</label>
+      </div>
+    </div>
+    <div id="inlayBody" class="hidden">
+      <div class="label-cols2">
+        <div class="side-box">
+          <div class="side-head">
+            <h2>Inlay Front</h2>
+            <div class="side-opts"><label class="chk"><input type="checkbox" id="inlayfrontsimprint"> simulate print</label></div>
+          </div>
+          <div class="row" style="align-items:end;">
+            <div class="field" style="flex:0 0 auto;">
+              <label>&nbsp;</label>
+              <button type="button" class="pickbtn no-print" id="inlayfrontpick" title="Choose inlay front artwork">⏏</button>
+            </div>
+            <div class="field">
+              <label>Artwork file (PDF, JPG, or TIFF)</label>
+              <div class="filemeta empty" id="inlayfrontmeta"></div>
+            </div>
+          </div>
+          <input type="file" id="inlayfrontinput" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+          <div class="label-preview-wrap" id="inlayfrontpreviewwrap">
+            <div class="label-preview" id="inlayfrontpreview"><div class="label-placeholder">no artwork selected</div></div>
+            <canvas class="label-simcanvas" id="inlayfrontsim"></canvas>
+          </div>
+          <ul class="labelwarnings" id="inlayfrontwarnings"></ul>
+        </div>
+        <div class="side-box">
+          <div class="side-head">
+            <h2>Inlay Back</h2>
+            <div class="side-opts"><label class="chk"><input type="checkbox" id="inlaybacksimprint"> simulate print</label></div>
+          </div>
+          <div class="row" style="align-items:end;">
+            <div class="field" style="flex:0 0 auto;">
+              <label>&nbsp;</label>
+              <button type="button" class="pickbtn no-print" id="inlaybackpick" title="Choose inlay back artwork">⏏</button>
+            </div>
+            <div class="field">
+              <label>Artwork file (PDF, JPG, or TIFF)</label>
+              <div class="filemeta empty" id="inlaybackmeta"></div>
+            </div>
+          </div>
+          <input type="file" id="inlaybackinput" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+          <div class="label-preview-wrap" id="inlaybackpreviewwrap">
+            <div class="label-preview" id="inlaybackpreview"><div class="label-placeholder">no artwork selected</div></div>
+            <canvas class="label-simcanvas" id="inlaybacksim"></canvas>
+          </div>
+          <ul class="labelwarnings" id="inlaybackwarnings"></ul>
+        </div>
+      </div>
+    </div>
+  </fieldset>
+
+  <div class="groove tight"></div>
+
+  <!-- ============ VINYL COLOUR & QUANTITY ============ -->
+  <fieldset>
+    <legend>Vinyl Colour & Quantity</legend>
+    <div id="colourRows"></div>
+    <button type="button" class="addbtn no-print" id="addColourBtn">+ add colour</button>
+    <ul class="checklist" id="colourChecklist"></ul>
+  </fieldset>
+
+  <div class="groove tight"></div>
+
+  <!-- ============ BILLING ADDRESS ============ -->
+  <fieldset>
+    <legend>Billing Address</legend>
+    <div id="billingAddress"></div>
+  </fieldset>
+
+  <div class="groove tight"></div>
+
+  <!-- ============ SHIPPING ADDRESS(ES) ============ -->
+  <fieldset>
+    <legend>Shipping Address(es)</legend>
+    <div id="shipAddrs"></div>
+    <button type="button" class="addbtn no-print" id="addShipAddrBtn">+ add shipping address</button>
   </fieldset>
 
   <div class="groove tight"></div>
@@ -302,7 +594,7 @@
     <button class="btn ghost" id="btnSaveJson">Save Order (.json)</button>
     <button class="btn ghost" id="btnLoadJson">Load Order (.json)</button>
     <input type="file" id="loadJsonInput" accept="application/json" class="hidden">
-    <button class="btn ghost" id="btnZip">Download Audio Package (.zip)</button>
+    <button class="btn ghost" id="btnZip">Save Project to Disc (.zip)</button>
     <button class="btn ghost" id="btnSwissTransfer">Send Files via SwissTransfer</button>
   </div>
 
