@@ -315,7 +315,7 @@ export function initShippingBilling(){
 /* ============================================================
    Cross-module interface — same pattern as labels.js /
    cover-sleeve.js's collect*Files(), consumed by tracklist.js for
-   JSON save/load and the printable order summary. Neither module
+   project save/load and the printable order summary. Neither module
    reaches into the other's DOM directly.
    ============================================================ */
 export function collectShippingBilling(){

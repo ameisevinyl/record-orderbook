@@ -11,6 +11,7 @@
 
 import { CONFIG } from "../config.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, computeSpreadInsetPx } from "../lib/print-artwork.js";
+import { printedPartFileName, fileExt } from "../lib/package-naming.js";
 
 // Canvas render resolution in pixels-per-mm (see labels.js for the same
 // idea) — named distinctly to avoid colliding with labels.js's own
@@ -118,15 +119,19 @@ function createArtworkSlot(prefix, getSpec){
 
   return {
     updateSizing, draw,
-    getFile: ()=> file
+    getFile: ()=> file,
+    setFile: handleFile
   };
 }
 
-async function collectSlotFile(slot, zipSuffix){
+function slotFileName(part, variant, file){
+  return printedPartFileName({catalogue: document.getElementById("catalogue").value, part, variant, ext: fileExt(file.name)});
+}
+
+async function collectSlotFile(slot, part, variant){
   const file = slot.getFile();
   if(!file) return null;
-  const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : "";
-  return { name: `${zipSuffix}${ext}`, data: await file.arrayBuffer() };
+  return { name: slotFileName(part, variant, file), data: await file.arrayBuffer() };
 }
 
 let coverSlot, innerSleeveSlot, inlayFrontSlot, inlayBackSlot;
@@ -185,40 +190,56 @@ function setFileNamePlaceholder(prefix, name){
   }
 }
 
-// Exported for the tracklist module's JSON save/load, same collect/apply
-// pattern as vinyl-color.js and shipping-billing.js. File contents aren't
-// stored in the JSON, only the name (for the "please re-select" hint).
+// fileMap: canonical package name -> File, from a reopened project zip
+// (see tracklist.js's loadProject). If the slot's stored name is in the
+// map, the file gets re-attached directly; otherwise it falls back to
+// the "please re-select" placeholder.
+function applySlotFile(slot, prefix, fileName, fileMap){
+  const file = fileMap && fileName && fileMap.get(fileName);
+  if(file) slot.setFile(file);
+  else setFileNamePlaceholder(prefix, fileName);
+}
+
+// Exported for the tracklist module's project save/load, same
+// collect/apply pattern as vinyl-color.js and shipping-billing.js. File
+// contents aren't stored in the JSON, only the canonical package name —
+// collectCoverSleeveFiles below builds the exact same name for the
+// actual file.
 export function collectCoverSleeve(){
+  const nameFor = (slot, part, variant) => {
+    const file = slot.getFile();
+    return file ? slotFileName(part, variant, file) : null;
+  };
   return {
     innerSleeve: {
       mode: document.getElementById("innersleeve-printed").checked ? "printed" : "unprinted",
       color: document.getElementById("innersleeveColor").value,
       cutout: document.getElementById("innersleeveCutout").checked,
       simprint: document.getElementById("innersleevesimprint").checked,
-      fileName: (innerSleeveSlot.getFile() || {}).name || null
+      fileName: nameFor(innerSleeveSlot, "innersleeve")
     },
     cover: {
       mode: document.getElementById("cover-printed").checked ? "printed"
           : document.getElementById("cover-unprinted").checked ? "unprinted" : "none",
       color: document.getElementById("coverColor").value,
       simprint: document.getElementById("coversimprint").checked,
-      fileName: (coverSlot.getFile() || {}).name || null
+      fileName: nameFor(coverSlot, "cover")
     },
     inlay: {
       include: document.getElementById("inlayInclude").checked,
       front: {
         simprint: document.getElementById("inlayfrontsimprint").checked,
-        fileName: (inlayFrontSlot.getFile() || {}).name || null
+        fileName: nameFor(inlayFrontSlot, "inlay", "front")
       },
       back: {
         simprint: document.getElementById("inlaybacksimprint").checked,
-        fileName: (inlayBackSlot.getFile() || {}).name || null
+        fileName: nameFor(inlayBackSlot, "inlay", "back")
       }
     }
   };
 }
 
-export function applyCoverSleeve(data){
+export function applyCoverSleeve(data, fileMap){
   const d = data || {};
 
   const is = d.innerSleeve || {};
@@ -227,7 +248,7 @@ export function applyCoverSleeve(data){
   document.getElementById("innersleeveColor").value = is.color || "white";
   document.getElementById("innersleeveCutout").checked = is.cutout !== false;
   document.getElementById("innersleevesimprint").checked = !!is.simprint;
-  setFileNamePlaceholder("innersleeve", is.fileName);
+  applySlotFile(innerSleeveSlot, "innersleeve", is.fileName, fileMap);
   updateInnerSleeveMode();
 
   const c = d.cover || {};
@@ -236,15 +257,15 @@ export function applyCoverSleeve(data){
   document.getElementById("cover-none").checked = c.mode !== "printed" && c.mode !== "unprinted";
   document.getElementById("coverColor").value = c.color || "white";
   document.getElementById("coversimprint").checked = !!c.simprint;
-  setFileNamePlaceholder("cover", c.fileName);
+  applySlotFile(coverSlot, "cover", c.fileName, fileMap);
   updateCoverMode();
 
   const inlay = d.inlay || {};
   document.getElementById("inlayInclude").checked = !!inlay.include;
   document.getElementById("inlayfrontsimprint").checked = !!(inlay.front && inlay.front.simprint);
-  setFileNamePlaceholder("inlayfront", inlay.front && inlay.front.fileName);
+  applySlotFile(inlayFrontSlot, "inlayfront", inlay.front && inlay.front.fileName, fileMap);
   document.getElementById("inlaybacksimprint").checked = !!(inlay.back && inlay.back.simprint);
-  setFileNamePlaceholder("inlayback", inlay.back && inlay.back.fileName);
+  applySlotFile(inlayBackSlot, "inlayback", inlay.back && inlay.back.fileName, fileMap);
   updateInlayVisibility();
 
   [coverSlot, innerSleeveSlot, inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.updateSizing(); s.draw(); });
@@ -265,9 +286,9 @@ export async function collectCoverSleeveFiles(){
   }
 
   if(document.getElementById("inlayInclude").checked){
-    const front = await collectSlotFile(inlayFrontSlot, "inlay_front");
+    const front = await collectSlotFile(inlayFrontSlot, "inlay", "front");
     if(front) files.push(front);
-    const back = await collectSlotFile(inlayBackSlot, "inlay_back");
+    const back = await collectSlotFile(inlayBackSlot, "inlay", "back");
     if(back) files.push(back);
   }
 

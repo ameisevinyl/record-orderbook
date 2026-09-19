@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { crc32, buildZipBytes } from "../src/lib/zip.js";
+import { crc32, buildZipBytes, parseZipBytes } from "../src/lib/zip.js";
 
 test("crc32 matches the well-known reference value for 'hello'", () => {
   const bytes = new TextEncoder().encode("hello");
@@ -32,4 +32,23 @@ test("buildZipBytes handles multiple files without overlapping offsets", () => {
   const eocdOffset = zip.length - 22;
   const dv = new DataView(zip.buffer, zip.byteOffset + eocdOffset, 22);
   assert.equal(dv.getUint16(10, true), 2);
+});
+
+test("parseZipBytes round-trips names and contents written by buildZipBytes", () => {
+  const files = [
+    { name: "one.txt", data: new TextEncoder().encode("first file").buffer },
+    { name: "folder/two.bin", data: new Uint8Array([0, 1, 2, 255, 254]).buffer },
+  ];
+  const zip = buildZipBytes(files);
+  const parsed = parseZipBytes(zip);
+
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].name, "one.txt");
+  assert.equal(new TextDecoder().decode(parsed[0].data), "first file");
+  assert.equal(parsed[1].name, "folder/two.bin");
+  assert.deepEqual([...new Uint8Array(parsed[1].data)], [0, 1, 2, 255, 254]);
+});
+
+test("parseZipBytes rejects a non-zip buffer", () => {
+  assert.throws(() => parseZipBytes(new TextEncoder().encode("not a zip")));
 });

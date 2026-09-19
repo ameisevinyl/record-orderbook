@@ -9,12 +9,37 @@
 import { CONFIG } from "../config.js";
 import { formatTime, parseTime } from "../lib/time.js";
 import { readAudioDuration, compressionWarning } from "../lib/audio-duration.js";
-import { buildZip } from "../lib/zip.js";
+import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
+import { trackFileName, continuousSideFileName, projectFileName, fileExt } from "../lib/package-naming.js";
 import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
 import { collectCoverSleeveFiles, collectCoverSleeve, applyCoverSleeve } from "./cover-sleeve.js";
 import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
 import { collectShippingBilling, applyShippingBilling, buildShippingBillingSummary } from "./shipping-billing.js";
+
+// Shared by the manual file-input handler and loadProject's zip
+// re-attach path, so both go through the same duration-reading/warning
+// logic.
+function attachTrackFile(row, f){
+  row._file = f;
+  const pickbtn = row.querySelector(".pickbtn");
+  const meta = row.querySelector(".filemeta");
+  const lengthInput = row.querySelector(".length");
+  pickbtn.classList.add("has-file");
+  meta.textContent = "file: " + f.name + " — reading duration…";
+  meta.classList.remove("empty");
+  meta.classList.remove("warn");
+  const warning = compressionWarning(f);
+  readAudioDuration(f).then(dur=>{
+    const durText = (isFinite(dur) && dur > 0)
+      ? (()=>{ lengthInput.value = formatTime(dur); row._autoLength = true; recompute();
+               return formatTime(dur) + " (auto)"; })()
+      : "could not read duration, enter length manually";
+    meta.textContent = "file: " + f.name + " — " + durText + (warning ? "  " + warning : "");
+    meta.classList.toggle("warn", !!warning);
+    recompute();
+  });
+}
 
 function createTrackRow(side){
   const row = document.createElement("div");
@@ -52,22 +77,7 @@ function createTrackRow(side){
   pickbtn.addEventListener("click", ()=> fileInput.click());
   fileInput.addEventListener("change", ()=>{
     const f = fileInput.files[0];
-    if(!f) return;
-    row._file = f;
-    pickbtn.classList.add("has-file");
-    meta.textContent = "file: " + f.name + " — reading duration…";
-    meta.classList.remove("empty");
-    meta.classList.remove("warn");
-    const warning = compressionWarning(f);
-    readAudioDuration(f).then(dur=>{
-      const durText = (isFinite(dur) && dur > 0)
-        ? (()=>{ lengthInput.value = formatTime(dur); row._autoLength = true; recompute();
-                 return formatTime(dur) + " (auto)"; })()
-        : "could not read duration, enter length manually";
-      meta.textContent = "file: " + f.name + " — " + durText + (warning ? "  " + warning : "");
-      meta.classList.toggle("warn", !!warning);
-      recompute();
-    });
+    if(f) attachTrackFile(row, f);
   });
 
   lengthInput.addEventListener("input", ()=>{ row._autoLength = false; recompute(); });
@@ -110,6 +120,27 @@ function addTrack(side){
 /* ============================================================
    Side-level continuous-file mode
    ============================================================ */
+
+// Shared by the manual file-input handler and loadProject's zip
+// re-attach path — see attachTrackFile above for the per-track version.
+function attachContinuousFile(side, f){
+  const contWrap = document.getElementById("contfile-"+side);
+  const contMeta = document.getElementById("contfilemeta-"+side);
+  const contOverride = document.getElementById("contoverride-"+side);
+  contWrap._file = f;
+  contMeta.textContent = "file: " + f.name + " — reading duration…";
+  contMeta.classList.remove("warn");
+  const warning = compressionWarning(f);
+  readAudioDuration(f).then(dur=>{
+    const durText = (isFinite(dur) && dur > 0)
+      ? (()=>{ contOverride.value = formatTime(dur); return formatTime(dur) + " (auto)"; })()
+      : "could not read duration, enter length manually";
+    contMeta.textContent = "file: " + f.name + " — " + durText + (warning ? "  " + warning : "");
+    contMeta.classList.toggle("warn", !!warning);
+    recompute();
+  });
+}
+
 function wireSideOptions(side){
   const contChk = document.getElementById("cont-"+side);
   const contWrap = document.getElementById("contfile-"+side);
@@ -132,24 +163,11 @@ function wireSideOptions(side){
   });
 
   const contFileInput = document.getElementById("contfileinput-"+side);
-  const contMeta = document.getElementById("contfilemeta-"+side);
   const contOverride = document.getElementById("contoverride-"+side);
   document.getElementById("contpick-"+side).addEventListener("click", ()=> contFileInput.click());
   contFileInput.addEventListener("change", ()=>{
     const f = contFileInput.files[0];
-    if(!f) return;
-    contWrap._file = f;
-    contMeta.textContent = "file: " + f.name + " — reading duration…";
-    contMeta.classList.remove("warn");
-    const warning = compressionWarning(f);
-    readAudioDuration(f).then(dur=>{
-      const durText = (isFinite(dur) && dur > 0)
-        ? (()=>{ contOverride.value = formatTime(dur); return formatTime(dur) + " (auto)"; })()
-        : "could not read duration, enter length manually";
-      contMeta.textContent = "file: " + f.name + " — " + durText + (warning ? "  " + warning : "");
-      contMeta.classList.toggle("warn", !!warning);
-      recompute();
-    });
+    if(f) attachContinuousFile(side, f);
   });
   contOverride.addEventListener("input", recompute);
 
@@ -398,32 +416,38 @@ export function initTracklist(){
   recompute();
 
   document.getElementById("btnPrint").addEventListener("click", printOrder);
-  document.getElementById("btnSaveJson").addEventListener("click", saveJson);
-  document.getElementById("btnLoadJson").addEventListener("click", ()=> document.getElementById("loadJsonInput").click());
-  document.getElementById("loadJsonInput").addEventListener("change", loadJson);
-  document.getElementById("btnZip").addEventListener("click", saveProjectPackage);
-  document.getElementById("btnSwissTransfer").addEventListener("click", sendViaSwissTransfer);
+  document.getElementById("btnSaveProject").addEventListener("click", saveProject);
+  document.getElementById("btnOpenProject").addEventListener("click", ()=> document.getElementById("openProjectInput").click());
+  document.getElementById("openProjectInput").addEventListener("change", (e)=>{
+    const file = e.target.files[0];
+    e.target.value = "";
+    if(file) loadProject(file);
+  });
+  document.getElementById("btnSwissTransfer").addEventListener("click", sendToPlant);
 }
 
 function serializeSide(side){
+  const catalogue = document.getElementById("catalogue").value;
   const blankChk = side==="B" ? document.getElementById("blankB") : null;
   const cont = document.getElementById("cont-"+side).checked;
+  const contFile = document.getElementById("contfile-"+side)._file;
   const data = {
     blank: blankChk ? blankChk.checked : false,
     rpm: document.getElementById("rpm-"+side).value,
     continuous: cont,
     continuousLength: document.getElementById("contoverride-"+side).value,
-    continuousFileName: (document.getElementById("contfile-"+side)._file || {}).name || null,
+    continuousFileName: contFile ? continuousSideFileName({catalogue, side, ext: fileExt(contFile.name)}) : null,
     tracks: []
   };
-  document.querySelectorAll("#tracks-"+side+" .track-row").forEach(row=>{
+  document.querySelectorAll("#tracks-"+side+" .track-row").forEach((row, i)=>{
+    const title = row.querySelector(".title").value;
+    const artist = row.querySelector(".artist").value;
     data.tracks.push({
-      title: row.querySelector(".title").value,
-      artist: row.querySelector(".artist").value,
+      title, artist,
       length: row.querySelector(".length").value,
       gap: row.querySelector(".gap").value,
       gapCustom: row.querySelector(".gapcustom").value,
-      fileName: row._file ? row._file.name : null
+      fileName: row._file ? trackFileName({catalogue, side, index: i+1, title, artist, ext: fileExt(row._file.name)}) : null
     });
   });
   return data;
@@ -445,94 +469,154 @@ function buildProjectObject(){
   };
 }
 
-function saveJson(){
-  const project = buildProjectObject();
-  const blob = new Blob([JSON.stringify(project, null, 2)], {type:"application/json"});
+function downloadBlob(blob, fileName){
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = (project.catalogue || "cutting-order") + ".json";
+  a.download = fileName;
   a.click();
   URL.revokeObjectURL(a.href);
 }
 
-function loadJson(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ()=>{
-    let p;
-    try{ p = JSON.parse(reader.result); } catch(err){ alert("Not a valid order file."); return; }
-    document.getElementById("catalogue").value = p.catalogue || "";
-    document.getElementById("format").value = p.format || String(firstEnabledFormat());
-    // Formats drive label/cover-sleeve sizing and visibility (big center
-    // hole options, preview dimensions) — dispatch so those modules'
-    // format-change handlers run before we apply their saved state below.
-    document.getElementById("format").dispatchEvent(new Event("change"));
-    document.getElementById("soundsystem").checked = !!p.soundsystem;
-    document.getElementById("albumTitle").value = p.albumTitle || "";
-    document.getElementById("albumArtist").value = p.albumArtist || "";
-    document.getElementById("notes").value = p.notes || "";
-    applyVinylColor(p.vinylColor);
-    applyShippingBilling(p.shippingBilling);
-    applyLabels(p.labels);
-    applyCoverSleeve(p.coverSleeve);
+// The project's canonical file name, used both as the zip's own file
+// name and as the single folder nested inside it (unzipping then drops
+// one tidy folder rather than scattering files loose).
+function currentProjectFileName(project){
+  const customerEmail = project.shippingBilling && project.shippingBilling.billing
+    ? project.shippingBilling.billing.email : null;
+  return projectFileName({catalogue: project.catalogue, customerEmail});
+}
 
-    ["A","B"].forEach(side=>{
-      const s = (p.sides && p.sides[side]) || {tracks:[]};
-      document.getElementById("tracks-"+side).innerHTML = "";
-      (s.tracks || []).forEach(t=>{
-        addTrack(side);
-        const row = document.querySelectorAll("#tracks-"+side+" .track-row");
-        const r = row[row.length-1];
-        r.querySelector(".title").value = t.title || "";
-        r.querySelector(".artist").value = t.artist || "";
-        r.querySelector(".length").value = t.length || "";
-        r.querySelector(".gap").value = t.gap || "2";
-        r.querySelector(".gapcustom").value = t.gapCustom || "2";
-        r.querySelector(".gap-wrap").classList.toggle("custom", (t.gap||"2")==="custom");
-        if(t.fileName){
-          const m = r.querySelector(".filemeta");
-          m.classList.remove("empty");
-          m.textContent = "file: " + t.fileName + " — please re-select this file (not stored in the order file)";
-        }
-      });
-      if(!s.tracks || !s.tracks.length) addTrack(side);
-      document.getElementById("rpm-"+side).value = s.rpm || CONFIG.defaultRpm[document.getElementById("format").value];
-      document.getElementById("cont-"+side).checked = !!s.continuous;
-      document.getElementById("cont-"+side).dispatchEvent(new Event("change"));
-      document.getElementById("contoverride-"+side).value = s.continuousLength || "";
-      if(s.continuousFileName){
-        document.getElementById("contfilemeta-"+side).textContent =
-          "file: " + s.continuousFileName + " — please re-select this file (not stored in the order file)";
+// A project is always a .zip — see CLAUDE.md's Workflow. Builds it fresh
+// from the current form state every time, so it's never stale.
+async function buildProjectZip(){
+  const project = buildProjectObject();
+  const files = await collectPackageFiles();
+  files.push({name:"order-summary.txt", data: new TextEncoder().encode(buildSummaryText()).buffer});
+  files.push({name:"project.json", data: new TextEncoder().encode(JSON.stringify(project, null, 2)).buffer});
+
+  const baseName = currentProjectFileName(project);
+  const foldered = files.map(f => ({name: baseName + "/" + f.name, data: f.data}));
+  const blob = await buildZip(foldered);
+  return {blob, fileName: baseName + ".zip"};
+}
+
+async function saveProject(){
+  const {blob, fileName} = await buildProjectZip();
+  downloadBlob(blob, fileName);
+}
+
+// Strips a zip entry's leading folder ("<project>/A1_..._v1.wav" ->
+// "A1_..._v1.wav"), so re-attaching files works whatever the folder was
+// named when the zip was built (older exports, or a renamed download).
+function baseEntryName(name){
+  const i = name.lastIndexOf("/");
+  return i === -1 ? name : name.slice(i+1);
+}
+
+async function loadProject(file){
+  let entries;
+  try{
+    entries = parseZipBytes(new Uint8Array(await file.arrayBuffer()));
+  } catch(err){
+    alert("Not a valid project file (" + err.message + ").");
+    return;
+  }
+  const jsonEntry = entries.find(e => baseEntryName(e.name) === "project.json");
+  if(!jsonEntry){ alert("No project.json found inside this zip."); return; }
+
+  let p;
+  try{ p = JSON.parse(new TextDecoder().decode(jsonEntry.data)); }
+  catch(err){ alert("project.json inside the zip isn't valid JSON."); return; }
+
+  // Canonical package name -> File, for auto re-attaching audio/artwork
+  // that was renamed to our convention when this zip was built — see
+  // trackFileName/printedPartFileName. A project.json loaded stand-alone
+  // (not inside one of our zips) simply won't find any matches here.
+  const fileMap = new Map();
+  entries.forEach(e=>{
+    const name = baseEntryName(e.name);
+    if(name === "project.json" || name === "order-summary.txt") return;
+    fileMap.set(name, new File([e.data], name));
+  });
+
+  document.getElementById("catalogue").value = p.catalogue || "";
+  document.getElementById("format").value = p.format || String(firstEnabledFormat());
+  // Formats drive label/cover-sleeve sizing and visibility (big center
+  // hole options, preview dimensions) — dispatch so those modules'
+  // format-change handlers run before we apply their saved state below.
+  document.getElementById("format").dispatchEvent(new Event("change"));
+  document.getElementById("soundsystem").checked = !!p.soundsystem;
+  document.getElementById("albumTitle").value = p.albumTitle || "";
+  document.getElementById("albumArtist").value = p.albumArtist || "";
+  document.getElementById("notes").value = p.notes || "";
+  applyVinylColor(p.vinylColor);
+  applyShippingBilling(p.shippingBilling);
+  applyLabels(p.labels, fileMap);
+  applyCoverSleeve(p.coverSleeve, fileMap);
+
+  ["A","B"].forEach(side=>{
+    const s = (p.sides && p.sides[side]) || {tracks:[]};
+    document.getElementById("tracks-"+side).innerHTML = "";
+    (s.tracks || []).forEach(t=>{
+      addTrack(side);
+      const rows = document.querySelectorAll("#tracks-"+side+" .track-row");
+      const r = rows[rows.length-1];
+      r.querySelector(".title").value = t.title || "";
+      r.querySelector(".artist").value = t.artist || "";
+      r.querySelector(".length").value = t.length || "";
+      r.querySelector(".gap").value = t.gap || "2";
+      r.querySelector(".gapcustom").value = t.gapCustom || "2";
+      r.querySelector(".gap-wrap").classList.toggle("custom", (t.gap||"2")==="custom");
+      const trackFile = t.fileName && fileMap.get(t.fileName);
+      if(trackFile){
+        attachTrackFile(r, trackFile);
+      } else if(t.fileName){
+        const m = r.querySelector(".filemeta");
+        m.classList.remove("empty");
+        m.textContent = "file: " + t.fileName + " — please re-select this file (not stored in the order file)";
       }
-      if(side === "B"){
-        document.getElementById("blankB").checked = !!s.blank;
-        document.getElementById("blankB").dispatchEvent(new Event("change"));
-      }
-      renumber(side);
     });
+    if(!s.tracks || !s.tracks.length) addTrack(side);
+    document.getElementById("rpm-"+side).value = s.rpm || CONFIG.defaultRpm[document.getElementById("format").value];
+    document.getElementById("cont-"+side).checked = !!s.continuous;
+    document.getElementById("cont-"+side).dispatchEvent(new Event("change"));
+    document.getElementById("contoverride-"+side).value = s.continuousLength || "";
+    const contFile = s.continuousFileName && fileMap.get(s.continuousFileName);
+    if(contFile){
+      attachContinuousFile(side, contFile);
+    } else if(s.continuousFileName){
+      document.getElementById("contfilemeta-"+side).textContent =
+        "file: " + s.continuousFileName + " — please re-select this file (not stored in the order file)";
+    }
+    if(side === "B"){
+      document.getElementById("blankB").checked = !!s.blank;
+      document.getElementById("blankB").dispatchEvent(new Event("change"));
+    }
+    renumber(side);
+  });
 
-    document.getElementById("stamp").textContent = document.getElementById("catalogue").value || "— unsaved —";
-    recompute();
-  };
-  reader.readAsText(file);
-  e.target.value = "";
+  document.getElementById("stamp").textContent = document.getElementById("catalogue").value || "— unsaved —";
+  recompute();
 }
 
 async function collectPackageFiles(){
+  const catalogue = document.getElementById("catalogue").value;
   const files = [];
   for(const side of ["A","B"]){
     const blankChk = side==="B" ? document.getElementById("blankB") : null;
     if(blankChk && blankChk.checked) continue;
     if(document.getElementById("cont-"+side).checked){
       const f = document.getElementById("contfile-"+side)._file;
-      if(f) files.push({name: side + "_side_" + f.name, data: await f.arrayBuffer()});
+      if(f) files.push({name: continuousSideFileName({catalogue, side, ext: fileExt(f.name)}), data: await f.arrayBuffer()});
     } else {
       const rows = document.querySelectorAll("#tracks-"+side+" .track-row");
       let i=1;
       for(const row of rows){
         if(row._file){
-          files.push({name: `${side}${i}_${row._file.name}`, data: await row._file.arrayBuffer()});
+          const title = row.querySelector(".title").value;
+          const artist = row.querySelector(".artist").value;
+          const name = trackFileName({catalogue, side, index:i, title, artist, ext: fileExt(row._file.name)});
+          files.push({name, data: await row._file.arrayBuffer()});
         }
         i++;
       }
@@ -578,53 +662,30 @@ function buildSummaryText(){
   return out;
 }
 
-// Filesystem-safe folder/zip name — the catalogue number with any path
-// separators or reserved Windows/macOS filename characters stripped, so
-// it works as both the zip's own filename and the folder name inside it.
-function sanitizeFileName(name){
-  return name.trim().replace(/[\\/:*?"<>|]+/g, "-") || "untitled-release";
-}
-
-let projectSaved = false;
-let zipFileName = null;
-
-async function saveProjectPackage(){
-  const files = await collectPackageFiles();
-  if(files.length === 0){
-    alert("No audio files attached yet — only the order summary and JSON will be packaged.");
-  }
-  const summary = buildSummaryText();
-  files.push({name:"order-summary.txt", data: new TextEncoder().encode(summary).buffer});
-  const project = buildProjectObject();
-  files.push({name:"cutting-order.json", data: new TextEncoder().encode(JSON.stringify(project, null, 2)).buffer});
-
-  // Nest everything under one folder inside the zip, named after the
-  // catalogue number, so unzipping drops a single tidy folder rather
-  // than scattering files loose wherever it's extracted.
-  const folderName = sanitizeFileName(document.getElementById("catalogue").value || "cutting-order");
-  const foldered = files.map(f => ({name: folderName + "/" + f.name, data: f.data}));
-
-  const blob = await buildZip(foldered);
-  zipFileName = folderName + ".zip";
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = zipFileName;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  projectSaved = true;
+// Same completeness scan printOrder uses (every module's checklist, at
+// once), but as a dismissible warning rather than a hard block — the
+// plant can still receive and fix an incomplete order if the customer
+// chooses to send it anyway. See CLAUDE.md's Workflow, step 4.
+function confirmIncompleteSend(){
+  const missing = document.querySelectorAll(".checklist li.bad");
+  if(missing.length === 0) return true;
+  return confirm(
+    `${missing.length} item${missing.length===1?"":"s"} still need attention (marked "!"), starting with:\n\n`
+    + `${missing[0].textContent.trim()}\n\nSend to the plant anyway?`
+  );
 }
 
 /* ============================================================
    SwissTransfer — no public browser-callable upload API exists,
-   so this stays a two-step handoff: make sure the package has
-   been downloaded, then open a short instruction page telling
-   the person which file to upload and where to send it.
+   so this stays a two-step handoff: download the package, then
+   open a short instruction page telling the person which file to
+   upload and where to send it.
    ============================================================ */
-function sendViaSwissTransfer(){
-  if(!projectSaved){
-    alert("Save the project (.zip) first, then click \u201cSend Files via SwissTransfer\u201d again.");
-    return;
-  }
+async function sendToPlant(){
+  if(!confirmIncompleteSend()) return;
+  const {blob, fileName} = await buildProjectZip();
+  downloadBlob(blob, fileName);
+
   const cat = document.getElementById("catalogue").value.trim() || "(no catalogue number)";
   const page = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Send via SwissTransfer</title>
@@ -643,7 +704,7 @@ function sendViaSwissTransfer(){
   <h1>Send via SwissTransfer — ${cat}</h1>
   <div class="box">
     <div class="label">Upload this file</div>
-    <div class="val">${zipFileName}</div>
+    <div class="val">${fileName}</div>
   </div>
   <div class="box">
     <div class="label">Send to</div>
@@ -652,7 +713,7 @@ function sendViaSwissTransfer(){
   <p>Open SwissTransfer, add the file above, enter the address above as the recipient, and send.</p>
   <a class="btn" href="https://www.swisstransfer.com/" target="_blank" rel="noopener">Open swisstransfer.com</a>
 </body></html>`;
-  const blob = new Blob([page], {type:"text/html"});
-  window.open(URL.createObjectURL(blob), "_blank");
+  const pageBlob = new Blob([page], {type:"text/html"});
+  window.open(URL.createObjectURL(pageBlob), "_blank");
 }
 

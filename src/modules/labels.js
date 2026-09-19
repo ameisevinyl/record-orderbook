@@ -11,6 +11,7 @@
 import { CONFIG } from "../config.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, computePrintSimGeometry } from "../lib/print-artwork.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
+import { printedPartFileName, fileExt } from "../lib/package-naming.js";
 
 const SIDES = ["A", "B"];
 // Canvas render resolution in pixels-per-mm — plenty crisp at the
@@ -221,22 +222,34 @@ export function initLabels(){
   updateBigCenterVisibility();
 }
 
-// Exported for the tracklist module's JSON save/load — same
-// collect/apply pattern as vinyl-color.js and shipping-billing.js.
-// File contents aren't stored in the JSON, only the name (for the
-// "please re-select" hint on load).
+function labelFileName(side, file){
+  return printedPartFileName({catalogue: document.getElementById("catalogue").value, part:"labels", variant:side, ext: fileExt(file.name)});
+}
+
+// Exported for the tracklist module's project save/load — same
+// collect/apply pattern as vinyl-color.js and shipping-billing.js. File
+// contents aren't stored in the JSON, only the canonical package name —
+// tracklist.js's collectLabelFiles below builds the exact same name for
+// the actual file, so a reopened project zip can re-attach it by an
+// exact name match.
 export function collectLabels(){
   return {
     bigCenter: document.getElementById("bigCenter").checked,
-    sides: Object.fromEntries(SIDES.map(side => [side, {
-      whitelabel: document.getElementById("whitelabel-"+side).checked,
-      simprint: document.getElementById("simprint-"+side).checked,
-      fileName: (document.getElementById("labelbox-"+side)._file || {}).name || null
-    }]))
+    sides: Object.fromEntries(SIDES.map(side => {
+      const file = document.getElementById("labelbox-"+side)._file;
+      return [side, {
+        whitelabel: document.getElementById("whitelabel-"+side).checked,
+        simprint: document.getElementById("simprint-"+side).checked,
+        fileName: file ? labelFileName(side, file) : null
+      }];
+    }))
   };
 }
 
-export function applyLabels(data){
+// fileMap: canonical package name -> File, from a reopened project zip
+// (see tracklist.js's loadProject). Omitted for a plain-JSON load, where
+// there's nothing to re-attach.
+export function applyLabels(data, fileMap){
   const d = data || {};
   const bigCenter = document.getElementById("bigCenter");
   bigCenter.checked = !!d.bigCenter;
@@ -250,7 +263,10 @@ export function applyLabels(data){
     document.getElementById("simprint-"+side).checked = !!s.simprint;
 
     const meta = document.getElementById("labelmeta-"+side);
-    if(s.fileName){
+    const file = fileMap && s.fileName && fileMap.get(s.fileName);
+    if(file){
+      handleFile(side, file);
+    } else if(s.fileName){
       meta.classList.remove("empty");
       meta.textContent = "file: " + s.fileName + " — please re-select this file (not stored in the order file)";
     } else {
@@ -270,8 +286,7 @@ export async function collectLabelFiles(){
     if(document.getElementById("whitelabel-"+side).checked) continue;
     const file = document.getElementById("labelbox-"+side)._file;
     if(!file) continue;
-    const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : "";
-    files.push({ name: `label_${side}${ext}`, data: await file.arrayBuffer() });
+    files.push({ name: labelFileName(side, file), data: await file.arrayBuffer() });
   }
   return files;
 }
