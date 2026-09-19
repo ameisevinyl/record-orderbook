@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  slug, fileExt, sanitizeFileName, trackFileName, continuousSideFileName,
+  slug, fileExt, sanitizeFileName, mimeType, trackFileName, continuousSideFileName,
   printedPartFileName, dateStamp, projectFileName
 } from "../src/lib/package-naming.js";
 
@@ -21,6 +21,14 @@ test("sanitizeFileName strips reserved characters but keeps case", () => {
   assert.equal(sanitizeFileName("PNKRCK007"), "PNKRCK007");
   assert.equal(sanitizeFileName('a/b:c*d?e"f<g>h|i'), "a-b-c-d-e-f-g-h-i");
   assert.equal(sanitizeFileName(""), "untitled-release");
+});
+
+test("mimeType maps known extensions case-insensitively, else empty", () => {
+  assert.equal(mimeType(".PDF"), "application/pdf");
+  assert.equal(mimeType(".jpg"), "image/jpeg");
+  assert.equal(mimeType(".wav"), "audio/wav");
+  assert.equal(mimeType(".xyz"), "");
+  assert.equal(mimeType(""), "");
 });
 
 test("trackFileName builds catalogue/side/index/title/artist/version", () => {

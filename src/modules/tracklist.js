@@ -11,7 +11,7 @@ import { formatTime, parseTime } from "../lib/time.js";
 import { readAudioDuration, compressionWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
-import { trackFileName, continuousSideFileName, projectFileName, fileExt } from "../lib/package-naming.js";
+import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType } from "../lib/package-naming.js";
 import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
 import { collectCoverSleeveFiles, collectCoverSleeve, applyCoverSleeve } from "./cover-sleeve.js";
 import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
@@ -536,7 +536,7 @@ async function loadProject(file){
   entries.forEach(e=>{
     const name = baseEntryName(e.name);
     if(name === "project.json" || name === "order-summary.txt") return;
-    fileMap.set(name, new File([e.data], name));
+    fileMap.set(name, new File([e.data], name, {type: mimeType(fileExt(name))}));
   });
 
   document.getElementById("catalogue").value = p.catalogue || "";

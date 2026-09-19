@@ -28,6 +28,21 @@ export function sanitizeFileName(name){
   return (name || "").trim().replace(/[\\/:*?"<>|]+/g, "-") || "untitled-release";
 }
 
+// A File picked via <input type=file> gets its MIME type from the OS.
+// A File reconstructed from a reopened zip's raw bytes (see tracklist.js
+// loadProject) doesn't — without it, the browser has nothing to render a
+// PDF/image preview with and an <iframe>/<img> just shows raw bytes.
+const MIME_BY_EXT = {
+  ".pdf": "application/pdf",
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+  ".tif": "image/tiff", ".tiff": "image/tiff",
+  ".wav": "audio/wav", ".wave": "audio/wav",
+  ".aif": "audio/aiff", ".aiff": "audio/aiff", ".aifc": "audio/aiff"
+};
+export function mimeType(ext){
+  return MIME_BY_EXT[(ext || "").toLowerCase()] || "";
+}
+
 // PNKRCK007_A1_my_way_artist_v1.wav — catalogue# prefixed so a track
 // keeps a unique name once it's pulled out of its project folder (e.g.
 // into a shared mastering working directory), same reasoning as
