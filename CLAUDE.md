@@ -5,15 +5,14 @@ Project brief for Claude Code. Read this before making changes.
 ## What this is
 
 Browser-based, self-contained production tooling for a music record
-pressing plant (mastering → electroforming → pressing). So called vinyl pressing plant. Each tool covers one artifact of a release: the tracklist and playing time for each side, choosing tracks and assembling each side for the mastering studio. printed parts of the production: Labels, innersleeves (printed or plain), covers (usually printed), billing address and shipping address (can be multiple destinations), vinyl colours (default: black).
+pressing plant. So called "vinyl". Each tool covers one artifact of a release: the tracklist and playing time for each side, choosing tracks and assembling each side for the mastering studio. printed parts of the production: Labels, innersleeves (printed or plain), covers (usually printed), inlays, billing address and shipping address (can be multiple destinations), vinyl colours (default: black).
 All sharing the same release record (catalogue number, format, title, artist).
 
-The end users are non-developers: customer service staff taking phone/email
-orders, and a cutting/mastering engineer reading a printed or PDF order
-sheet at a lathe. The tool must stay usable with zero setup — open the
-HTML file, it works.
+The end users are customers who want to submit their production info and files for ordering and quoting to the pressing plant (not made for one individual plant can be reused by others). 
 
-The maintainer is a programmer, preferring minimalistic, simple, low-level style. Use modern solution when these are simple and widely accepted. Comments are short and assume everybody can read the code.
+the page let's the user download a json file with all the chosen infos. and they can load projects back in the forms from that json file.
+
+The maintainer is a programmer, preferring minimalistic, simple, low-level style. Use modern solution when these are simple and widely accepted. Comments are short and assume everybody can read the code. don't repeat yourself. be short and precise. 
 
 ## Hard constraints — do not relax these without asking
 
@@ -77,16 +76,16 @@ configured on purpose — keep it that way unless asked.
   as opposed to the final printed label.
 - **Studio email** (`CONFIG.studioEmail`) — where finished packages get
   sent (e.g. via SwissTransfer) for the cutting engineer to pick up.
+- see also: https://www.sst-ffm.de/en/frequently-given-answers for record mastering insights
+- see also https://www.randmuzik.de/en/specifications/ for record specific printed parts
 
 ## Conventions
 
 - Plain, modern JS (ES2020+ features are fine — target is current
   evergreen browsers, not legacy IE-era compatibility).
-- Studio-specific values (playing-time thresholds, default RPM, studio
-  email) live in a single `CONFIG` object — never hardcode them elsewhere.
+- plant specific values (playing-time thresholds, default RPM, studio
+  email, printing specs) live in a single `CONFIG` object — never hardcode them elsewhere.
 - Comments explain *why*, not *what*, especially around anything
   reverse-engineered from a file format spec (WAV/AIFF chunks, ZIP
   headers) — cite the chunk/field being read.
-- Commit messages: short, imperative, no ceremony (`add AIFF duration
-  fallback`, not `feat: implement AIFF...`). This is a solo/small-team
-  project — skip conventional-commits formality unless asked.
+- Commit messages: short, imperative, no ceremony, scientific, precise, DRY
