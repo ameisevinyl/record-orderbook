@@ -74,6 +74,12 @@ function createTrackRow(side){
   const gapWrap = row.querySelector(".gap-wrap");
   const gapCustom = row.querySelector(".gapcustom");
 
+  // Most releases are single-artist — default a new track to the album
+  // artist so nobody has to retype it on every row. Left editable for
+  // the various-artists case.
+  const albumArtist = document.getElementById("albumArtist").value;
+  if(albumArtist) row.querySelector(".artist").value = albumArtist;
+
   pickbtn.addEventListener("click", ()=> fileInput.click());
   fileInput.addEventListener("change", ()=>{
     const f = fileInput.files[0];
@@ -91,6 +97,17 @@ function createTrackRow(side){
   });
 
   return row;
+}
+
+// Fills any track whose artist field is still blank with the album
+// artist, whenever that field changes — doesn't touch a track that
+// already has its own artist (various-artists releases stay untouched).
+function applyAlbumArtistToEmptyTracks(){
+  const albumArtist = document.getElementById("albumArtist").value;
+  if(!albumArtist) return;
+  document.querySelectorAll(".track-row .artist").forEach(input=>{
+    if(!input.value) input.value = albumArtist;
+  });
 }
 
 function rowGapSeconds(row, isFirst){
@@ -411,6 +428,7 @@ export function initTracklist(){
     updateChecklist();
   });
   document.getElementById("albumTitle").addEventListener("input", updateChecklist);
+  document.getElementById("albumArtist").addEventListener("input", applyAlbumArtistToEmptyTracks);
 
   applyDefaultRpm();
   recompute();
