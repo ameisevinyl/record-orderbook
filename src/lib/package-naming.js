@@ -7,11 +7,17 @@
 // Versioning isn't tracked yet (see CLAUDE.md) — every name gets a fixed
 // "v1" suffix for now.
 
+// German umlauts/ß transliterated before the general a-z/0-9 filter below
+// would otherwise just drop them as unrecognized characters — "schöner"
+// should become "schoener", not "sch_ner".
+const GERMAN_TRANSLITERATIONS = { "ä":"ae", "ö":"oe", "ü":"ue", "ß":"ss" };
+
 // Lowercase, filename-safe token: anything that isn't a-z/0-9 collapses
 // to one underscore, leading/trailing underscores trimmed.
 export function slug(str){
   return (str || "")
     .toLowerCase()
+    .replace(/[äöüß]/g, ch => GERMAN_TRANSLITERATIONS[ch])
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 }

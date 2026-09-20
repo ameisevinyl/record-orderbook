@@ -11,6 +11,13 @@ test("slug lowercases and collapses non-alnum runs to single underscores", () =>
   assert.equal(slug(""), "");
 });
 
+test("slug transliterates German umlauts and ß instead of dropping them", () => {
+  assert.equal(slug("Ein schöner Tag"), "ein_schoener_tag");
+  assert.equal(slug("Mädchen"), "maedchen");
+  assert.equal(slug("Grüße"), "gruesse");
+  assert.equal(slug("groß"), "gross");
+});
+
 test("fileExt extracts the extension with its dot, or empty string", () => {
   assert.equal(fileExt("track.WAV"), ".WAV");
   assert.equal(fileExt("noext"), "");

@@ -54,7 +54,7 @@ function attachTrackFile(row, f, originalFileName = f.name){
   const warning = compressionWarning(f);
   readAudioDuration(f).then(dur=>{
     const durText = (isFinite(dur) && dur > 0)
-      ? (()=>{ lengthInput.value = formatTime(dur); row._autoLength = true; recompute();
+      ? (()=>{ lengthInput.value = formatTime(dur); recompute();
                return formatTime(dur) + " (auto)"; })()
       : "could not read duration, enter length manually";
     renderFileMeta(meta, f.name, originalFileName, durText + (warning ? "  " + warning : ""));
@@ -108,7 +108,7 @@ function createTrackRow(side){
     if(f) attachTrackFile(row, f);
   });
 
-  lengthInput.addEventListener("input", ()=>{ row._autoLength = false; recompute(); });
+  lengthInput.addEventListener("input", recompute);
   gapSel.addEventListener("change", ()=>{
     gapWrap.classList.toggle("custom", gapSel.value === "custom");
     recompute();
@@ -434,9 +434,14 @@ function applyDefaultRpm(){
 
 // Matrix/runout inscription defaults to "<catalogue> <side>" and tracks
 // the catalogue number until the customer types their own — same
-// "fill until touched" rule as attachTrackFile's auto length and
-// applyAlbumArtistToEmptyTracks above, so a deliberate edit is never
-// silently overwritten.
+// "fill until touched" idea as applyAlbumArtistToEmptyTracks above, so
+// a deliberate edit is never silently overwritten. Unlike that one,
+// this needs an explicit _auto flag (input._auto, false once the field
+// has been typed into) rather than an emptiness check, because a
+// touched matrix field is never actually empty — it starts pre-filled.
+// Whether a project was saved with the field still on "auto" is itself
+// persisted (see serializeSide/loadProject) so that state survives a
+// save/reload round-trip and doesn't refreeze on a stale value.
 function defaultMatrix(catalogue, side){
   return (catalogue ? catalogue + " " : "") + side;
 }
@@ -508,10 +513,12 @@ function serializeSide(side){
   const cont = document.getElementById("cont-"+side).checked;
   const contWrap = document.getElementById("contfile-"+side);
   const contFile = contWrap._file;
+  const matrixInput = document.getElementById("matrix-"+side);
   const data = {
     blank: blankChk ? blankChk.checked : false,
     rpm: document.getElementById("rpm-"+side).value,
-    matrixInscription: document.getElementById("matrix-"+side).value,
+    matrixInscription: matrixInput.value,
+    matrixInscriptionAuto: matrixInput._auto !== false,
     continuous: cont,
     continuousLength: document.getElementById("contoverride-"+side).value,
     continuousFileName: contFile ? continuousSideFileName({catalogue, side, ext: fileExt(contFile.name)}) : null,
@@ -660,11 +667,16 @@ async function loadProject(file){
     if(!s.tracks || !s.tracks.length) addTrack(side);
     document.getElementById("rpm-"+side).value = s.rpm || CONFIG.defaultRpm[document.getElementById("format").value];
     // Older project files predate this field — leave those sides on the
-    // "auto" default (filled in below) rather than blanking them.
+    // "auto" default (filled in below) rather than blanking them. When
+    // the field is present, matrixInscriptionAuto (persisted by
+    // serializeSide) says whether it was still tracking the catalogue
+    // number at save time — restoring that, rather than always treating
+    // a saved value as final, is what lets editing the catalogue later
+    // keep updating an untouched matrix field after a reload.
     const matrixInput = document.getElementById("matrix-"+side);
-    if(s.matrixInscription !== undefined){
+    if(s.matrixInscription != null){
       matrixInput.value = s.matrixInscription;
-      matrixInput._auto = false;
+      matrixInput._auto = s.matrixInscriptionAuto === false ? false : true;
     } else {
       matrixInput._auto = true;
     }
