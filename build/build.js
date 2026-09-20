@@ -37,6 +37,7 @@ const FILES = [
   "src/lib/vinyl-color.js",
   "src/lib/info-text.js",
   "src/lib/package-naming.js",
+  "src/lib/text-table.js",
   "src/modules/labels.js",
   "src/modules/cover-sleeve.js",
   "src/modules/vinyl-color.js",

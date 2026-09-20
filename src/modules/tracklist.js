@@ -1,6 +1,6 @@
-// Tracklist / Cutting Order module — catalogue number, format/RPM,
-// side A/B track listing, playing-time warnings, printable order sheet,
-// ZIP package export, SwissTransfer handoff.
+// Tracklist module — catalogue number, format/RPM, side A/B track
+// listing, playing-time warnings, printable order sheet, ZIP package
+// export, SwissTransfer handoff.
 //
 // DOM-coupled by design (this is UI wiring, not a pure lib) — pure
 // logic (time parsing, ZIP writer, WAV/AIFF duration, threshold rules)
@@ -12,21 +12,43 @@ import { readAudioDuration, compressionWarning } from "../lib/audio-duration.js"
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
 import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType } from "../lib/package-naming.js";
+import { renderTable } from "../lib/text-table.js";
 import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
 import { collectCoverSleeveFiles, collectCoverSleeve, applyCoverSleeve } from "./cover-sleeve.js";
 import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
 import { collectShippingBilling, applyShippingBilling, buildShippingBillingSummary } from "./shipping-billing.js";
 
+// Renders "file: <current name> — <status>", plus a tight second line
+// with the original filename when it differs from the current one —
+// only true after a project reload re-attaches a file by its renamed
+// (convention) name; a fresh manual pick has nothing to show there.
+// Built with DOM nodes rather than innerHTML since file names are
+// untrusted strings (the customer's own upload).
+function renderFileMeta(el, currentName, originalName, statusText){
+  el.textContent = "";
+  el.append(`file: ${currentName} — ${statusText}`);
+  if(originalName && originalName !== currentName){
+    el.append(document.createElement("br"));
+    const orig = document.createElement("span");
+    orig.className = "filemeta-orig";
+    orig.textContent = "was: " + originalName;
+    el.append(orig);
+  }
+}
+
 // Shared by the manual file-input handler and loadProject's zip
 // re-attach path, so both go through the same duration-reading/warning
-// logic.
-function attachTrackFile(row, f){
+// logic. originalFileName defaults to the file's own name (a fresh
+// manual pick); loadProject passes the name recorded before renaming,
+// so renderFileMeta can show it as the "was:" line.
+function attachTrackFile(row, f, originalFileName = f.name){
   row._file = f;
+  row._originalFileName = originalFileName;
   const pickbtn = row.querySelector(".pickbtn");
   const meta = row.querySelector(".filemeta");
   const lengthInput = row.querySelector(".length");
   pickbtn.classList.add("has-file");
-  meta.textContent = "file: " + f.name + " — reading duration…";
+  renderFileMeta(meta, f.name, originalFileName, "reading duration…");
   meta.classList.remove("empty");
   meta.classList.remove("warn");
   const warning = compressionWarning(f);
@@ -35,7 +57,7 @@ function attachTrackFile(row, f){
       ? (()=>{ lengthInput.value = formatTime(dur); row._autoLength = true; recompute();
                return formatTime(dur) + " (auto)"; })()
       : "could not read duration, enter length manually";
-    meta.textContent = "file: " + f.name + " — " + durText + (warning ? "  " + warning : "");
+    renderFileMeta(meta, f.name, originalFileName, durText + (warning ? "  " + warning : ""));
     meta.classList.toggle("warn", !!warning);
     recompute();
   });
@@ -110,13 +132,22 @@ function applyAlbumArtistToEmptyTracks(){
   });
 }
 
-function rowGapSeconds(row, isFirst){
+// {gap, gapCustom} is the shape both a track-row's fields and a
+// serialized track object share, so this works for either — see
+// rowGapSeconds (DOM) and tracklistBody (project JSON) below.
+function trackGapSeconds({gap, gapCustom}, isFirst){
   if(isFirst) return 0;
-  const sel = row.querySelector(".gap").value;
-  if(sel === "0") return 0;
-  if(sel === "2") return 2;
-  const v = parseFloat(row.querySelector(".gapcustom").value);
+  if(gap === "0") return 0;
+  if(gap === "2") return 2;
+  const v = parseFloat(gapCustom);
   return isFinite(v) ? v : 0;
+}
+
+function rowGapSeconds(row, isFirst){
+  return trackGapSeconds({
+    gap: row.querySelector(".gap").value,
+    gapCustom: row.querySelector(".gapcustom").value
+  }, isFirst);
 }
 
 function renumber(side){
@@ -140,19 +171,20 @@ function addTrack(side){
 
 // Shared by the manual file-input handler and loadProject's zip
 // re-attach path — see attachTrackFile above for the per-track version.
-function attachContinuousFile(side, f){
+function attachContinuousFile(side, f, originalFileName = f.name){
   const contWrap = document.getElementById("contfile-"+side);
   const contMeta = document.getElementById("contfilemeta-"+side);
   const contOverride = document.getElementById("contoverride-"+side);
   contWrap._file = f;
-  contMeta.textContent = "file: " + f.name + " — reading duration…";
+  contWrap._originalFileName = originalFileName;
+  renderFileMeta(contMeta, f.name, originalFileName, "reading duration…");
   contMeta.classList.remove("warn");
   const warning = compressionWarning(f);
   readAudioDuration(f).then(dur=>{
     const durText = (isFinite(dur) && dur > 0)
       ? (()=>{ contOverride.value = formatTime(dur); return formatTime(dur) + " (auto)"; })()
       : "could not read duration, enter length manually";
-    contMeta.textContent = "file: " + f.name + " — " + durText + (warning ? "  " + warning : "");
+    renderFileMeta(contMeta, f.name, originalFileName, durText + (warning ? "  " + warning : ""));
     contMeta.classList.toggle("warn", !!warning);
     recompute();
   });
@@ -448,13 +480,15 @@ function serializeSide(side){
   const catalogue = document.getElementById("catalogue").value;
   const blankChk = side==="B" ? document.getElementById("blankB") : null;
   const cont = document.getElementById("cont-"+side).checked;
-  const contFile = document.getElementById("contfile-"+side)._file;
+  const contWrap = document.getElementById("contfile-"+side);
+  const contFile = contWrap._file;
   const data = {
     blank: blankChk ? blankChk.checked : false,
     rpm: document.getElementById("rpm-"+side).value,
     continuous: cont,
     continuousLength: document.getElementById("contoverride-"+side).value,
     continuousFileName: contFile ? continuousSideFileName({catalogue, side, ext: fileExt(contFile.name)}) : null,
+    continuousOriginalFileName: contFile ? (contWrap._originalFileName || contFile.name) : null,
     tracks: []
   };
   document.querySelectorAll("#tracks-"+side+" .track-row").forEach((row, i)=>{
@@ -465,7 +499,8 @@ function serializeSide(side){
       length: row.querySelector(".length").value,
       gap: row.querySelector(".gap").value,
       gapCustom: row.querySelector(".gapcustom").value,
-      fileName: row._file ? trackFileName({catalogue, side, index: i+1, title, artist, ext: fileExt(row._file.name)}) : null
+      fileName: row._file ? trackFileName({catalogue, side, index: i+1, title, artist, ext: fileExt(row._file.name)}) : null,
+      originalFileName: row._file ? (row._originalFileName || row._file.name) : null
     });
   });
   return data;
@@ -509,7 +544,8 @@ function currentProjectFileName(project){
 async function buildProjectZip(){
   const project = buildProjectObject();
   const files = await collectPackageFiles();
-  files.push({name:"order-summary.txt", data: new TextEncoder().encode(buildSummaryText()).buffer});
+  files.push({name:"order_summary.txt", data: new TextEncoder().encode(buildOrderSummaryText(project)).buffer});
+  files.push({name:"tracklist.txt", data: new TextEncoder().encode(buildTracklistText(project)).buffer});
   files.push({name:"project.json", data: new TextEncoder().encode(JSON.stringify(project, null, 2)).buffer});
 
   const baseName = currentProjectFileName(project);
@@ -553,7 +589,7 @@ async function loadProject(file){
   const fileMap = new Map();
   entries.forEach(e=>{
     const name = baseEntryName(e.name);
-    if(name === "project.json" || name === "order-summary.txt") return;
+    if(name === "project.json" || name === "order_summary.txt" || name === "tracklist.txt") return;
     fileMap.set(name, new File([e.data], name, {type: mimeType(fileExt(name))}));
   });
 
@@ -587,7 +623,7 @@ async function loadProject(file){
       r.querySelector(".gap-wrap").classList.toggle("custom", (t.gap||"2")==="custom");
       const trackFile = t.fileName && fileMap.get(t.fileName);
       if(trackFile){
-        attachTrackFile(r, trackFile);
+        attachTrackFile(r, trackFile, t.originalFileName || t.fileName);
       } else if(t.fileName){
         const m = r.querySelector(".filemeta");
         m.classList.remove("empty");
@@ -601,7 +637,7 @@ async function loadProject(file){
     document.getElementById("contoverride-"+side).value = s.continuousLength || "";
     const contFile = s.continuousFileName && fileMap.get(s.continuousFileName);
     if(contFile){
-      attachContinuousFile(side, contFile);
+      attachContinuousFile(side, contFile, s.continuousOriginalFileName || s.continuousFileName);
     } else if(s.continuousFileName){
       document.getElementById("contfilemeta-"+side).textContent =
         "file: " + s.continuousFileName + " — please re-select this file (not stored in the order file)";
@@ -645,39 +681,120 @@ async function collectPackageFiles(){
   return files;
 }
 
-function buildSummaryText(){
-  const cat = document.getElementById("catalogue").value || "(no catalogue number)";
-  const title = document.getElementById("albumTitle").value;
-  const artist = document.getElementById("albumArtist").value;
-  const format = document.getElementById("format").value;
-  let out = `CUTTING ORDER — ${cat}\n${artist ? artist + " — " : ""}${title || ""}\nFormat: ${format}"\n\n`;
+// Only worth a column when some track's artist actually differs from
+// the album artist (a various-artists release) — otherwise it's
+// redundant with the artist already shown once in the header above.
+// order_summary.txt and tracklist.txt are always built from the project
+// object (the same one that becomes project.json), never read back out
+// of the DOM directly — that's what guarantees the filenames printed in
+// these documents (already-renamed, catalogue#-prefixed) are exactly
+// the ones actually in the zip, with no separate re-derivation to drift
+// out of sync.
+
+function tracksNeedArtistColumn(project){
+  return ["A","B"].some(side =>
+    project.sides[side].tracks.some(t => t.artist && t.artist !== project.albumArtist)
+  );
+}
+
+// yyyy-mm-dd, local date — human-readable, as opposed to
+// package-naming.js's dateStamp() (compact yymmdd, used in filenames).
+function humanDate(date = new Date()){
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function documentHeader(project, label){
+  const cat = project.catalogue || "(no catalogue number)";
+  const title = project.albumTitle || "(no title)";
+  const artist = project.albumArtist || "(no artist)";
+  return `${label}\n${cat} - ${title} - ${artist} - ${humanDate()}\nFormat: ${project.format}"\n\n`;
+}
+
+// Printed-part filenames only — tracks/continuous-side files are already
+// listed in the per-side tables below, so repeating them here would be
+// redundant. A null fileName means "not actually included" (whitelabel,
+// unprinted, inlay not included, etc.) — see collectLabels/collectCoverSleeve.
+function filesManifestSection(project){
+  const l = project.labels, c = project.coverSleeve;
+  const packageFiles = [
+    l.sides.A.fileName, l.sides.B.fileName,
+    c.innerSleeve.fileName, c.cover.fileName,
+    c.inlay.front.fileName, c.inlay.back.fileName
+  ].filter(Boolean);
+  if(!packageFiles.length) return "";
+  return "Files:\n" + packageFiles.map(f => `  ${f}`).join("\n") + "\n\n";
+}
+
+// The tracklist body (per-side track tables) — shared by order_summary.txt
+// (the complete order, for customer service / production management) and
+// tracklist.txt (audio + artwork filenames and notes only, no billing/
+// shipping — this one goes to the mastering engineer and graphics
+// department, who don't need to see the customer's order details).
+function tracklistBody(project){
+  const showArtist = tracksNeedArtistColumn(project);
+  let out = "";
+
   ["A","B"].forEach(side=>{
-    const blankChk = side==="B" ? document.getElementById("blankB") : null;
-    out += `SIDE ${side}`;
-    if(blankChk && blankChk.checked){ out += " — blank\n\n"; return; }
-    out += ` — ${document.getElementById("rpm-"+side).value} RPM — total ${document.getElementById("total-"+side).textContent}\n`;
-    if(document.getElementById("cont-"+side).checked){
-      const f = document.getElementById("contfile-"+side)._file;
-      out += `  continuous file: ${f ? f.name : "(none selected)"}\n`;
-    } else {
-      document.querySelectorAll("#tracks-"+side+" .track-row").forEach((row,i)=>{
-        const t = row.querySelector(".title").value || "(untitled)";
-        const a = row.querySelector(".artist").value;
-        const len = row.querySelector(".length").value || "?:??";
-        const file = row._file ? row._file.name : "(no file — manual entry)";
-        if(i > 0){
-          const gap = rowGapSeconds(row, false);
-          out += `  ${gap === 0 ? "no pause" : gap + "s pause"}\n`;
-        }
-        out += `  ${side}${i+1}  ${len}  ${t}${a ? " / " + a : ""}  [${file}]\n`;
-      });
+    const s = project.sides[side];
+    if(s.blank){ out += `SIDE ${side} — blank\n\n`; return; }
+
+    if(s.continuous){
+      const total = parseTime(s.continuousLength) || 0;
+      out += `SIDE ${side} — ${s.rpm} RPM — total ${formatTime(total)}\n`;
+      out += `  continuous file: ${s.continuousFileName || "(none selected)"}\n\n`;
+      return;
     }
-    out += "\n";
+
+    const headers = ["Pos.", "Pregap", "Start", "Length", "Title"];
+    if(showArtist) headers.push("Artist");
+    headers.push("filename");
+
+    // Running start time within the side: silence (pregap) plays first,
+    // then the track, so pregap accumulates before start and the
+    // track's own length accumulates after it.
+    let cursor = 0;
+    const rows = s.tracks.map((t, i)=>{
+      const gap = trackGapSeconds(t, i===0);
+      cursor += gap;
+      const cells = [side+(i+1), formatTime(gap), formatTime(cursor), t.length || "?:??", t.title || "(untitled)"];
+      if(showArtist) cells.push(t.artist || "");
+      cells.push(t.fileName || "(no file — manual entry)");
+      cursor += parseTime(t.length) || 0;
+      return cells;
+    });
+
+    out += `SIDE ${side} — ${s.rpm} RPM — total ${formatTime(cursor)}\n`;
+    out += renderTable(headers, rows) + "\n\n";
   });
-  const notes = document.getElementById("notes").value.trim();
-  if(notes) out += `NOTES TO CUTTING ENGINEER:\n${notes}\n`;
-  out += "\n" + buildShippingBillingSummary();
   return out;
+}
+
+function notesSection(project){
+  return project.notes.trim() ? `NOTES TO CUTTING ENGINEER:\n${project.notes.trim()}\n` : "";
+}
+
+// The complete order in human-readable form — release info, package file
+// manifest, tracklist, notes, and the customer's billing/shipping details.
+// Goes to customer service / production management.
+function buildOrderSummaryText(project){
+  return documentHeader(project, "ORDER SUMMARY")
+    + filesManifestSection(project)
+    + tracklistBody(project)
+    + notesSection(project)
+    + "\n" + buildShippingBillingSummary();
+}
+
+// Same tracklist as above, minus the customer's billing/shipping details —
+// this one goes to the mastering engineer and graphics department, who
+// don't need to see the rest of the order.
+function buildTracklistText(project){
+  return documentHeader(project, "TRACKLIST")
+    + filesManifestSection(project)
+    + tracklistBody(project)
+    + notesSection(project);
 }
 
 // Same completeness scan printOrder uses (every module's checklist, at

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Record Orderbook</title>
 <!--
-  record-orderbook — Tracklist / Cutting Order module (source, not the
-  distributable file). This loads app.js as ES modules for development;
+  record-orderbook — page shell (source, not the distributable file).
+  This loads app.js as ES modules for development;
   `node build/build.js` inlines everything into a single self-contained
   dist/index.html with no external requests, for actual use in the field.
   Studio-specific settings (playing-time recommendations, default RPM,
@@ -109,9 +109,10 @@
   }
   .pickbtn:hover{ border-color:var(--accent); color:var(--accent); }
   .pickbtn.has-file{ border-color:var(--ok); color:var(--ok); }
-  .filemeta{ grid-column:1 / -1; font-size:10px; color:var(--ink-dim); margin:-3px 0 2px 32px; }
+  .filemeta{ grid-column:1 / -1; font-size:10px; color:var(--ink-dim); margin:-3px 0 2px 32px; line-height:1.5; }
   .filemeta.empty{ display:none; }
   .filemeta.warn{ color:var(--danger); font-weight:700; }
+  .filemeta-orig{ opacity:.7; font-weight:400; }
   .len-wrap{ display:flex; align-items:center; gap:4px; }
   .len-wrap input{ text-align:center; }
   .autoflag{ font-size:9px; color:var(--ok); white-space:nowrap; }
@@ -327,7 +328,7 @@
     <div class="row">
       <div class="field">
         <label>Catalogue Number <span class="req">*</span></label>
-        <input type="text" id="catalogue" placeholder="e.g. AV-0142">
+        <input type="text" id="catalogue" placeholder="e.g. SP-23">
       </div>
       <div class="field">
         <label>Format</label>

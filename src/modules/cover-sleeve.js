@@ -205,35 +205,45 @@ function applySlotFile(slot, prefix, fileName, fileMap){
 // contents aren't stored in the JSON, only the canonical package name —
 // collectCoverSleeveFiles below builds the exact same name for the
 // actual file.
+// fileName is null whenever the mode/include flag makes the file
+// inapplicable (same condition collectCoverSleeveFiles uses to skip
+// it) — a non-null fileName here always means the file is actually in
+// the package, which is what lets the tracklist/order-summary exports
+// build their file manifest straight from this data, no DOM re-check
+// needed.
 export function collectCoverSleeve(){
-  const nameFor = (slot, part, variant) => {
+  const nameFor = (slot, part, variant, applicable) => {
+    if(!applicable) return null;
     const file = slot.getFile();
     return file ? slotFileName(part, variant, file) : null;
   };
+  const coverPrinted = document.getElementById("cover-printed").checked;
+  const innerSleevePrinted = document.getElementById("innersleeve-printed").checked;
+  const inlayInclude = document.getElementById("inlayInclude").checked;
   return {
     innerSleeve: {
-      mode: document.getElementById("innersleeve-printed").checked ? "printed" : "unprinted",
+      mode: innerSleevePrinted ? "printed" : "unprinted",
       color: document.getElementById("innersleeveColor").value,
       cutout: document.getElementById("innersleeveCutout").checked,
       simprint: document.getElementById("innersleevesimprint").checked,
-      fileName: nameFor(innerSleeveSlot, "innersleeve")
+      fileName: nameFor(innerSleeveSlot, "innersleeve", undefined, innerSleevePrinted)
     },
     cover: {
-      mode: document.getElementById("cover-printed").checked ? "printed"
+      mode: coverPrinted ? "printed"
           : document.getElementById("cover-unprinted").checked ? "unprinted" : "none",
       color: document.getElementById("coverColor").value,
       simprint: document.getElementById("coversimprint").checked,
-      fileName: nameFor(coverSlot, "cover")
+      fileName: nameFor(coverSlot, "cover", undefined, coverPrinted)
     },
     inlay: {
-      include: document.getElementById("inlayInclude").checked,
+      include: inlayInclude,
       front: {
         simprint: document.getElementById("inlayfrontsimprint").checked,
-        fileName: nameFor(inlayFrontSlot, "inlay", "front")
+        fileName: nameFor(inlayFrontSlot, "inlay", "front", inlayInclude)
       },
       back: {
         simprint: document.getElementById("inlaybacksimprint").checked,
-        fileName: nameFor(inlayBackSlot, "inlay", "back")
+        fileName: nameFor(inlayBackSlot, "inlay", "back", inlayInclude)
       }
     }
   };

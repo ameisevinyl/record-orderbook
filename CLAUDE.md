@@ -45,12 +45,17 @@ yourself. Be short and precise.
    flagged by a module's checklist, rather than silently shipping gaps.
 5. The zip always contains: `project.json` (the complete, re-loadable
    form state — fixed name, so `loadProject` can find it inside any
-   zip), a human-readable `order-summary.txt` (so plant staff, e.g. the
-   mastering engineer, can read catalogue number and tracklist without
-   opening the tool), and the customer's own audio/artwork files renamed
-   to the plant's internal convention (see below). Everything is nested
-   under one folder inside the zip, named per the project naming
-   convention below. See `src/lib/zip.js` for the writer/reader and
+   zip), two human-readable text files, and the customer's own
+   audio/artwork files renamed to the plant's internal convention (see
+   below). The two text files exist because they go to different
+   people: `order_summary.txt` is the complete order (release info,
+   file manifest, tracklist, notes, billing/shipping) for customer
+   service / production management; `tracklist.txt` is the same
+   release info, file manifest, tracklist and notes but *without*
+   billing/shipping, for the mastering engineer and graphics
+   department, who don't need the customer's order details. Everything
+   is nested under one folder inside the zip, named per the project
+   naming convention below. See `src/lib/zip.js` for the writer/reader and
    `src/lib/package-naming.js` for the naming.
 6. The page is printable to PDF (see the `@media print` rules in
    `src/index.html`) for the rare customer who wants a paper copy —
@@ -142,9 +147,10 @@ configured on purpose — keep it that way unless asked.
 - **Studio email** (`CONFIG.studioEmail`) — where finished packages get
   sent (e.g. via SwissTransfer) for the cutting engineer to pick up.
 - **Project** — one release's complete form state, saved/loaded as a
-  single .zip (`project.json` + `order-summary.txt` + renamed customer
-  files) — see the Workflow section above for why it's a zip and not a
-  bare JSON file or a live folder.
+  single .zip (`project.json` + `order_summary.txt` + `tracklist.txt` +
+  renamed customer files) — see the Workflow section above for why it's
+  a zip and not a bare JSON file or a live folder, and for why there
+  are two text files.
 - see also: https://www.sst-ffm.de/en/frequently-given-answers for record mastering insights
 - see also https://www.randmuzik.de/en/specifications/ for record specific printed parts
 

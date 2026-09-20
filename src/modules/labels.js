@@ -231,16 +231,21 @@ function labelFileName(side, file){
 // contents aren't stored in the JSON, only the canonical package name —
 // tracklist.js's collectLabelFiles below builds the exact same name for
 // the actual file, so a reopened project zip can re-attach it by an
-// exact name match.
+// exact name match. fileName is null whenever whitelabel makes the file
+// inapplicable (same condition collectLabelFiles uses to skip it) — a
+// non-null fileName here always means the file is actually in the
+// package, which is what lets the tracklist/order-summary exports build
+// their file manifest straight from this data, no DOM re-check needed.
 export function collectLabels(){
   return {
     bigCenter: document.getElementById("bigCenter").checked,
     sides: Object.fromEntries(SIDES.map(side => {
+      const whitelabel = document.getElementById("whitelabel-"+side).checked;
       const file = document.getElementById("labelbox-"+side)._file;
       return [side, {
-        whitelabel: document.getElementById("whitelabel-"+side).checked,
+        whitelabel,
         simprint: document.getElementById("simprint-"+side).checked,
-        fileName: file ? labelFileName(side, file) : null
+        fileName: (!whitelabel && file) ? labelFileName(side, file) : null
       }];
     }))
   };
