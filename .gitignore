@@ -8,3 +8,7 @@
 # OS/editor noise
 .DS_Store
 *.swp
+
+# Impeccable design-tool local cache — ephemeral, not project state.
+.impeccable/hook.cache.json
+.impeccable/config.local.json

@@ -70,7 +70,11 @@ function createTrackRow(side){
     <div class="pos">--</div>
     <button type="button" class="pickbtn no-print" title="Choose audio file">⏏</button>
     <div class="field" style="margin:0;"><input type="text" class="title" placeholder="track title (optional)"></div>
-    <div class="field" style="margin:0;"><input type="text" class="artist" placeholder="artist (optional)"></div>
+    <div class="field artist-field" style="margin:0;">
+      <input type="text" class="artist" placeholder="artist (optional)" readonly>
+      <button type="button" class="artist-change no-print">change</button>
+      <button type="button" class="artist-revert no-print hidden">revert</button>
+    </div>
     <div class="len-wrap">
       <input type="text" class="length" placeholder="m:ss">
     </div>
@@ -96,11 +100,23 @@ function createTrackRow(side){
   const gapWrap = row.querySelector(".gap-wrap");
   const gapCustom = row.querySelector(".gapcustom");
 
-  // Most releases are single-artist — default a new track to the album
-  // artist so nobody has to retype it on every row. Left editable for
-  // the various-artists case.
-  const albumArtist = document.getElementById("albumArtist").value;
-  if(albumArtist) row.querySelector(".artist").value = albumArtist;
+  // Most releases are single-artist — a new track starts "linked": its
+  // artist field is read-only and mirrors Album Artist live (see
+  // syncAlbumArtistToLinkedTracks), so nobody has to retype it on every
+  // row and it can never drift out of sync while typing. "change"
+  // unlocks it into an ordinary input for the various-artists case —
+  // from then on it's this track's own value, no longer linked. "revert"
+  // undoes that: re-links the field and snaps it back to Album Artist.
+  row.querySelector(".artist").value = document.getElementById("albumArtist").value;
+  row.querySelector(".artist-change").addEventListener("click", ()=>{
+    setArtistLinked(row, false);
+    const artistInput = row.querySelector(".artist");
+    artistInput.focus();
+    artistInput.select();
+  });
+  row.querySelector(".artist-revert").addEventListener("click", ()=>{
+    setArtistLinked(row, true);
+  });
 
   pickbtn.addEventListener("click", ()=> fileInput.click());
   fileInput.addEventListener("change", ()=>{
@@ -121,14 +137,27 @@ function createTrackRow(side){
   return row;
 }
 
-// Fills any track whose artist field is still blank with the album
-// artist, whenever that field changes — doesn't touch a track that
-// already has its own artist (various-artists releases stay untouched).
-function applyAlbumArtistToEmptyTracks(){
+// Single place that flips a track's artist field between linked
+// (read-only, mirrors Album Artist) and its own value — used by
+// "change", "revert", and project reload, so the readOnly flag, the
+// change/revert link visibility, and the value stay consistent no
+// matter which of those three sets the state.
+function setArtistLinked(row, linked){
+  const artistInput = row.querySelector(".artist");
+  artistInput.readOnly = linked;
+  row.querySelector(".artist-change").classList.toggle("hidden", !linked);
+  row.querySelector(".artist-revert").classList.toggle("hidden", linked);
+  if(linked) artistInput.value = document.getElementById("albumArtist").value;
+}
+
+// A track's artist is the album artist for as long as it stays
+// "linked" (read-only, no "change" click yet) — mirrored live on every
+// keystroke, never a one-time copy, so it can't go stale or truncate
+// mid-typing. A track past "change" is read-only:false and skipped.
+function syncAlbumArtistToLinkedTracks(){
   const albumArtist = document.getElementById("albumArtist").value;
-  if(!albumArtist) return;
-  document.querySelectorAll(".track-row .artist").forEach(input=>{
-    if(!input.value) input.value = albumArtist;
+  document.querySelectorAll(".track-row .artist[readonly]").forEach(input=>{
+    input.value = albumArtist;
   });
 }
 
@@ -355,7 +384,7 @@ function sideTemplate(side){
             <option value="45">45</option>
           </select>
         </label>
-        <label class="chk"><input type="checkbox" id="cont-${side}"> one continuous file for this side</label>
+        <label class="chk"><input type="checkbox" id="cont-${side}"> one continuous file </label>
       </div>
     </div>
 
@@ -434,14 +463,15 @@ function applyDefaultRpm(){
 
 // Matrix/runout inscription defaults to "<catalogue> <side>" and tracks
 // the catalogue number until the customer types their own — same
-// "fill until touched" idea as applyAlbumArtistToEmptyTracks above, so
-// a deliberate edit is never silently overwritten. Unlike that one,
-// this needs an explicit _auto flag (input._auto, false once the field
-// has been typed into) rather than an emptiness check, because a
-// touched matrix field is never actually empty — it starts pre-filled.
-// Whether a project was saved with the field still on "auto" is itself
-// persisted (see serializeSide/loadProject) so that state survives a
-// save/reload round-trip and doesn't refreeze on a stale value.
+// explicit-state idea as a track's artist field above (readonly until
+// "change"), so a deliberate edit is never silently overwritten and
+// nothing relies on guessing intent from an emptiness check. Here the
+// flag is input._auto (false once the field has been typed into)
+// rather than a DOM attribute, because a touched matrix field is never
+// actually empty — it starts pre-filled. Whether a project was saved
+// with the field still on "auto" is itself persisted (see
+// serializeSide/loadProject) so that state survives a save/reload
+// round-trip and doesn't refreeze on a stale value.
 function defaultMatrix(catalogue, side){
   return (catalogue ? catalogue + " " : "") + side;
 }
@@ -490,7 +520,7 @@ export function initTracklist(){
     updateChecklist();
   });
   document.getElementById("albumTitle").addEventListener("input", updateChecklist);
-  document.getElementById("albumArtist").addEventListener("input", applyAlbumArtistToEmptyTracks);
+  document.getElementById("albumArtist").addEventListener("input", syncAlbumArtistToLinkedTracks);
 
   applyDefaultRpm();
   applyDefaultMatrix();
@@ -527,9 +557,11 @@ function serializeSide(side){
   };
   document.querySelectorAll("#tracks-"+side+" .track-row").forEach((row, i)=>{
     const title = row.querySelector(".title").value;
-    const artist = row.querySelector(".artist").value;
+    const artistInput = row.querySelector(".artist");
+    const artist = artistInput.value;
     data.tracks.push({
       title, artist,
+      artistLinked: artistInput.readOnly,
       length: row.querySelector(".length").value,
       gap: row.querySelector(".gap").value,
       gapCustom: row.querySelector(".gapcustom").value,
@@ -650,7 +682,11 @@ async function loadProject(file){
       const rows = document.querySelectorAll("#tracks-"+side+" .track-row");
       const r = rows[rows.length-1];
       r.querySelector(".title").value = t.title || "";
+      // Older project files predate the linked/changed distinction —
+      // leave those tracks linked (the common case) rather than
+      // silently freezing every saved artist as a one-off override.
       r.querySelector(".artist").value = t.artist || "";
+      setArtistLinked(r, t.artistLinked !== false);
       r.querySelector(".length").value = t.length || "";
       r.querySelector(".gap").value = t.gap || "2";
       r.querySelector(".gapcustom").value = t.gapCustom || "2";
@@ -698,6 +734,7 @@ async function loadProject(file){
   });
 
   applyDefaultMatrix();
+  syncAlbumArtistToLinkedTracks();
   document.getElementById("stamp").textContent = document.getElementById("catalogue").value || "— unsaved —";
   recompute();
 }
