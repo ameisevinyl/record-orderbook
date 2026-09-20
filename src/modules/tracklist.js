@@ -383,6 +383,11 @@ function sideTemplate(side){
       </div>
       <button type="button" class="addbtn no-print" id="addbtn-${side}">+ add track</button>
 
+      <div class="field" style="max-width:260px; margin-top:12px;">
+        <label>Matrix / Runout Inscription</label>
+        <input type="text" id="matrix-${side}" maxlength="60">
+      </div>
+
       <div class="side-total">
         <div>
           <div class="total-fig" id="total-${side}">0:00</div>
@@ -427,6 +432,24 @@ function applyDefaultRpm(){
   recompute();
 }
 
+// Matrix/runout inscription defaults to "<catalogue> <side>" and tracks
+// the catalogue number until the customer types their own — same
+// "fill until touched" rule as attachTrackFile's auto length and
+// applyAlbumArtistToEmptyTracks above, so a deliberate edit is never
+// silently overwritten.
+function defaultMatrix(catalogue, side){
+  return (catalogue ? catalogue + " " : "") + side;
+}
+
+function applyDefaultMatrix(){
+  const catalogue = document.getElementById("catalogue").value;
+  ["A","B"].forEach(side=>{
+    const input = document.getElementById("matrix-"+side);
+    if(input._auto === false) return;
+    input.value = defaultMatrix(catalogue, side);
+  });
+}
+
 // Every module renders its own checklist the same way (<ul class="checklist">
 // with <li class="ok"|"bad">) — tracklist.js, as the page's thin router,
 // checks all of them at once rather than importing each module's own
@@ -450,6 +473,7 @@ export function initTracklist(){
     addTrack(side);
     wireSideOptions(side);
     document.getElementById("rpm-"+side).addEventListener("change", recompute);
+    document.getElementById("matrix-"+side).addEventListener("input", (e)=>{ e.target._auto = false; });
   });
 
   document.getElementById("format").addEventListener("change", applyDefaultRpm);
@@ -457,12 +481,14 @@ export function initTracklist(){
   document.getElementById("catalogue").addEventListener("input", ()=>{
     document.getElementById("stamp").textContent =
       (document.getElementById("catalogue").value.trim() || "— unsaved —");
+    applyDefaultMatrix();
     updateChecklist();
   });
   document.getElementById("albumTitle").addEventListener("input", updateChecklist);
   document.getElementById("albumArtist").addEventListener("input", applyAlbumArtistToEmptyTracks);
 
   applyDefaultRpm();
+  applyDefaultMatrix();
   recompute();
 
   document.getElementById("btnPrint").addEventListener("click", printOrder);
@@ -485,6 +511,7 @@ function serializeSide(side){
   const data = {
     blank: blankChk ? blankChk.checked : false,
     rpm: document.getElementById("rpm-"+side).value,
+    matrixInscription: document.getElementById("matrix-"+side).value,
     continuous: cont,
     continuousLength: document.getElementById("contoverride-"+side).value,
     continuousFileName: contFile ? continuousSideFileName({catalogue, side, ext: fileExt(contFile.name)}) : null,
@@ -632,6 +659,15 @@ async function loadProject(file){
     });
     if(!s.tracks || !s.tracks.length) addTrack(side);
     document.getElementById("rpm-"+side).value = s.rpm || CONFIG.defaultRpm[document.getElementById("format").value];
+    // Older project files predate this field — leave those sides on the
+    // "auto" default (filled in below) rather than blanking them.
+    const matrixInput = document.getElementById("matrix-"+side);
+    if(s.matrixInscription !== undefined){
+      matrixInput.value = s.matrixInscription;
+      matrixInput._auto = false;
+    } else {
+      matrixInput._auto = true;
+    }
     document.getElementById("cont-"+side).checked = !!s.continuous;
     document.getElementById("cont-"+side).dispatchEvent(new Event("change"));
     document.getElementById("contoverride-"+side).value = s.continuousLength || "";
@@ -649,6 +685,7 @@ async function loadProject(file){
     renumber(side);
   });
 
+  applyDefaultMatrix();
   document.getElementById("stamp").textContent = document.getElementById("catalogue").value || "— unsaved —";
   recompute();
 }
@@ -744,6 +781,7 @@ function tracklistBody(project){
     if(s.continuous){
       const total = parseTime(s.continuousLength) || 0;
       out += `SIDE ${side} — ${s.rpm} RPM — total ${formatTime(total)}\n`;
+      out += `  matrix: ${s.matrixInscription || "(none)"}\n`;
       out += `  continuous file: ${s.continuousFileName || "(none selected)"}\n\n`;
       return;
     }
@@ -767,6 +805,7 @@ function tracklistBody(project){
     });
 
     out += `SIDE ${side} — ${s.rpm} RPM — total ${formatTime(cursor)}\n`;
+    out += `  matrix: ${s.matrixInscription || "(none)"}\n`;
     out += renderTable(headers, rows) + "\n\n";
   });
   return out;

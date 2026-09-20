@@ -144,6 +144,11 @@ configured on purpose — keep it that way unless asked.
   marker.
 - **Whitelabel** — a test/promo pressing with a blank or minimal label,
   as opposed to the final printed label.
+- **Matrix / runout inscription** — text etched into the runout groove
+  (the dead wax between the last track and the label) of each side,
+  e.g. the catalogue number plus side letter. Defaults to
+  `<catalogue> <side>`, editable per side, until the customer types
+  their own — see `applyDefaultMatrix` in `tracklist.js`.
 - **Studio email** (`CONFIG.studioEmail`) — where finished packages get
   sent (e.g. via SwissTransfer) for the cutting engineer to pick up.
 - **Project** — one release's complete form state, saved/loaded as a
