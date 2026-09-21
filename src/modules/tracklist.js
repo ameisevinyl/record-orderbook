@@ -573,7 +573,11 @@ function downloadBlob(blob, fileName){
   a.href = URL.createObjectURL(blob);
   a.download = fileName;
   a.click();
-  URL.revokeObjectURL(a.href);
+  // a.click() only *starts* the download — Safari/Firefox stream it
+  // asynchronously, so revoking the object URL on the very next line can
+  // abort large downloads (a multi-hundred-MB project zip is exactly the
+  // case that hits this). Deferred, not immediate.
+  setTimeout(()=> URL.revokeObjectURL(a.href), 30000);
 }
 
 // The project's canonical file name, used both as the zip's own file
