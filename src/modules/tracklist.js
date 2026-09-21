@@ -11,11 +11,14 @@ import { formatTime, parseTime, trackGapSeconds } from "../lib/time.js";
 import { readAudioDuration, compressionWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
+import { getFormat, firstEnabledFormat } from "../lib/format-catalogue.js";
 import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType, humanDate } from "../lib/package-naming.js";
 import { renderTable } from "../lib/text-table.js";
 import { defaultMatrix } from "../lib/matrix.js";
 import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
-import { collectCoverSleeveFiles, collectCoverSleeve, applyCoverSleeve } from "./cover-sleeve.js";
+import { collectCoverFiles, collectCover, applyCover } from "./cover.js";
+import { collectInnerSleeveFiles, collectInnerSleeve, applyInnerSleeve } from "./inner-sleeve.js";
+import { collectInlayFiles, collectInlay, applyInlay } from "./inlay.js";
 import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
 import { collectShippingBilling, applyShippingBilling, buildShippingBillingSummary } from "./shipping-billing.js";
 
@@ -254,7 +257,7 @@ function wireSideOptions(side){
    ============================================================ */
 
 function sideMeta(side){
-  const format = parseInt(document.getElementById("format").value, 10);
+  const format = document.getElementById("format").value;
   const rpm = parseInt(document.getElementById("rpm-"+side).value, 10);
   const mode = document.getElementById("soundsystem").checked ? "soundsystem" : "normal";
   return {format, rpm, mode};
@@ -280,7 +283,7 @@ function computeSideSeconds(side){
 
 function statusFor(seconds, side){
   const {format, rpm, mode} = sideMeta(side);
-  return computeStatus(CONFIG.timeLimits, format, rpm, mode, seconds);
+  return computeStatus(getFormat(CONFIG, format).timeLimits, rpm, mode, seconds);
 }
 
 function recompute(){
@@ -423,29 +426,21 @@ function sideTemplate(side){
    Init
    ============================================================ */
 
-// The dropdown's option list is driven by CONFIG.formatCatalogue rather
-// than hardcoded in index.html, so disabling a format is a one-line
-// config change that takes effect on the next build.
-function firstEnabledFormat(){
-  const { order, enabled } = CONFIG.formatCatalogue;
-  const first = order.find(f => enabled[f]);
-  if(first === undefined) throw new Error("CONFIG.formatCatalogue: at least one format must be enabled");
-  return first;
-}
-
+// The dropdown's option list is driven by CONFIG.formats rather than
+// hardcoded in index.html, so disabling a format is a one-line config
+// change that takes effect on the next build.
 function populateFormatOptions(){
-  firstEnabledFormat(); // throws early if the config disabled every format
-  const { order, labels, enabled } = CONFIG.formatCatalogue;
+  firstEnabledFormat(CONFIG); // throws early if the config disabled every format
   const select = document.getElementById("format");
-  select.innerHTML = order
-    .filter(f => enabled[f])
-    .map(f => `<option value="${f}">${labels[f]}</option>`)
+  select.innerHTML = CONFIG.formats
+    .filter(f => f.enabled)
+    .map(f => `<option value="${f.id}">${f.label}</option>`)
     .join("");
 }
 
 function applyDefaultRpm(){
-  const format = parseInt(document.getElementById("format").value, 10);
-  const def = CONFIG.defaultRpm[format];
+  const format = document.getElementById("format").value;
+  const def = getFormat(CONFIG, format).rpm;
   document.getElementById("rpm-A").value = def;
   document.getElementById("rpm-B").value = def;
   recompute();
@@ -570,7 +565,7 @@ function buildProjectObject(){
     vinylColor: collectVinylColor(),
     shippingBilling: collectShippingBilling(),
     labels: collectLabels(),
-    coverSleeve: collectCoverSleeve()
+    coverSleeve: { cover: collectCover(), innerSleeve: collectInnerSleeve(), inlay: collectInlay() }
   };
 }
 
@@ -646,7 +641,7 @@ async function loadProject(file){
   });
 
   document.getElementById("catalogue").value = p.catalogue || "";
-  document.getElementById("format").value = p.format || String(firstEnabledFormat());
+  document.getElementById("format").value = p.format || firstEnabledFormat(CONFIG);
   // Formats drive label/cover-sleeve sizing and visibility (big center
   // hole options, preview dimensions) — dispatch so those modules'
   // format-change handlers run before we apply their saved state below.
@@ -658,7 +653,10 @@ async function loadProject(file){
   applyVinylColor(p.vinylColor);
   applyShippingBilling(p.shippingBilling);
   applyLabels(p.labels, fileMap);
-  applyCoverSleeve(p.coverSleeve, fileMap);
+  const cs = p.coverSleeve || {};
+  applyCover(cs.cover, fileMap);
+  applyInnerSleeve(cs.innerSleeve, fileMap);
+  applyInlay(cs.inlay, fileMap);
 
   ["A","B"].forEach(side=>{
     const s = (p.sides && p.sides[side]) || {tracks:[]};
@@ -687,7 +685,7 @@ async function loadProject(file){
       }
     });
     if(!s.tracks || !s.tracks.length) addTrack(side);
-    document.getElementById("rpm-"+side).value = s.rpm || CONFIG.defaultRpm[document.getElementById("format").value];
+    document.getElementById("rpm-"+side).value = s.rpm || getFormat(CONFIG, document.getElementById("format").value).rpm;
     // Older project files predate this field — leave those sides on the
     // "auto" default (filled in below) rather than blanking them. When
     // the field is present, matrixInscriptionAuto (persisted by
@@ -749,7 +747,9 @@ async function collectPackageFiles(){
     }
   }
   files.push(...await collectLabelFiles());
-  files.push(...await collectCoverSleeveFiles());
+  files.push(...await collectCoverFiles());
+  files.push(...await collectInnerSleeveFiles());
+  files.push(...await collectInlayFiles());
   return files;
 }
 
@@ -779,7 +779,8 @@ function documentHeader(project, label){
 // Printed-part filenames only — tracks/continuous-side files are already
 // listed in the per-side tables below, so repeating them here would be
 // redundant. A null fileName means "not actually included" (whitelabel,
-// unprinted, inlay not included, etc.) — see collectLabels/collectCoverSleeve.
+// unprinted, inlay not included, etc.) — see collectLabels/collectCover/
+// collectInnerSleeve/collectInlay.
 function filesManifestSection(project){
   const l = project.labels, c = project.coverSleeve;
   const packageFiles = [
