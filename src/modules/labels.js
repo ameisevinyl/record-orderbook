@@ -183,6 +183,22 @@ async function handleFile(side, file){
   drawSimGuides(side);
 }
 
+// A file picked for one format is sized for that format's dataSizeMm —
+// switching format invalidates it outright (see initLabels's format
+// change listener), rather than leaving a now-wrong-size file attached.
+function clearLabelArtwork(side){
+  const box = document.getElementById("labelbox-"+side);
+  if(box._url) URL.revokeObjectURL(box._url);
+  box._file = null;
+  box._url = null;
+  document.getElementById("labelinput-"+side).value = "";
+  const meta = document.getElementById("labelmeta-"+side);
+  meta.classList.add("empty");
+  meta.textContent = "";
+  setPreview(side, `<div class="label-placeholder">no artwork selected</div>`);
+  document.getElementById("labelwarnings-"+side).innerHTML = "";
+}
+
 function wireLabelSide(side){
   const input = document.getElementById("labelinput-"+side);
   document.getElementById("labelpick-"+side).addEventListener("click", ()=> input.click());
@@ -216,6 +232,7 @@ export function initLabels(){
   };
   document.getElementById("bigCenter").addEventListener("change", ()=> SIDES.forEach(drawSimGuides));
   document.getElementById("format").addEventListener("change", ()=>{
+    SIDES.forEach(clearLabelArtwork);
     updateBigCenterVisibility();
     updatePreviewSizing();
     updateLabelInfo();

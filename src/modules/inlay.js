@@ -104,6 +104,19 @@ function createInlayArtworkSlot(prefix){
     draw();
   }
 
+  // A file picked for one format is sized for that format's dataMm —
+  // switching format invalidates it outright (see initInlay's format
+  // change listener), rather than leaving a now-wrong-size file attached.
+  function clear(){
+    if(url) URL.revokeObjectURL(url);
+    file = null; url = null;
+    input.value = "";
+    meta.classList.add("empty");
+    meta.textContent = "";
+    preview.innerHTML = `<div class="label-placeholder">no artwork selected</div>`;
+    warningsList.innerHTML = "";
+  }
+
   document.getElementById(prefix+"pick").addEventListener("click", ()=> input.click());
   input.addEventListener("change", ()=>{
     const f = input.files[0];
@@ -111,7 +124,7 @@ function createInlayArtworkSlot(prefix){
   });
   simChk.addEventListener("change", draw);
 
-  return { updateSizing, draw, getFile: ()=> file, setFile: handleFile };
+  return { updateSizing, draw, clear, getFile: ()=> file, setFile: handleFile };
 }
 
 function inlaySlotFileName(variant, file){
@@ -136,7 +149,7 @@ export function initInlay(){
   [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.updateSizing(); s.draw(); });
 
   document.getElementById("format").addEventListener("change", ()=>{
-    [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.updateSizing(); s.draw(); });
+    [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.clear(); s.updateSizing(); s.draw(); });
   });
 
   document.getElementById("inlayInclude").addEventListener("change", updateInlayVisibility);
