@@ -117,7 +117,7 @@ async function fallbackToAiff(file){
 }
 
 function fallbackDuration(file){
-  if(/\.wav?$/i.test(file.name) || /\.wave$/i.test(file.name)) return fallbackToWav(file);
+  if(/\.wav$/i.test(file.name) || /\.wave$/i.test(file.name)) return fallbackToWav(file);
   if(/\.aiff?$/i.test(file.name) || /\.aifc$/i.test(file.name)) return fallbackToAiff(file);
   return Promise.resolve(null);
 }
