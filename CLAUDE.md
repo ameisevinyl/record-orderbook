@@ -51,9 +51,10 @@ yourself. Be short and precise.
    people: `order_summary.txt` is the complete order (release info,
    file manifest, tracklist, notes, billing/shipping) for customer
    service / production management; `tracklist.txt` is the same
-   release info, file manifest, tracklist and notes but *without*
-   billing/shipping, for the mastering engineer and graphics
-   department, who don't need the customer's order details. Everything
+   release info, tracklist and notes but *without* billing/shipping
+   or the artwork file manifest, for the mastering engineer and
+   graphics department, who don't need the customer's order details
+   or a listing of files they already have. Everything
    is nested under one folder inside the zip, named per the project
    naming convention below. See `src/lib/zip.js` for the writer/reader and
    `src/lib/package-naming.js` for the naming.

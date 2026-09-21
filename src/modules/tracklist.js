@@ -779,7 +779,9 @@ function documentHeader(project, label){
 // listed in the per-side tables below, so repeating them here would be
 // redundant. A null fileName means "not actually included" (whitelabel,
 // unprinted, inlay not included, etc.) — see collectLabels/collectCover/
-// collectInnerSleeve/collectInlay.
+// collectInnerSleeve/collectInlay. order_summary.txt only — the mastering
+// engineer and graphics department (tracklist.txt) don't need a manifest
+// of the artwork files, they already have the files themselves.
 function filesManifestSection(project){
   const l = project.labels, c = project.coverSleeve;
   const packageFiles = [
@@ -793,8 +795,8 @@ function filesManifestSection(project){
 
 // The tracklist body (per-side track tables) — shared by order_summary.txt
 // (the complete order, for customer service / production management) and
-// tracklist.txt (audio + artwork filenames and notes only, no billing/
-// shipping — this one goes to the mastering engineer and graphics
+// tracklist.txt (audio filenames and notes only, no billing/shipping or
+// artwork manifest — this one goes to the mastering engineer and graphics
 // department, who don't need to see the customer's order details).
 function tracklistBody(project){
   const showArtist = tracksNeedArtistColumn(project);
@@ -852,12 +854,12 @@ function buildOrderSummaryText(project){
     + "\n" + buildShippingBillingSummary();
 }
 
-// Same tracklist as above, minus the customer's billing/shipping details —
-// this one goes to the mastering engineer and graphics department, who
-// don't need to see the rest of the order.
+// Same tracklist as above, minus the customer's billing/shipping details
+// and the artwork file manifest — this one goes to the mastering engineer
+// and graphics department, who don't need to see the rest of the order or
+// a listing of files they already have.
 function buildTracklistText(project){
   return documentHeader(project, "TRACKLIST")
-    + filesManifestSection(project)
     + tracklistBody(project)
     + notesSection(project);
 }
