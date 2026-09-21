@@ -59,6 +59,7 @@ function fitPdfIframe(iframe, container, naturalMm){
   iframe.style.transformOrigin = "top left";
   const containerRect = container.getBoundingClientRect();
   const iframeRect = iframe.getBoundingClientRect();
+  if(containerRect.width === 0 || iframeRect.width === 0) return; // box not laid out yet (e.g. still hidden) — nothing sane to scale to
   iframe.style.transform = `scale(${containerRect.width / iframeRect.width}, ${containerRect.height / iframeRect.height})`;
 }
 
@@ -259,8 +260,10 @@ export function applyInnerSleeve(data, fileMap){
   document.getElementById("innersleeveColor").value = is.color || "white";
   document.getElementById("innersleeveCutout").checked = is.cutout !== false;
   document.getElementById("innersleevesimprint").checked = !!is.simprint;
-  applyInnerSleeveSlotFile(is.fileName, is.originalFileName, fileMap);
+  // Mode (and the visibility it drives) must be set before re-attaching
+  // the file — see cover.js's identical ordering fix and its comment.
   updateInnerSleeveMode();
+  applyInnerSleeveSlotFile(is.fileName, is.originalFileName, fileMap);
   innerSleeveSlot.updateSizing();
   innerSleeveSlot.draw();
 }

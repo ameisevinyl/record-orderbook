@@ -49,6 +49,7 @@ function fitPdfIframe(iframe, container, naturalMm){
   iframe.style.transformOrigin = "top left";
   const containerRect = container.getBoundingClientRect();
   const iframeRect = iframe.getBoundingClientRect();
+  if(containerRect.width === 0 || iframeRect.width === 0) return; // box not laid out yet (e.g. still hidden) — nothing sane to scale to
   iframe.style.transform = `scale(${containerRect.width / iframeRect.width}, ${containerRect.height / iframeRect.height})`;
 }
 
@@ -249,11 +250,13 @@ export function collectInlay(){
 export function applyInlay(data, fileMap){
   const inlay = data || {};
   document.getElementById("inlayInclude").checked = !!inlay.include;
+  // Visibility must be set before re-attaching files — see cover.js's
+  // identical ordering fix and its comment.
+  updateInlayVisibility();
   document.getElementById("inlayfrontsimprint").checked = !!(inlay.front && inlay.front.simprint);
   applyInlaySlotFile(inlayFrontSlot, "inlayfront", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap);
   document.getElementById("inlaybacksimprint").checked = !!(inlay.back && inlay.back.simprint);
   applyInlaySlotFile(inlayBackSlot, "inlayback", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap);
-  updateInlayVisibility();
   [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.updateSizing(); s.draw(); });
 }
 

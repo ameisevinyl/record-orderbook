@@ -104,6 +104,7 @@ function fitPdfIframe(iframe, container, naturalMm){
   iframe.style.transformOrigin = "top left";
   const containerRect = container.getBoundingClientRect();
   const iframeRect = iframe.getBoundingClientRect();
+  if(containerRect.width === 0 || iframeRect.width === 0) return; // box not laid out yet (e.g. still hidden) — nothing sane to scale to
   iframe.style.transform = `scale(${containerRect.width / iframeRect.width}, ${containerRect.height / iframeRect.height})`;
 }
 

@@ -76,6 +76,7 @@ function fitPdfIframe(iframe, container, naturalMm){
   iframe.style.transformOrigin = "top left";
   const containerRect = container.getBoundingClientRect();
   const iframeRect = iframe.getBoundingClientRect();
+  if(containerRect.width === 0 || iframeRect.width === 0) return; // box not laid out yet (e.g. still hidden) — nothing sane to scale to
   iframe.style.transform = `scale(${containerRect.width / iframeRect.width}, ${containerRect.height / iframeRect.height})`;
 }
 
@@ -289,8 +290,12 @@ export function applyCover(data, fileMap){
   document.getElementById("cover-none").checked = c.mode !== "printed" && c.mode !== "printed-inside-out" && c.mode !== "unprinted";
   document.getElementById("coverColor").value = c.color || "white";
   document.getElementById("coversimprint").checked = !!c.simprint;
-  applyCoverSlotFile(c.fileName, c.originalFileName, fileMap);
+  // Mode (and the visibility it drives) must be set before re-attaching
+  // the file: fitPdfIframe measures the preview box's rendered size, and
+  // a still-hidden box measures 0×0 — see the identical ordering fix in
+  // inner-sleeve.js/inlay.js.
   updateCoverMode();
+  applyCoverSlotFile(c.fileName, c.originalFileName, fileMap);
   coverSlot.updateSizing();
   coverSlot.draw();
 }

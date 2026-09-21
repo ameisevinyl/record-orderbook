@@ -79,7 +79,10 @@ function buildBundle(){
   if(!bundle.includes(BUILD_STAMP_MARKER)){
     throw new Error(`build.js: couldn't find the BUILD_STAMP marker in app.js to stamp`);
   }
-  return bundle.replace(BUILD_STAMP_MARKER, `const BUILD_STAMP = "${new Date().toISOString()}";`);
+  // Europe/Berlin, not UTC or the build machine's own zone — the plant
+  // is in Hamburg, so a stamp they read should match their wall clock.
+  const stamp = new Date().toLocaleString("de-DE", { timeZone: "Europe/Berlin", dateStyle: "short", timeStyle: "medium" }) + " (Berlin time)";
+  return bundle.replace(BUILD_STAMP_MARKER, `const BUILD_STAMP = ${JSON.stringify(stamp)};`);
 }
 
 function buildHtml(bundleJs){
