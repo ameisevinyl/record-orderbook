@@ -840,6 +840,39 @@ function filesManifestSection(project){
   return "Files:\n" + packageFiles.map(f => `  ${f}`).join("\n") + "\n\n";
 }
 
+// Full packaging spec — what each printed part actually IS (mode,
+// colour when unprinted, filename + the customer's original filename
+// when printed), not just its bare name (filesManifestSection above is
+// a flat file list for a quick zip cross-check; this reads like a
+// production instruction). order_summary.txt only, same reasoning as
+// filesManifestSection above — the mastering engineer and graphics
+// department already have the files, they don't need them described
+// back to them either.
+function packagingSection(project){
+  const c = project.coverSleeve;
+  const withOriginal = (fileName, originalFileName) =>
+    (fileName || "(no file)") + (originalFileName && originalFileName !== fileName ? ` (was: ${originalFileName})` : "");
+
+  const coverModeLabel = { printed: "printed", "printed-inside-out": "printed (inside out)" };
+  let out = "PACKAGING:\n";
+  out += (c.cover.mode in coverModeLabel)
+    ? `  Cover: ${coverModeLabel[c.cover.mode]} — ${withOriginal(c.cover.fileName, c.cover.originalFileName)}\n`
+    : c.cover.mode === "unprinted"
+      ? `  Cover: unprinted, ${c.cover.color}\n`
+      : `  Cover: none\n`;
+
+  out += c.innerSleeve.mode === "printed"
+    ? `  Inner sleeve: printed — ${withOriginal(c.innerSleeve.fileName, c.innerSleeve.originalFileName)} — center cut-out: ${c.innerSleeve.cutout ? "yes" : "no"}\n`
+    : `  Inner sleeve: unprinted, ${c.innerSleeve.color} — center cut-out: ${c.innerSleeve.cutout ? "yes" : "no"}\n`;
+
+  out += c.inlay.include
+    ? `  Inlay: front — ${withOriginal(c.inlay.front.fileName, c.inlay.front.originalFileName)}\n`
+      + `         back  — ${withOriginal(c.inlay.back.fileName, c.inlay.back.originalFileName)}\n`
+    : `  Inlay: none\n`;
+
+  return out + "\n";
+}
+
 // The tracklist body (per-side track tables) — shared by order_summary.txt
 // (the complete order, for customer service / production management) and
 // tracklist.txt (audio filenames and notes only, no billing/shipping or
@@ -896,6 +929,7 @@ function notesSection(project){
 function buildOrderSummaryText(project){
   return documentHeader(project, "ORDER SUMMARY")
     + filesManifestSection(project)
+    + packagingSection(project)
     + tracklistBody(project)
     + notesSection(project)
     + "\n" + buildShippingBillingSummary(project.shippingBilling, project.vinylColor);
