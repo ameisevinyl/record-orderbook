@@ -14,14 +14,8 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, computeSpreadInsetPx } from "../lib/print-artwork.js";
-import { printedPartFileName, fileExt } from "../lib/package-naming.js";
-
-// Canvas render resolution in pixels-per-mm — named distinctly per
-// printed-part module (see build/build.js's header comment: everything
-// flattens into one shared top-level scope, so labels.js's PX_PER_MM and
-// inner-sleeve.js's/inlay.js's own constants can't collide with this).
-const COVER_PX_PER_MM = 4;
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork } from "../lib/print-artwork.js";
+import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
 // On-screen preview cap, in px. A flat cover spread can be 600+mm wide —
 // displaying that at true CSS-mm size would make the preview several
@@ -54,11 +48,10 @@ function createCoverArtworkSlot(){
   const meta = document.getElementById("covermeta");
   const preview = document.getElementById("coverpreview");
   const wrap = document.getElementById("coverpreviewwrap");
-  const canvas = document.getElementById("coversim");
   const warningsList = document.getElementById("coverwarnings");
-  const simChk = document.getElementById("coversimprint");
   const caption = document.getElementById("covercaption");
   let file = null, url = null, originalFileName = null;
+  let previewFile = null, previewUrl = null;
 
   function updateSizing(){
     const { dataMm } = coverSpec();
@@ -66,23 +59,7 @@ function createCoverArtworkSlot(){
     wrap.style.maxWidth = COVER_PREVIEW_MAX_W+"px";
     wrap.style.aspectRatio = dataMm.w+" / "+dataMm.h;
     preview.style.width = "100%"; preview.style.height = "100%";
-    canvas.width = Math.round(dataMm.w * COVER_PX_PER_MM);
-    canvas.height = Math.round(dataMm.h * COVER_PX_PER_MM);
-    canvas.style.width = "100%"; canvas.style.height = "100%";
     caption.style.width = "100%"; caption.style.maxWidth = COVER_PREVIEW_MAX_W+"px";
-  }
-
-  function draw(){
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if(!simChk.checked) return;
-    const { dataMm, trimMm } = coverSpec();
-    const inset = computeSpreadInsetPx(canvas.width, canvas.height, dataMm, trimMm);
-    ctx.beginPath();
-    ctx.rect(0, 0, canvas.width, canvas.height);
-    ctx.rect(inset.x, inset.y, canvas.width - 2*inset.x, canvas.height - 2*inset.y);
-    ctx.fillStyle = "#000";
-    ctx.fill("evenodd");
   }
 
   // "file: <current name>", plus a tight second line with the original
@@ -103,6 +80,19 @@ function createCoverArtworkSlot(){
     }
   }
 
+  // Swaps the preview box to a plant-generated preview image, taking
+  // priority over the live-rendered original — see applyCoverSlotFile
+  // below, the only caller (a fresh manual pick never has one to show
+  // yet). Reuses the existing file-meta status-text slot instead of
+  // adding new markup/CSS for a separate caption.
+  function showPreviewImage(previewImgFile){
+    previewFile = previewImgFile;
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(previewImgFile);
+    preview.innerHTML = `<img src="${previewUrl}" alt="plant preview">`;
+    renderCoverFileMeta(file.name, originalFileName, "plant preview");
+  }
+
   // origName defaults to the file's own name (a fresh manual pick);
   // applyCoverSlotFile passes the name recorded before renaming, on a
   // project reload, so renderCoverFileMeta can show it as the "was:" line.
@@ -112,6 +102,9 @@ function createCoverArtworkSlot(){
     meta.classList.remove("empty");
     renderCoverFileMeta(f.name, origName, "checking…");
     if(url) URL.revokeObjectURL(url);
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewFile = null;
+    previewUrl = null;
 
     const buf = await f.arrayBuffer();
     const kind = sniffFileKind(buf);
@@ -144,7 +137,6 @@ function createCoverArtworkSlot(){
       preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
     }
     renderCoverFileMeta(f.name, origName, null);
-    draw();
   }
 
   // A file picked for one format is sized for that format's dataMm —
@@ -153,6 +145,8 @@ function createCoverArtworkSlot(){
   function clear(){
     if(url) URL.revokeObjectURL(url);
     file = null; url = null; originalFileName = null;
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewFile = null; previewUrl = null;
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
@@ -165,9 +159,11 @@ function createCoverArtworkSlot(){
     const f = input.files[0];
     if(f) handleFile(f);
   });
-  simChk.addEventListener("change", draw);
 
-  return { updateSizing, draw, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName, setFile: handleFile };
+  return {
+    updateSizing, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName,
+    setFile: handleFile, setPreviewImage: showPreviewImage, getPreviewFile: ()=> previewFile
+  };
 }
 
 function coverSlotFileName(file){
@@ -191,12 +187,10 @@ function updateCoverMode(){
 export function initCover(){
   coverSlot = createCoverArtworkSlot();
   coverSlot.updateSizing();
-  coverSlot.draw();
 
   document.getElementById("format").addEventListener("change", ()=>{
     coverSlot.clear();
     coverSlot.updateSizing();
-    coverSlot.draw();
   });
 
   document.getElementById("cover-printed").addEventListener("change", updateCoverMode);
@@ -229,10 +223,16 @@ function setCoverFileNamePlaceholder(name, originalName){
 // (see tracklist.js's loadProject). If the slot's stored name is in the
 // map, the file gets re-attached directly; otherwise it falls back to
 // the "please re-select" placeholder.
-function applyCoverSlotFile(fileName, originalFileName, fileMap){
+async function applyCoverSlotFile(fileName, originalFileName, fileMap){
   const file = fileMap && fileName && fileMap.get(fileName);
-  if(file) coverSlot.setFile(file, originalFileName || fileName);
-  else setCoverFileNamePlaceholder(fileName, originalFileName);
+  if(file){
+    await coverSlot.setFile(file, originalFileName || fileName);
+    const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"cover"});
+    const previewImg = fileMap && fileMap.get(previewName);
+    if(previewImg) coverSlot.setPreviewImage(previewImg);
+  } else {
+    setCoverFileNamePlaceholder(fileName, originalFileName);
+  }
 }
 
 // Exported for the tracklist module's project save/load, same
@@ -250,24 +250,21 @@ export function collectCover(){
         : document.getElementById("cover-printed-inside-out").checked ? "printed-inside-out"
         : document.getElementById("cover-unprinted").checked ? "unprinted" : "none",
     color: document.getElementById("coverColor").value,
-    simprint: document.getElementById("coversimprint").checked,
     fileName: (hasArtwork && file) ? coverSlotFileName(file) : null,
     originalFileName: (hasArtwork && file) ? coverSlot.getOriginalFileName() : null
   };
 }
 
-export function applyCover(data, fileMap){
+export async function applyCover(data, fileMap){
   const c = data || {};
   document.getElementById("cover-printed").checked = c.mode === "printed";
   document.getElementById("cover-printed-inside-out").checked = c.mode === "printed-inside-out";
   document.getElementById("cover-unprinted").checked = c.mode === "unprinted";
   document.getElementById("cover-none").checked = c.mode !== "printed" && c.mode !== "printed-inside-out" && c.mode !== "unprinted";
   document.getElementById("coverColor").value = c.color || "white";
-  document.getElementById("coversimprint").checked = !!c.simprint;
-  applyCoverSlotFile(c.fileName, c.originalFileName, fileMap);
+  await applyCoverSlotFile(c.fileName, c.originalFileName, fileMap);
   updateCoverMode();
   coverSlot.updateSizing();
-  coverSlot.draw();
 }
 
 // Exported for the tracklist module's package export, same pattern as
@@ -277,6 +274,11 @@ export async function collectCoverFiles(){
   if(coverHasArtwork()){
     const cover = await collectCoverSlotFile();
     if(cover) files.push(cover);
+    const previewImg = coverSlot.getPreviewFile();
+    if(previewImg){
+      const name = previewFileName({catalogue: document.getElementById("catalogue").value, part:"cover"});
+      files.push({name, data: await previewImg.arrayBuffer()});
+    }
   }
   return files;
 }

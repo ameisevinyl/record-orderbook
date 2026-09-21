@@ -632,14 +632,10 @@
           <label class="hint">Artwork file — flat, opened, front on the right, back on the left (PDF, JPG, or TIFF)</label>
           <div class="filemeta empty" id="covermeta"></div>
         </div>
-        <div class="field" style="flex:0 0 auto;">
-          <label class="chk" style="margin-top:20px;"><input type="checkbox" id="coversimprint" data-warnfor="coverwarnings"> simulate print</label>
-        </div>
       </div>
       <input type="file" id="coverinput" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
       <div class="label-preview-wrap" id="coverpreviewwrap">
         <div class="label-preview" id="coverpreview"><div class="label-placeholder">no artwork selected</div></div>
-        <canvas class="label-simcanvas" id="coversim"></canvas>
       </div>
       <div class="spread-caption" id="covercaption"><span>back</span><span>front</span></div>
       <ul class="labelwarnings" id="coverwarnings"></ul>

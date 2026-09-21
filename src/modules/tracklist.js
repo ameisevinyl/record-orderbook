@@ -706,7 +706,7 @@ async function loadProject(file){
   applyShippingBilling(p.shippingBilling);
   await applyLabels(p.labels, fileMap);
   const cs = p.coverSleeve || {};
-  applyCover(cs.cover, fileMap);
+  await applyCover(cs.cover, fileMap);
   applyInnerSleeve(cs.innerSleeve, fileMap);
   applyInlay(cs.inlay, fileMap);
 
