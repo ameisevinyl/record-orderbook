@@ -234,7 +234,120 @@ function dictAround(text, textIndex){
   return null; // unbalanced — malformed or truncated file
 }
 
-export function parsePdfArtwork(arrayBuffer){
+// The mirror image of dictAround: given the index of the ">>" that
+// closes some dictionary, walks backward token-by-token (depth-
+// tracking, same as dictAround) to find the "<<" it matches. Needed to
+// find the dict immediately preceding a "stream" keyword — a plain
+// text.lastIndexOf("<<", ...) would instead find an already-closed
+// nested subdictionary's opener whenever the object contains one
+// anywhere earlier (e.g. a /DecodeParms dict), returning just that
+// subdictionary's bounds instead of the whole object's.
+function dictBefore(text, closeEndIndex){
+  const tokenRe = /<<|>>/g;
+  const tokens = [];
+  let m;
+  while((m = tokenRe.exec(text)) !== null){
+    if(m.index >= closeEndIndex) break;
+    tokens.push({ tok: m[0], index: m.index });
+  }
+  let depth = 0;
+  for(let i = tokens.length - 1; i >= 0; i--){
+    depth += tokens[i].tok === ">>" ? 1 : -1;
+    if(depth === 0) return text.slice(tokens[i].index, closeEndIndex);
+  }
+  return null; // unbalanced — malformed or truncated file
+}
+
+// PDF's /FlateDecode is zlib-wrapped deflate (RFC 1950) — a zlib header
+// plus an Adler-32 trailer around the raw deflate data — unlike a zip
+// entry's raw DEFLATE (RFC 1951, see zip.js's inflateRaw), so this
+// needs the "deflate" format, not "deflate-raw".
+async function inflateFlateDecode(bytes){
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"));
+  const reader = stream.getReader();
+  const chunks = [];
+  let total = 0;
+  while(true){
+    const { done, value } = await reader.read();
+    if(done) break;
+    chunks.push(value);
+    total += value.length;
+  }
+  const out = new Uint8Array(total);
+  let o = 0;
+  chunks.forEach(c => { out.set(c, o); o += c.length; });
+  return new TextDecoder("latin1").decode(out);
+}
+
+// True when a bare content-stream operator token appears preceded by a
+// number (its last operand) and followed by whitespace/end — e.g. "0 k"
+// for a CMYK fill. Content streams are strictly postfix (operands then
+// operator), so this is specific enough to trust without a full
+// tokenizer, for the single-operator names this file cares about.
+function hasContentOperator(content, op){
+  return new RegExp(`[\\d.]\\s+${op}(?=[\\s]|$)`, "m").test(content);
+}
+
+// Resource-free colour operators only — k/K (CMYK fill/stroke), rg/RG
+// (RGB), g/G (Gray). Deliberately not cs/scn with a named resource
+// colourspace: resolving one of those means following an indirect
+// object reference, exactly the kind of full parsing this file avoids
+// everywhere else — and a named colourspace's spot/Pantone use is
+// already caught by extractSpotNames above regardless of whether it's
+// ever actually painted. CMYK wins if present at all (professional
+// tools commonly draw plain black text as "0 g" even in an otherwise
+// CMYK-targeted file, so Gray-only doesn't mean "not CMYK" the way it
+// would for a raster file).
+function vectorColorModeFromOperators(content){
+  if(hasContentOperator(content, "k") || hasContentOperator(content, "K")) return "CMYK";
+  if(hasContentOperator(content, "rg") || hasContentOperator(content, "RG")) return "RGB";
+  if(hasContentOperator(content, "g") || hasContentOperator(content, "G")) return "Gray";
+  return "unknown";
+}
+
+// Only called when no image XObject was found at all — a pure-vector
+// file's colour only shows up as operators inside its (usually
+// compressed) page content stream, which this file otherwise never
+// touches (see its header comment on avoiding a real object parser).
+// Trusted only when the document has exactly one Flate-compressed,
+// non-image candidate stream: the common case for simple vector
+// artwork. Anything more structurally ambiguous — multiple candidates,
+// none at all, a candidate that turns out not to be valid deflate data
+// — stays "unknown" rather than risk guessing wrong, which would be
+// worse than today's honest "can't tell".
+async function detectVectorColorMode(text, bytes){
+  const candidates = [];
+  const streamOpenRe = /(>>)\s*stream\r?\n/g;
+  let m;
+  while((m = streamOpenRe.exec(text)) !== null){
+    const dictText = dictBefore(text, m.index + 2);
+    if(!dictText) continue;
+    if(!/\/FlateDecode\b/.test(dictText)) continue;
+    if(/\/Subtype\s*\/Image/.test(dictText)) continue;
+    if(/\/Type\s*\/(ObjStm|XRef|Metadata)\b/.test(dictText)) continue;
+
+    const dataStart = streamOpenRe.lastIndex;
+    let dataEnd = text.indexOf("endstream", dataStart);
+    if(dataEnd === -1) continue;
+    // A single EOL conventionally separates the stream data from the
+    // "endstream" keyword (PDF spec) — part of the file's framing, not
+    // part of the compressed payload, so left in it trips zlib's
+    // trailing-data check on an otherwise perfectly valid stream.
+    if(text[dataEnd-1] === "\n"){ dataEnd--; if(text[dataEnd-1] === "\r") dataEnd--; }
+    candidates.push({ start: dataStart, end: dataEnd });
+  }
+
+  if(candidates.length !== 1) return "unknown";
+
+  try{
+    const content = await inflateFlateDecode(bytes.slice(candidates[0].start, candidates[0].end));
+    return vectorColorModeFromOperators(content);
+  } catch{
+    return "unknown"; // not actually valid deflate data — stay honest, don't guess
+  }
+}
+
+export async function parsePdfArtwork(arrayBuffer){
   const bytes = new Uint8Array(arrayBuffer);
   // Latin-1, not UTF-8: PDF structure is always single-byte ASCII even
   // when a stream's binary content isn't, and this keeps string index
@@ -311,6 +424,13 @@ export function parsePdfArtwork(arrayBuffer){
   // dictionaries are always plain, uncompressed objects (unlike page
   // content streams), so this needs no stream decompression either.
   const spotColors = Array.from(new Set(extractSpotNames(text)));
+
+  // No image at all means colorMode is still "unknown" at this point —
+  // the only other place colour information can come from is the page
+  // content stream itself (vector fills), which does need decompression.
+  if(imagePx === null && colorMode === "unknown"){
+    colorMode = await detectVectorColorMode(text, bytes);
+  }
 
   return { pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors };
 }

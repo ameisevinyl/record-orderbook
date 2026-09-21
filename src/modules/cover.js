@@ -108,7 +108,7 @@ function createCoverArtworkSlot(){
     const buf = await f.arrayBuffer();
     const kind = sniffFileKind(buf);
     let parsed = null;
-    if(kind === "pdf") parsed = parsePdfArtwork(buf);
+    if(kind === "pdf") parsed = await parsePdfArtwork(buf);
     else if(kind === "jpeg") parsed = parseJpegArtwork(buf);
     else if(kind === "tiff") parsed = parseTiffArtwork(buf);
 

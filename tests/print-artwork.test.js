@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { deflateSync } from "node:zlib";
 import {
   sniffFileKind,
   parseJpegArtwork,
@@ -99,6 +100,42 @@ function pdfBuffer(str) {
   return new TextEncoder().encode(str).buffer;
 }
 
+// Concatenates ASCII text chunks (encoded 1 char = 1 byte, matching
+// this codebase's latin1-index-equals-byte-offset assumption) with raw
+// binary chunks (e.g. real deflate output) into one ArrayBuffer — for
+// building a synthetic PDF whose content stream is genuinely
+// Flate-compressed, not just a string that happens to say "FlateDecode".
+function concatBytes(parts) {
+  const chunks = parts.map(p =>
+    typeof p === "string" ? Uint8Array.from(p, c => c.charCodeAt(0)) : p);
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const out = new Uint8Array(total);
+  let o = 0;
+  chunks.forEach(c => { out.set(c, o); o += c.length; });
+  return out.buffer;
+}
+
+// A minimal one-page vector PDF: a real page object (no image XObject
+// at all) whose /Contents stream is genuinely Flate-compressed, so
+// parsePdfArtwork's vector-colour detection has real deflate bytes to
+// decompress, not a stub.
+function vectorPdfBuffer({ mediaBoxPt = [0, 0, 283.5, 283.5], content, extraObjects = "" }) {
+  const compressed = deflateSync(Buffer.from(content, "latin1"));
+  const pre = `%PDF-1.4
+1 0 obj
+<< /Type /Page /MediaBox [${mediaBoxPt.join(" ")}] /Contents 2 0 R >>
+endobj
+2 0 obj
+<< /Length ${compressed.length} /Filter /FlateDecode >>
+stream
+`;
+  const post = `
+endstream
+endobj
+${extraObjects}`;
+  return concatBytes([pre, new Uint8Array(compressed), post]);
+}
+
 // ---- sniffFileKind ----
 
 test("sniffFileKind detects PDF, JPEG, TIFF, and unknown", () => {
@@ -159,44 +196,44 @@ test("parseTiffArtwork returns null for non-TIFF bytes", () => {
 
 // ---- parsePdfArtwork ----
 
-test("parsePdfArtwork reads MediaBox in points and converts to mm", () => {
+test("parsePdfArtwork reads MediaBox in points and converts to mm", async () => {
   // 98mm x 98mm = 277.795... x 277.795... pt
   const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 277.8 277.8] >>\nendobj\n";
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.ok(Math.abs(info.pageSizeMm.w - 98) < 0.05);
   assert.ok(Math.abs(info.pageSizeMm.h - 98) < 0.05);
 });
 
-test("parsePdfArtwork prefers BleedBox over TrimBox and MediaBox — targetMm is always the bleed-inclusive dataSizeMm/dataMm, not the trim size", () => {
+test("parsePdfArtwork prefers BleedBox over TrimBox and MediaBox — targetMm is always the bleed-inclusive dataSizeMm/dataMm, not the trim size", async () => {
   // MediaBox is the full sheet with crop marks (~120mm); TrimBox is the
   // cut size WITHOUT bleed (98mm); BleedBox is the cut size WITH bleed
   // (104mm) — the one every caller's targetMm actually matches.
   const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 340.2 340.2] /TrimBox [21.2 21.2 299 299] /BleedBox [12.8 12.8 307.603 307.603] >>\nendobj\n";
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.ok(Math.abs(info.pageSizeMm.w - 104) < 0.05, info.pageSizeMm.w);
   assert.ok(Math.abs(info.pageSizeMm.h - 104) < 0.05, info.pageSizeMm.h);
 });
 
-test("parsePdfArtwork falls back to TrimBox over MediaBox when there's no BleedBox", () => {
+test("parsePdfArtwork falls back to TrimBox over MediaBox when there's no BleedBox", async () => {
   const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 340.2 340.2] /TrimBox [21.2 21.2 299 299] >>\nendobj\n";
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.ok(Math.abs(info.pageSizeMm.w - 98) < 0.05, info.pageSizeMm.w);
 });
 
-test("parsePdfArtwork + validateArtwork: a correctly-bled prepress export doesn't false-flag as wrong size", () => {
+test("parsePdfArtwork + validateArtwork: a correctly-bled prepress export doesn't false-flag as wrong size", async () => {
   // Regression case: MediaBox 120mm (crop marks), BleedBox 106mm
   // (matches a 12\" label's dataSizeMm exactly), TrimBox 100mm (matches
   // its diameterMm) — BleedBox must win, or this reads as 100mm and
   // wrongly warns against the 106mm target.
   const pt = mm => mm / 25.4 * 72;
   const pdf = `%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 ${pt(120)} ${pt(120)}] /BleedBox [${pt(7)} ${pt(7)} ${pt(113)} ${pt(113)}] /TrimBox [${pt(10)} ${pt(10)} ${pt(110)} ${pt(110)}] >>\nendobj\n`;
-  const parsed = parsePdfArtwork(pdfBuffer(pdf));
+  const parsed = await parsePdfArtwork(pdfBuffer(pdf));
   assert.ok(Math.abs(parsed.pageSizeMm.w - 106) < 0.05, parsed.pageSizeMm.w);
   const result = validateArtwork(parsed, { w: 106, h: 106 }, 0.5, 300, 1200);
   assert.ok(!result.warnings.some(w => w.includes("wrong size")), result.warnings.join("; "));
 });
 
-test("parsePdfArtwork finds an embedded image XObject's size and CMYK colorspace", () => {
+test("parsePdfArtwork finds an embedded image XObject's size and CMYK colorspace", async () => {
   const pdf = `%PDF-1.4
 1 0 obj
 << /Type /Page /MediaBox [0 0 277.8 277.8] >>
@@ -207,22 +244,22 @@ stream
 ...
 endstream
 endobj`;
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.deepEqual(info.imagePx, { w: 1157, h: 1157 });
   assert.equal(info.colorMode, "CMYK");
 });
 
-test("parsePdfArtwork detects RGB via /DeviceRGB", () => {
+test("parsePdfArtwork detects RGB via /DeviceRGB", async () => {
   const pdf = `<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace /DeviceRGB >>`;
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.equal(info.colorMode, "RGB");
 });
 
-test("parsePdfArtwork returns null when neither MediaBox nor an image is found", () => {
-  assert.equal(parsePdfArtwork(pdfBuffer("%PDF-1.4\nnothing useful here\n")), null);
+test("parsePdfArtwork returns null when neither MediaBox nor an image is found", async () => {
+  assert.equal(await parsePdfArtwork(pdfBuffer("%PDF-1.4\nnothing useful here\n")), null);
 });
 
-test("parsePdfArtwork picks the largest image when a PDF has more than one (e.g. a soft mask)", () => {
+test("parsePdfArtwork picks the largest image when a PDF has more than one (e.g. a soft mask)", async () => {
   const pdf = `%PDF-1.4
 1 0 obj
 << /Type /Page /MediaBox [0 0 277.8 277.8] >>
@@ -233,17 +270,17 @@ endobj
 3 0 obj
 << /Type /XObject /Subtype /Image /Width 1157 /Height 1157 /ColorSpace /DeviceCMYK /BitsPerComponent 8 >>
 endobj`;
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.deepEqual(info.imagePx, { w: 1157, h: 1157 });
   assert.equal(info.colorMode, "CMYK");
 });
 
-test("parsePdfArtwork detects a spot colour on an image (Separation over DeviceCMYK), decoding its hex-escaped name", () => {
+test("parsePdfArtwork detects a spot colour on an image (Separation over DeviceCMYK), decoding its hex-escaped name", async () => {
   // #20 is a hex-escaped space — PDF Name objects escape anything outside
   // the regular-character set this way, so "PANTONE#20186#20C" is the
   // literal on-disk form of "PANTONE 186 C".
   const pdf = `<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace [/Separation /PANTONE#20186#20C /DeviceCMYK 12 0 R] >>`;
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   // The alternate space is still what colorMode reports — a spot ink is
   // normally defined over a CMYK fallback, and that's still a separate,
   // useful fact from "this file also uses a spot colour".
@@ -251,28 +288,28 @@ test("parsePdfArtwork detects a spot colour on an image (Separation over DeviceC
   assert.deepEqual(info.spotColors, ["PANTONE 186 C"]);
 });
 
-test("parsePdfArtwork collects every name from a DeviceN spot colourant array", () => {
+test("parsePdfArtwork collects every name from a DeviceN spot colourant array", async () => {
   const pdf = `<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace [/DeviceN [/PANTONE#20186#20C /PANTONE#20Reflex#20Blue#20C] /DeviceCMYK 12 0 R] >>`;
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.deepEqual(info.spotColors, ["PANTONE 186 C", "PANTONE Reflex Blue C"]);
 });
 
-test("parsePdfArtwork reports an empty spotColors array for a plain process-colour file", () => {
+test("parsePdfArtwork reports an empty spotColors array for a plain process-colour file", async () => {
   const pdf = `<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace /DeviceCMYK >>`;
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.deepEqual(info.spotColors, []);
 });
 
-test("parsePdfArtwork finds a spot colour declared in /Resources even when no image uses it (a vector fill)", () => {
+test("parsePdfArtwork finds a spot colour declared in /Resources even when no image uses it (a vector fill)", async () => {
   const pdf = `%PDF-1.4
 1 0 obj
 << /Type /Page /MediaBox [0 0 277.8 277.8] /Resources << /ColorSpace << /CS0 [/Separation /PANTONE#20186#20C /DeviceCMYK 5 0 R] >> >> >>
 endobj`;
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.deepEqual(info.spotColors, ["PANTONE 186 C"]);
 });
 
-test("parsePdfArtwork dedupes the same spot colour found both on an image and in /Resources", () => {
+test("parsePdfArtwork dedupes the same spot colour found both on an image and in /Resources", async () => {
   const pdf = `%PDF-1.4
 1 0 obj
 << /Type /Page /MediaBox [0 0 277.8 277.8] /Resources << /ColorSpace << /CS0 [/Separation /PANTONE#20186#20C /DeviceCMYK 5 0 R] >> >> >>
@@ -280,8 +317,72 @@ endobj
 2 0 obj
 << /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace [/Separation /PANTONE#20186#20C /DeviceCMYK 12 0 R] >>
 endobj`;
-  const info = parsePdfArtwork(pdfBuffer(pdf));
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
   assert.deepEqual(info.spotColors, ["PANTONE 186 C"]);
+});
+
+// ---- parsePdfArtwork: vector colour-mode detection (no image XObject at all) ----
+
+test("parsePdfArtwork detects CMYK from a real Flate-compressed vector content stream", async () => {
+  const buf = vectorPdfBuffer({ content: "0 0.55 0.86 0 k\n0 0 200 200 re f" });
+  const info = await parsePdfArtwork(buf);
+  assert.equal(info.colorMode, "CMYK");
+});
+
+test("parsePdfArtwork detects RGB from vector fill operators", async () => {
+  const buf = vectorPdfBuffer({ content: "1 0 0 rg\n0 0 200 200 re f" });
+  const info = await parsePdfArtwork(buf);
+  assert.equal(info.colorMode, "RGB");
+});
+
+test("parsePdfArtwork detects Gray from vector fill operators when no CMYK/RGB operator is present", async () => {
+  const buf = vectorPdfBuffer({ content: "0 g\n0 0 200 200 re f" });
+  const info = await parsePdfArtwork(buf);
+  assert.equal(info.colorMode, "Gray");
+});
+
+test("parsePdfArtwork prefers CMYK over Gray when both appear (e.g. black text alongside a CMYK-filled shape)", async () => {
+  const buf = vectorPdfBuffer({ content: "0 g\n0 0.55 0.86 0 k\n0 0 200 200 re f" });
+  const info = await parsePdfArtwork(buf);
+  assert.equal(info.colorMode, "CMYK");
+});
+
+test("parsePdfArtwork stays 'unknown' rather than guess when more than one candidate content stream exists", async () => {
+  const extra = `3 0 obj
+<< /Length 4 /Filter /FlateDecode >>
+stream
+junk
+endstream
+endobj`;
+  const buf = vectorPdfBuffer({ content: "0 0.55 0.86 0 k\n0 0 200 200 re f", extraObjects: extra });
+  const info = await parsePdfArtwork(buf);
+  assert.equal(info.colorMode, "unknown");
+});
+
+test("parsePdfArtwork stays 'unknown' rather than throw when the sole candidate stream isn't valid deflate data", async () => {
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Page /MediaBox [0 0 283.5 283.5] /Contents 2 0 R >>
+endobj
+2 0 obj
+<< /Length 11 /Filter /FlateDecode >>
+stream
+not-deflate!
+endstream
+endobj`;
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.colorMode, "unknown");
+});
+
+test("parsePdfArtwork trusts an already-found image's colour mode over vector content operators", async () => {
+  const buf = vectorPdfBuffer({
+    content: "0 0.55 0.86 0 k\n0 0 50 50 re f", // CMYK vector fill — should be ignored
+    extraObjects: `3 0 obj
+<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace /DeviceRGB >>
+endobj`
+  });
+  const info = await parsePdfArtwork(buf);
+  assert.equal(info.colorMode, "RGB");
 });
 
 // ---- validateArtwork ----
