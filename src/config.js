@@ -137,9 +137,9 @@ export const CONFIG = {
     standardColor: "black",
     basicColors: ["yellow", "red", "pink", "blue", "green", "transparent", "white"],
     minOrderQty: {
-      black: 0,
-      yellow: 300, red: 300, pink: 300, blue: 300, green: 300, transparent: 300, white: 300,
-      random: 300
+      black: 1,
+      yellow: 100, red: 100, pink: 100, blue: 100, green: 100, transparent: 100, white: 100,
+      random: 100
     }
   },
 
