@@ -27,7 +27,6 @@ const ROOT = join(__dirname, "..");
 // Dependencies before dependents.
 const FILES = [
   "src/config.js",
-  "src/lib/browser.js",
   "src/lib/time.js",
   "src/lib/zip.js",
   "src/lib/audio-duration.js",

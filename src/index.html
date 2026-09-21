@@ -268,14 +268,9 @@
   }
   .label-preview iframe, .label-preview img{ width:100%; height:100%; border:0; object-fit:contain; display:block; }
   .label-placeholder{ color:var(--ink-dim); font-size:11px; text-align:center; padding:10px; line-height:1.5; }
-  .label-simcanvas{ position:absolute; top:0; left:0; pointer-events:none; }
   .labelwarnings{ list-style:none; margin:8px 0 0; padding:0; font-size:11px; }
   .labelwarnings li{ padding:2px 0; color:var(--warn); }
   .labelwarnings li.err{ color:var(--danger); font-weight:700; }
-
-  /* Inserted next to each "simulate print" checkbox for Safari visitors
-     only — see app.js's warnSafariSimulatePrint. */
-  .safari-warn{ font-size:11px; color:var(--warn); margin-top:4px; }
 
   /* ---------------- expert info toggles ---------------- */
   /* A native <details> — collapsed by default, no JS needed to open
@@ -305,8 +300,8 @@
   }
 
   /* cover / inner sleeve flat spreads reuse the .label-preview-wrap /
-     .label-preview / .label-simcanvas / .labelwarnings rules above —
-     only the back/front caption below the spread is new. */
+     .label-preview / .labelwarnings rules above — only the back/front
+     caption below the spread is new. */
   .spread-caption{
     display:flex; justify-content:space-between; max-width:100%;
     font-size:11px; letter-spacing:.08em; text-transform:uppercase;
@@ -403,7 +398,6 @@
     body{ background:#fff; padding:0; font-size:10px; line-height:1.35; }
     .no-print{ display:none !important; }
     .debugbanner{ display:none !important; }
-    .safari-warn{ display:none !important; }
     .sheet{ max-width:none; }
 
     /* Tight — every rule below only shrinks spacing that's generous
@@ -445,7 +439,7 @@
        literal-mm label preview needs a print-specific override. This
        is a reference sheet, not a calibrated proof, same caveat the
        on-screen preview already carries. */
-    #labelSides .label-preview-wrap, #labelSides .label-preview, #labelSides .label-simcanvas{
+    #labelSides .label-preview-wrap, #labelSides .label-preview{
       width:80mm !important; height:80mm !important; margin:4px 0 !important;
     }
   }
