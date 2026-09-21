@@ -11,7 +11,7 @@ import { formatTime, parseTime, trackGapSeconds } from "../lib/time.js";
 import { readAudioDuration, compressionWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
-import { getFormat, firstEnabledFormat } from "../lib/format-catalogue.js";
+import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-catalogue.js";
 import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType, humanDate } from "../lib/package-naming.js";
 import { renderTable } from "../lib/text-table.js";
 import { defaultMatrix } from "../lib/matrix.js";
@@ -432,8 +432,7 @@ function sideTemplate(side){
 function populateFormatOptions(){
   firstEnabledFormat(CONFIG); // throws early if the config disabled every format
   const select = document.getElementById("format");
-  select.innerHTML = CONFIG.formats
-    .filter(f => f.enabled)
+  select.innerHTML = enabledFormats(CONFIG)
     .map(f => `<option value="${f.id}">${f.label}</option>`)
     .join("");
 }

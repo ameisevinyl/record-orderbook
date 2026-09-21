@@ -95,7 +95,7 @@ export function initVinylColor(){
 }
 
 /* ============================================================
-   Cross-module interface, same pattern as labels.js/cover-sleeve.js's
+   Cross-module interface, same pattern as labels.js/cover.js's
    collect*Files() — shipping-billing.js reads these instead of a
    manually-entered total, tracklist.js uses collect/apply for JSON
    save/load.

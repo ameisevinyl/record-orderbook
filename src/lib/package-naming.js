@@ -1,6 +1,6 @@
 // File/folder naming for the customer package — see CLAUDE.md's "File
 // naming convention". Pure string logic so tracklist.js, labels.js and
-// cover-sleeve.js all build the exact same name for the exact same file,
+// cover.js/inner-sleeve.js/inlay.js all build the exact same name for the exact same file,
 // which is what lets a reopened project zip re-attach files by an exact
 // name match instead of guessing.
 //
