@@ -9,7 +9,7 @@
 // the obvious mistakes.
 //
 // All three parsers return the same shape (or null if unreadable):
-//   { pageSizeMm, imagePx, declaredDpi, colorMode }
+//   { pageSizeMm, imagePx, declaredDpi, colorMode, spotColors }
 // - pageSizeMm  — {w,h} in mm, from a PDF's /BleedBox, /TrimBox, or
 //                 /MediaBox (first one present, in that priority order —
 //                 see parsePdfArtwork). null for JPEG/TIFF, which have no
@@ -19,7 +19,13 @@
 // - declaredDpi — {x,y}, only when the file itself states a resolution
 //                 (JFIF density, TIFF X/YResolution). PDFs never carry
 //                 this — resolution is implied by pixels-vs-page-size.
-// - colorMode   — "CMYK" | "RGB" | "Gray" | "unknown"
+// - colorMode   — "CMYK" | "RGB" | "Gray" | "unknown". For a PDF using a
+//                 spot colour (/Separation, /DeviceN), this is still the
+//                 declared *alternate* space (normally CMYK) — a separate,
+//                 still-useful fact from "this file also uses a spot ink".
+// - spotColors  — string[] of decoded spot/Pantone colourant names found
+//                 in the file, [] if none. Always [] for JPEG/TIFF, which
+//                 have no colour-space concept beyond their raw pixels.
 
 // ---- format sniffing (magic bytes, not file extension) ----------------
 
@@ -89,7 +95,7 @@ export function parseJpegArtwork(arrayBuffer){
   else if(components === 3) colorMode = "RGB";
   else if(components === 4) colorMode = "CMYK"; // Adobe CMYK/YCCK JPEG — plain baseline JPEG has no 4th channel
 
-  return { pageSizeMm: null, imagePx: {w:widthPx, h:heightPx}, declaredDpi: dpi, colorMode };
+  return { pageSizeMm: null, imagePx: {w:widthPx, h:heightPx}, declaredDpi: dpi, colorMode, spotColors: [] };
 }
 
 // ---- TIFF: read the IFD tag directory -----------------------------------
@@ -161,7 +167,8 @@ export function parseTiffArtwork(arrayBuffer){
     pageSizeMm: null,
     imagePx: {w:widthPx, h:heightPx},
     declaredDpi: (xres && yres) ? {x:xres, y:yres} : null,
-    colorMode
+    colorMode,
+    spotColors: []
   };
 }
 
@@ -179,6 +186,37 @@ export function parseTiffArtwork(arrayBuffer){
 // This intentionally never decodes an image's actual pixels — the
 // backend preprocessor is the real gate; this only reads dictionary
 // keys sitting in the plaintext part of the file.
+
+// PDF Name objects escape any character outside the regular set as
+// #XX (two hex digits) — e.g. a space is #20, so "PANTONE#20186#20C"
+// on disk is the name "PANTONE 186 C". Names otherwise read literally.
+function decodePdfName(raw){
+  return raw.replace(/#([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+// Finds every /Separation and /DeviceN spot-colourant declaration in a
+// chunk of PDF text and returns their decoded names. Both forms are
+// colour-space arrays: /Separation carries one name, /DeviceN an array
+// of names (a single ink channel can stand in for several colourants).
+// Matches anywhere the array is written out inline — same "no cross-
+// reference table, no indirect objects" limitation as the rest of this
+// file (see its header comment): a /ColorSpace that's only an indirect
+// reference (`/ColorSpace 15 0 R`) isn't followed.
+const NAME_TOKEN = "\\/([^\\s\\/\\[\\]()<>]+)";
+function extractSpotNames(chunk){
+  const names = [];
+  const sepRe = new RegExp(`\\/Separation\\s+${NAME_TOKEN}`, "g");
+  let m;
+  while((m = sepRe.exec(chunk)) !== null) names.push(decodePdfName(m[1]));
+
+  const devNRe = new RegExp(`\\/DeviceN\\s*\\[\\s*((?:${NAME_TOKEN}\\s*)+)\\]`, "g");
+  while((m = devNRe.exec(chunk)) !== null){
+    const nameRe = new RegExp(NAME_TOKEN, "g");
+    let nm;
+    while((nm = nameRe.exec(m[1])) !== null) names.push(decodePdfName(nm[1]));
+  }
+  return names;
+}
 
 // Returns the PDF dictionary "<< ... >>" enclosing textIndex, tracking
 // << >> nesting depth so a nested subdictionary (e.g. /DecodeParms)
@@ -267,7 +305,14 @@ export function parsePdfArtwork(arrayBuffer){
 
   if(!pageSizeMm && !imagePx) return null; // nothing usable found — treat as unreadable
 
-  return { pageSizeMm, imagePx, declaredDpi: null, colorMode };
+  // One scan of the whole document, not just the winning image's dict —
+  // this is what also catches a spot colour declared for a vector fill
+  // via /Resources /ColorSpace, with no image involved at all. Resource
+  // dictionaries are always plain, uncompressed objects (unlike page
+  // content streams), so this needs no stream decompression either.
+  const spotColors = Array.from(new Set(extractSpotNames(text)));
+
+  return { pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors };
 }
 
 // ---- validation ----------------------------------------------------------
@@ -333,6 +378,13 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
 
   if(parsed.colorMode === "unknown") warnings.push("could not determine color mode automatically — please verify CMYK manually");
   else if(parsed.colorMode !== "CMYK") warnings.push(`file appears to be ${parsed.colorMode}, not CMYK`);
+
+  // Independent of the CMYK check above — a file can be perfectly valid
+  // CMYK and still carry a spot ink, which the plant typically charges
+  // extra for (an additional printing plate/pass per spot colour).
+  if(parsed.spotColors && parsed.spotColors.length){
+    warnings.push(`uses spot colour(s): ${parsed.spotColors.join(", ")} — may incur additional cost, please confirm with the plant`);
+  }
 
   // A label's target is always square (w===h; covers/sleeves/inlays aren't,
   // so this never fires for them). Ratio needs no mm/px/pt conversion —

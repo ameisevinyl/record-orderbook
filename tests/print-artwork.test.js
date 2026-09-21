@@ -238,6 +238,52 @@ endobj`;
   assert.equal(info.colorMode, "CMYK");
 });
 
+test("parsePdfArtwork detects a spot colour on an image (Separation over DeviceCMYK), decoding its hex-escaped name", () => {
+  // #20 is a hex-escaped space — PDF Name objects escape anything outside
+  // the regular-character set this way, so "PANTONE#20186#20C" is the
+  // literal on-disk form of "PANTONE 186 C".
+  const pdf = `<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace [/Separation /PANTONE#20186#20C /DeviceCMYK 12 0 R] >>`;
+  const info = parsePdfArtwork(pdfBuffer(pdf));
+  // The alternate space is still what colorMode reports — a spot ink is
+  // normally defined over a CMYK fallback, and that's still a separate,
+  // useful fact from "this file also uses a spot colour".
+  assert.equal(info.colorMode, "CMYK");
+  assert.deepEqual(info.spotColors, ["PANTONE 186 C"]);
+});
+
+test("parsePdfArtwork collects every name from a DeviceN spot colourant array", () => {
+  const pdf = `<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace [/DeviceN [/PANTONE#20186#20C /PANTONE#20Reflex#20Blue#20C] /DeviceCMYK 12 0 R] >>`;
+  const info = parsePdfArtwork(pdfBuffer(pdf));
+  assert.deepEqual(info.spotColors, ["PANTONE 186 C", "PANTONE Reflex Blue C"]);
+});
+
+test("parsePdfArtwork reports an empty spotColors array for a plain process-colour file", () => {
+  const pdf = `<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace /DeviceCMYK >>`;
+  const info = parsePdfArtwork(pdfBuffer(pdf));
+  assert.deepEqual(info.spotColors, []);
+});
+
+test("parsePdfArtwork finds a spot colour declared in /Resources even when no image uses it (a vector fill)", () => {
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Page /MediaBox [0 0 277.8 277.8] /Resources << /ColorSpace << /CS0 [/Separation /PANTONE#20186#20C /DeviceCMYK 5 0 R] >> >> >>
+endobj`;
+  const info = parsePdfArtwork(pdfBuffer(pdf));
+  assert.deepEqual(info.spotColors, ["PANTONE 186 C"]);
+});
+
+test("parsePdfArtwork dedupes the same spot colour found both on an image and in /Resources", () => {
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Page /MediaBox [0 0 277.8 277.8] /Resources << /ColorSpace << /CS0 [/Separation /PANTONE#20186#20C /DeviceCMYK 5 0 R] >> >> >>
+endobj
+2 0 obj
+<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace [/Separation /PANTONE#20186#20C /DeviceCMYK 12 0 R] >>
+endobj`;
+  const info = parsePdfArtwork(pdfBuffer(pdf));
+  assert.deepEqual(info.spotColors, ["PANTONE 186 C"]);
+});
+
 // ---- validateArtwork ----
 
 const TARGET = {w:98, h:98}, TOL = 0.5, DPI_MIN = 300, DPI_MAX = 1200;
@@ -299,6 +345,23 @@ test("validateArtwork warns on RGB instead of CMYK", () => {
   const parsed = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "RGB" };
   const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
   assert.ok(result.warnings.some((w) => w.includes("RGB")));
+});
+
+test("validateArtwork warns about spot colours, naming them, when spotColors is non-empty", () => {
+  const parsed = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", spotColors: ["PANTONE 186 C"] };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  const w = result.warnings.find((w) => w.includes("spot colour"));
+  assert.ok(w, result.warnings.join("; "));
+  assert.ok(w.includes("PANTONE 186 C"));
+});
+
+test("validateArtwork doesn't warn about spot colours for a plain process-colour file (spotColors absent or empty)", () => {
+  const withoutField = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK" };
+  const withEmptyArray = { ...withoutField, spotColors: [] };
+  for (const parsed of [withoutField, withEmptyArray]) {
+    const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+    assert.ok(!result.warnings.some((w) => w.includes("spot colour")), result.warnings.join("; "));
+  }
 });
 
 test("validateArtwork treats vector PDFs (page size, no image) as resolution n/a", () => {
