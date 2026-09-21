@@ -10,7 +10,7 @@
 //
 // All three parsers return the same shape (or null if unreadable):
 //   { pageSizeMm, imagePx, declaredDpi, colorMode }
-// - pageSizeMm  — {w,h} in mm, from a PDF's /TrimBox, /BleedBox, or
+// - pageSizeMm  — {w,h} in mm, from a PDF's /BleedBox, /TrimBox, or
 //                 /MediaBox (first one present, in that priority order —
 //                 see parsePdfArtwork). null for JPEG/TIFF, which have no
 //                 page concept independent of their pixels.
@@ -211,13 +211,18 @@ export function parsePdfArtwork(arrayBuffer){
   const text = new TextDecoder("latin1").decode(bytes);
 
   // A prepress PDF/X export (InDesign/Illustrator with printer marks)
-  // sets /MediaBox to the full sheet — slug area and crop marks included
-  // — while /TrimBox (or /BleedBox, if that's all the file carries) holds
-  // the true artwork boundary. Preferring TrimBox, then BleedBox, then
-  // falling back to MediaBox avoids a false "wrong size" warning on an
-  // otherwise correct professional export.
+  // sets /MediaBox to the full sheet — slug area and crop marks included.
+  // /TrimBox is the cut size WITHOUT bleed; /BleedBox is the cut size
+  // WITH bleed. Every caller's targetMm here is dataSizeMm/dataMm —
+  // "the full print file size including bleed" (see CLAUDE.md's file
+  // naming convention) — so /BleedBox is the correct match, not /TrimBox
+  // (which would be smaller than the bleed-inclusive target by exactly
+  // the bleed margin on every otherwise-correct professional export).
+  // /TrimBox only outranks /MediaBox as a fallback for files that omit
+  // /BleedBox — a closer approximation than the full marked-up sheet,
+  // even though it'll still read a bit undersized against the target.
   const boxMatch = key => text.match(new RegExp(`\\/${key}\\s*\\[\\s*([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s*\\]`));
-  const pageBoxMatch = boxMatch("TrimBox") || boxMatch("BleedBox") || boxMatch("MediaBox");
+  const pageBoxMatch = boxMatch("BleedBox") || boxMatch("TrimBox") || boxMatch("MediaBox");
   let pageSizeMm = null;
   if(pageBoxMatch){
     const x0 = parseFloat(pageBoxMatch[1]), y0 = parseFloat(pageBoxMatch[2]);

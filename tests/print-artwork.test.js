@@ -167,19 +167,33 @@ test("parsePdfArtwork reads MediaBox in points and converts to mm", () => {
   assert.ok(Math.abs(info.pageSizeMm.h - 98) < 0.05);
 });
 
-test("parsePdfArtwork prefers TrimBox over a larger MediaBox (prepress crop marks/slug area)", () => {
-  // MediaBox is the full sheet with crop marks (120mm); TrimBox is the
-  // true 98mm artwork boundary a prepress PDF/X export carries.
+test("parsePdfArtwork prefers BleedBox over TrimBox and MediaBox — targetMm is always the bleed-inclusive dataSizeMm/dataMm, not the trim size", () => {
+  // MediaBox is the full sheet with crop marks (~120mm); TrimBox is the
+  // cut size WITHOUT bleed (98mm); BleedBox is the cut size WITH bleed
+  // (104mm) — the one every caller's targetMm actually matches.
+  const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 340.2 340.2] /TrimBox [21.2 21.2 299 299] /BleedBox [12.8 12.8 307.603 307.603] >>\nendobj\n";
+  const info = parsePdfArtwork(pdfBuffer(pdf));
+  assert.ok(Math.abs(info.pageSizeMm.w - 104) < 0.05, info.pageSizeMm.w);
+  assert.ok(Math.abs(info.pageSizeMm.h - 104) < 0.05, info.pageSizeMm.h);
+});
+
+test("parsePdfArtwork falls back to TrimBox over MediaBox when there's no BleedBox", () => {
   const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 340.2 340.2] /TrimBox [21.2 21.2 299 299] >>\nendobj\n";
   const info = parsePdfArtwork(pdfBuffer(pdf));
   assert.ok(Math.abs(info.pageSizeMm.w - 98) < 0.05, info.pageSizeMm.w);
-  assert.ok(Math.abs(info.pageSizeMm.h - 98) < 0.05, info.pageSizeMm.h);
 });
 
-test("parsePdfArtwork falls back to BleedBox over MediaBox when there's no TrimBox", () => {
-  const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 340.2 340.2] /BleedBox [12.8 12.8 307.603 307.603] >>\nendobj\n";
-  const info = parsePdfArtwork(pdfBuffer(pdf));
-  assert.ok(Math.abs(info.pageSizeMm.w - 104) < 0.05, info.pageSizeMm.w);
+test("parsePdfArtwork + validateArtwork: a correctly-bled prepress export doesn't false-flag as wrong size", () => {
+  // Regression case: MediaBox 120mm (crop marks), BleedBox 106mm
+  // (matches a 12\" label's dataSizeMm exactly), TrimBox 100mm (matches
+  // its diameterMm) — BleedBox must win, or this reads as 100mm and
+  // wrongly warns against the 106mm target.
+  const pt = mm => mm / 25.4 * 72;
+  const pdf = `%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 ${pt(120)} ${pt(120)}] /BleedBox [${pt(7)} ${pt(7)} ${pt(113)} ${pt(113)}] /TrimBox [${pt(10)} ${pt(10)} ${pt(110)} ${pt(110)}] >>\nendobj\n`;
+  const parsed = parsePdfArtwork(pdfBuffer(pdf));
+  assert.ok(Math.abs(parsed.pageSizeMm.w - 106) < 0.05, parsed.pageSizeMm.w);
+  const result = validateArtwork(parsed, { w: 106, h: 106 }, 0.5, 300, 1200);
+  assert.ok(!result.warnings.some(w => w.includes("wrong size")), result.warnings.join("; "));
 });
 
 test("parsePdfArtwork finds an embedded image XObject's size and CMYK colorspace", () => {
