@@ -33,17 +33,23 @@ function initDebugMode(){
 // still matches the target trim size, but the artwork underneath no
 // longer lines up with it. Only relevant once the checkbox is actually
 // on, so the note tracks its checked state instead of always showing.
+// Placed right after each artifact's own .labelwarnings list (below the
+// preview), alongside the other artwork warnings, rather than next to
+// the checkbox — that list's innerHTML gets fully rebuilt on every file
+// pick/clear (see e.g. renderCoverWarnings), so a note living inside it
+// wouldn't survive; each checkbox names its list via data-warnfor
+// instead of relying on brittle DOM-structure guessing (labels.js's ids
+// don't follow the same prefix pattern as cover/inner-sleeve/inlay's).
 // Runs once, after every module has built its DOM (including labels.js's
-// per-side checkboxes, generated at initLabels), and finds every
-// "simulate print" checkbox by the id substring they all share.
+// per-side checkboxes, generated at initLabels).
 function warnSafariSimulatePrint(){
   if(!isSafari(navigator.userAgent)) return;
   document.querySelectorAll('input[id*="simprint"]').forEach(checkbox=>{
-    const label = checkbox.closest("label");
-    if(!label) return;
-    label.insertAdjacentHTML("afterend",
+    const warningsList = document.getElementById(checkbox.dataset.warnfor);
+    if(!warningsList) return;
+    warningsList.insertAdjacentHTML("afterend",
       `<div class="safari-warn hidden">⚠ simulate print is unreliable in Safari — you'll get an accurate proof from us after upload</div>`);
-    const warn = label.nextElementSibling;
+    const warn = warningsList.nextElementSibling;
     const sync = () => warn.classList.toggle("hidden", !checkbox.checked);
     checkbox.addEventListener("change", sync);
     sync();

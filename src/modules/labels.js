@@ -40,7 +40,7 @@ function labelSideTemplate(side){
       <h2>Label ${side}</h2>
       <div class="side-opts">
         <label class="chk"><input type="checkbox" id="whitelabel-${side}"> whitelabel (blank)</label>
-        <label class="chk"><input type="checkbox" id="simprint-${side}"> simulate print</label>
+        <label class="chk"><input type="checkbox" id="simprint-${side}" data-warnfor="labelwarnings-${side}"> simulate print</label>
       </div>
     </div>
 
