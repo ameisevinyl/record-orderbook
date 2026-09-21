@@ -49,6 +49,36 @@ function renderCoverWarnings(listEl, result){
   listEl.innerHTML = items.join("");
 }
 
+// Safari's built-in PDF viewer doesn't scale its rendered page to fill
+// the given iframe the way Chrome/Firefox do — it renders at its own
+// natural size instead, leaving grey showing around it whenever that's
+// smaller than the target box (reported for labels, same iframe
+// pattern here — Chrome already fills correctly regardless of any URL
+// fragment, verified live). Sizing the iframe to the PDF's own natural
+// page size and CSS-transform-scaling it up to the container doesn't
+// depend on the PDF viewer's own internal fit logic at all, so it
+// works the same in every browser.
+//
+// The scale factor comes from measuring both boxes' actual rendered
+// pixels (getBoundingClientRect), not from assuming a specific mm-to-px
+// conversion — this container is sized responsively (aspect-ratio + a
+// max-width cap via updateSizing above), not via literal CSS "mm"
+// units the way labels.js's equivalent container is, so the same
+// helper (copied there, see its identical comment) has to work either
+// way without knowing which.
+function fitPdfIframe(iframe, container, naturalMm){
+  if(!naturalMm) return; // couldn't determine the PDF's own page size — leave it at the CSS default (100%/100%)
+  iframe.style.position = "absolute";
+  iframe.style.top = "0";
+  iframe.style.left = "0";
+  iframe.style.width = naturalMm.w + "mm";
+  iframe.style.height = naturalMm.h + "mm";
+  iframe.style.transformOrigin = "top left";
+  const containerRect = container.getBoundingClientRect();
+  const iframeRect = iframe.getBoundingClientRect();
+  iframe.style.transform = `scale(${containerRect.width / iframeRect.width}, ${containerRect.height / iframeRect.height})`;
+}
+
 function createCoverArtworkSlot(){
   const input = document.getElementById("coverinput");
   const meta = document.getElementById("covermeta");
@@ -128,12 +158,8 @@ function createCoverArtworkSlot(){
 
     url = URL.createObjectURL(f);
     if(kind === "pdf"){
-      // No view=Fit — Safari's PDF viewer handles the Acrobat open-
-      // parameters fragment inconsistently and can render smaller than
-      // the iframe with it present; Chrome/Firefox already fill
-      // correctly via the CSS width/height:100% on .label-preview
-      // iframe regardless of this fragment, so dropping it is safe.
       preview.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0"></iframe>`;
+      fitPdfIframe(preview.querySelector("iframe"), preview, parsed && parsed.pageSizeMm);
     } else if(kind === "jpeg"){
       preview.innerHTML = `<img src="${url}" alt="artwork">`;
     } else if(kind === "tiff"){

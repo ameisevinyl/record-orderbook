@@ -33,6 +33,25 @@ function renderInlayWarnings(listEl, result){
   listEl.innerHTML = items.join("");
 }
 
+// See labels.js's identical helper (same comment there) — Safari's PDF
+// viewer doesn't scale to fill the iframe, so size the iframe to the
+// PDF's own natural page size and CSS-transform-scale it to the
+// container, measured via getBoundingClientRect rather than assumed
+// mm-to-px math (this container is sized responsively, not via literal
+// CSS "mm" units).
+function fitPdfIframe(iframe, container, naturalMm){
+  if(!naturalMm) return;
+  iframe.style.position = "absolute";
+  iframe.style.top = "0";
+  iframe.style.left = "0";
+  iframe.style.width = naturalMm.w + "mm";
+  iframe.style.height = naturalMm.h + "mm";
+  iframe.style.transformOrigin = "top left";
+  const containerRect = container.getBoundingClientRect();
+  const iframeRect = iframe.getBoundingClientRect();
+  iframe.style.transform = `scale(${containerRect.width / iframeRect.width}, ${containerRect.height / iframeRect.height})`;
+}
+
 // prefix is "inlayfront" or "inlayback" — the two sides share this
 // scaffolding (unlike cover.js/inner-sleeve.js, which each have exactly
 // one slot), since front/back are otherwise identical.
@@ -113,12 +132,8 @@ function createInlayArtworkSlot(prefix){
 
     url = URL.createObjectURL(f);
     if(kind === "pdf"){
-      // No view=Fit — Safari's PDF viewer handles the Acrobat open-
-      // parameters fragment inconsistently and can render smaller than
-      // the iframe with it present; Chrome/Firefox already fill
-      // correctly via the CSS width/height:100% on .label-preview
-      // iframe regardless of this fragment, so dropping it is safe.
       preview.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0"></iframe>`;
+      fitPdfIframe(preview.querySelector("iframe"), preview, parsed && parsed.pageSizeMm);
     } else if(kind === "jpeg"){
       preview.innerHTML = `<img src="${url}" alt="artwork">`;
     } else if(kind === "tiff"){
