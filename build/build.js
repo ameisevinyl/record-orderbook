@@ -62,6 +62,12 @@ function stripModuleSyntax(source, filePath){
     .replace(/\n+$/, "\n");
 }
 
+// app.js declares `const BUILD_STAMP = "dev";` as its own fallback for
+// running src/ directly; this is the one place that literal gets replaced
+// with the real build time, so dist/index.html can prove which build it is
+// (see app.js's initDebugMode, ?debug on the URL).
+const BUILD_STAMP_MARKER = 'const BUILD_STAMP = "dev";';
+
 function buildBundle(){
   const sections = FILES.map(rel => {
     const full = join(ROOT, rel);
@@ -69,7 +75,11 @@ function buildBundle(){
     const stripped = stripModuleSyntax(raw, rel);
     return `// ---- ${rel} ----\n${stripped}`;
   });
-  return sections.join("\n");
+  const bundle = sections.join("\n");
+  if(!bundle.includes(BUILD_STAMP_MARKER)){
+    throw new Error(`build.js: couldn't find the BUILD_STAMP marker in app.js to stamp`);
+  }
+  return bundle.replace(BUILD_STAMP_MARKER, `const BUILD_STAMP = "${new Date().toISOString()}";`);
 }
 
 function buildHtml(bundleJs){
