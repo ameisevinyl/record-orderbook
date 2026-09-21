@@ -198,9 +198,15 @@ export function parsePdfArtwork(arrayBuffer){
   const bytes = new Uint8Array(arrayBuffer);
   // Latin-1, not UTF-8: PDF structure is always single-byte ASCII even
   // when a stream's binary content isn't, and this keeps string index
-  // === byte offset, which the regexes below rely on implicitly.
-  let text = "";
-  for(let i=0; i<bytes.length; i++) text += String.fromCharCode(bytes[i]);
+  // === byte offset, which the regexes below rely on implicitly. A
+  // byte-by-byte fromCharCode loop is orders of magnitude slower (and
+  // allocation-heavy) than TextDecoder on a real multi-MB print PDF —
+  // WHATWG's "latin1" label actually decodes as windows-1252, which
+  // differs from true Latin-1 only in the 0x80-0x9F range (unused C1
+  // control codes there, never part of PDF dictionary/keyword syntax)
+  // and still preserves the 1-byte-in, 1-code-unit-out mapping this
+  // file's index math depends on.
+  const text = new TextDecoder("latin1").decode(bytes);
 
   const mediaBoxMatch = text.match(/\/MediaBox\s*\[\s*([\d.+-]+)\s+([\d.+-]+)\s+([\d.+-]+)\s+([\d.+-]+)\s*\]/);
   let pageSizeMm = null;
