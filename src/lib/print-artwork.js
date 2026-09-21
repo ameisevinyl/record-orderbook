@@ -10,8 +10,10 @@
 //
 // All three parsers return the same shape (or null if unreadable):
 //   { pageSizeMm, imagePx, declaredDpi, colorMode }
-// - pageSizeMm  — {w,h} in mm, from a PDF's /MediaBox. null for JPEG/TIFF,
-//                 which have no page concept independent of their pixels.
+// - pageSizeMm  — {w,h} in mm, from a PDF's /TrimBox, /BleedBox, or
+//                 /MediaBox (first one present, in that priority order —
+//                 see parsePdfArtwork). null for JPEG/TIFF, which have no
+//                 page concept independent of their pixels.
 // - imagePx     — {w,h} in pixels, from image dimensions. null for a
 //                 vector-only PDF with no raster content found.
 // - declaredDpi — {x,y}, only when the file itself states a resolution
@@ -208,11 +210,18 @@ export function parsePdfArtwork(arrayBuffer){
   // file's index math depends on.
   const text = new TextDecoder("latin1").decode(bytes);
 
-  const mediaBoxMatch = text.match(/\/MediaBox\s*\[\s*([\d.+-]+)\s+([\d.+-]+)\s+([\d.+-]+)\s+([\d.+-]+)\s*\]/);
+  // A prepress PDF/X export (InDesign/Illustrator with printer marks)
+  // sets /MediaBox to the full sheet — slug area and crop marks included
+  // — while /TrimBox (or /BleedBox, if that's all the file carries) holds
+  // the true artwork boundary. Preferring TrimBox, then BleedBox, then
+  // falling back to MediaBox avoids a false "wrong size" warning on an
+  // otherwise correct professional export.
+  const boxMatch = key => text.match(new RegExp(`\\/${key}\\s*\\[\\s*([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s*\\]`));
+  const pageBoxMatch = boxMatch("TrimBox") || boxMatch("BleedBox") || boxMatch("MediaBox");
   let pageSizeMm = null;
-  if(mediaBoxMatch){
-    const x0 = parseFloat(mediaBoxMatch[1]), y0 = parseFloat(mediaBoxMatch[2]);
-    const x1 = parseFloat(mediaBoxMatch[3]), y1 = parseFloat(mediaBoxMatch[4]);
+  if(pageBoxMatch){
+    const x0 = parseFloat(pageBoxMatch[1]), y0 = parseFloat(pageBoxMatch[2]);
+    const x1 = parseFloat(pageBoxMatch[3]), y1 = parseFloat(pageBoxMatch[4]);
     pageSizeMm = { w: Math.abs(x1-x0) * 25.4/72, h: Math.abs(y1-y0) * 25.4/72 };
   }
 

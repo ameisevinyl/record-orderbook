@@ -167,6 +167,21 @@ test("parsePdfArtwork reads MediaBox in points and converts to mm", () => {
   assert.ok(Math.abs(info.pageSizeMm.h - 98) < 0.05);
 });
 
+test("parsePdfArtwork prefers TrimBox over a larger MediaBox (prepress crop marks/slug area)", () => {
+  // MediaBox is the full sheet with crop marks (120mm); TrimBox is the
+  // true 98mm artwork boundary a prepress PDF/X export carries.
+  const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 340.2 340.2] /TrimBox [21.2 21.2 299 299] >>\nendobj\n";
+  const info = parsePdfArtwork(pdfBuffer(pdf));
+  assert.ok(Math.abs(info.pageSizeMm.w - 98) < 0.05, info.pageSizeMm.w);
+  assert.ok(Math.abs(info.pageSizeMm.h - 98) < 0.05, info.pageSizeMm.h);
+});
+
+test("parsePdfArtwork falls back to BleedBox over MediaBox when there's no TrimBox", () => {
+  const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 340.2 340.2] /BleedBox [12.8 12.8 307.603 307.603] >>\nendobj\n";
+  const info = parsePdfArtwork(pdfBuffer(pdf));
+  assert.ok(Math.abs(info.pageSizeMm.w - 104) < 0.05, info.pageSizeMm.w);
+});
+
 test("parsePdfArtwork finds an embedded image XObject's size and CMYK colorspace", () => {
   const pdf = `%PDF-1.4
 1 0 obj
