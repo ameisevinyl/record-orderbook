@@ -24,12 +24,6 @@ function formatSpec(){
   return getFormat(CONFIG, currentFormat()).printableParts.label;
 }
 
-function centerHoleMm(){
-  const centerHole = getFormat(CONFIG, currentFormat()).centerHole;
-  const big = !!centerHole.big && document.getElementById("bigCenter").checked;
-  return big ? centerHole.big : centerHole.normal;
-}
-
 function labelSideTemplate(side){
   return `
   <div class="side-box" id="labelbox-${side}">

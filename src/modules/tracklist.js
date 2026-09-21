@@ -374,7 +374,8 @@ function updateChecklist(){
   // Errors from label/cover/inner-sleeve/inlay's own validateArtwork
   // results (see each module's render*Warnings) — an unreadable or
   // unrecognized file, not merely a size/DPI warning.
-  const erroredArtwork = document.querySelectorAll(".labelwarnings li.err").length;
+  const erroredArtwork = Array.from(document.querySelectorAll(".labelwarnings li.err"))
+    .filter(el => !el.closest(".hidden")).length;
   if(erroredArtwork > 0){
     items.push([false, `${erroredArtwork} artwork file(s) have errors — check labels/cover/inner sleeve/inlay`, true]);
   }

@@ -19,8 +19,7 @@ import { printedPartFileName, previewFileName, fileExt } from "../lib/package-na
 
 // On-screen preview cap, in px. A flat cover spread can be 600+mm wide —
 // displaying that at true CSS-mm size would make the preview several
-// times wider than a browser window. Canvas render resolution above is
-// unaffected by this.
+// times wider than a browser window.
 const COVER_PREVIEW_MAX_W = 640;
 
 function coverCurrentFormat(){
