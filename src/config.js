@@ -16,6 +16,13 @@ export const CONFIG = {
   // Email address customers should send SwissTransfer packages to.
   studioEmail: "cutting@example.com",
 
+  // Hard-blocks "Send to Plant" (not Save Project, which always stays
+  // warning-only) when required artwork is missing or unreadable/
+  // unrecognized-format — see tracklist.js's confirmIncompleteSend.
+  // Set false to fall back to the old fully-dismissible behavior for
+  // every checklist item, including these two.
+  blockIncompleteArtworkOnSend: true,
+
   formats: [
     {
       id: "12",
