@@ -10,11 +10,9 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, computeSpreadInsetPx } from "../lib/print-artwork.js";
-import { printedPartFileName, fileExt } from "../lib/package-naming.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork } from "../lib/print-artwork.js";
+import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
-// See cover.js's identical comment — flattened build, must stay unique.
-const INNER_SLEEVE_PX_PER_MM = 4;
 const INNER_SLEEVE_PREVIEW_MAX_W = 640;
 
 function innerSleeveCurrentFormat(){
@@ -37,11 +35,10 @@ function createInnerSleeveArtworkSlot(){
   const meta = document.getElementById("innersleevemeta");
   const preview = document.getElementById("innersleevepreview");
   const wrap = document.getElementById("innersleevepreviewwrap");
-  const canvas = document.getElementById("innersleevesim");
   const warningsList = document.getElementById("innersleevewarnings");
-  const simChk = document.getElementById("innersleevesimprint");
   const caption = document.getElementById("innersleevecaption");
   let file = null, url = null, originalFileName = null;
+  let previewFile = null, previewUrl = null;
 
   function updateSizing(){
     const { dataMm } = innerSleeveSpec();
@@ -49,23 +46,7 @@ function createInnerSleeveArtworkSlot(){
     wrap.style.maxWidth = INNER_SLEEVE_PREVIEW_MAX_W+"px";
     wrap.style.aspectRatio = dataMm.w+" / "+dataMm.h;
     preview.style.width = "100%"; preview.style.height = "100%";
-    canvas.width = Math.round(dataMm.w * INNER_SLEEVE_PX_PER_MM);
-    canvas.height = Math.round(dataMm.h * INNER_SLEEVE_PX_PER_MM);
-    canvas.style.width = "100%"; canvas.style.height = "100%";
     caption.style.width = "100%"; caption.style.maxWidth = INNER_SLEEVE_PREVIEW_MAX_W+"px";
-  }
-
-  function draw(){
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if(!simChk.checked) return;
-    const { dataMm, trimMm } = innerSleeveSpec();
-    const inset = computeSpreadInsetPx(canvas.width, canvas.height, dataMm, trimMm);
-    ctx.beginPath();
-    ctx.rect(0, 0, canvas.width, canvas.height);
-    ctx.rect(inset.x, inset.y, canvas.width - 2*inset.x, canvas.height - 2*inset.y);
-    ctx.fillStyle = "#000";
-    ctx.fill("evenodd");
   }
 
   // "file: <current name>", plus a tight second line with the original
@@ -86,6 +67,20 @@ function createInnerSleeveArtworkSlot(){
     }
   }
 
+  // Swaps the preview box to a plant-generated preview image, taking
+  // priority over the live-rendered original — see
+  // applyInnerSleeveSlotFile below, the only caller (a fresh manual pick
+  // never has one to show yet). Reuses the existing file-meta
+  // status-text slot instead of adding new markup/CSS for a separate
+  // caption.
+  function showPreviewImage(previewImgFile){
+    previewFile = previewImgFile;
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(previewImgFile);
+    preview.innerHTML = `<img src="${previewUrl}" alt="plant preview">`;
+    renderInnerSleeveFileMeta(file.name, originalFileName, "plant preview");
+  }
+
   // origName defaults to the file's own name (a fresh manual pick);
   // applyInnerSleeveSlotFile passes the name recorded before renaming, on
   // a project reload, so renderInnerSleeveFileMeta can show it as the
@@ -96,6 +91,9 @@ function createInnerSleeveArtworkSlot(){
     meta.classList.remove("empty");
     renderInnerSleeveFileMeta(f.name, origName, "checking…");
     if(url) URL.revokeObjectURL(url);
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewFile = null;
+    previewUrl = null;
 
     const buf = await f.arrayBuffer();
     const kind = sniffFileKind(buf);
@@ -124,7 +122,6 @@ function createInnerSleeveArtworkSlot(){
       preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
     }
     renderInnerSleeveFileMeta(f.name, origName, null);
-    draw();
   }
 
   // A file picked for one format is sized for that format's dataMm —
@@ -134,6 +131,8 @@ function createInnerSleeveArtworkSlot(){
   function clear(){
     if(url) URL.revokeObjectURL(url);
     file = null; url = null; originalFileName = null;
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewFile = null; previewUrl = null;
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
@@ -146,9 +145,11 @@ function createInnerSleeveArtworkSlot(){
     const f = input.files[0];
     if(f) handleFile(f);
   });
-  simChk.addEventListener("change", draw);
 
-  return { updateSizing, draw, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName, setFile: handleFile };
+  return {
+    updateSizing, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName,
+    setFile: handleFile, setPreviewImage: showPreviewImage, getPreviewFile: ()=> previewFile
+  };
 }
 
 function innerSleeveSlotFileName(file){
@@ -172,12 +173,10 @@ function updateInnerSleeveMode(){
 export function initInnerSleeve(){
   innerSleeveSlot = createInnerSleeveArtworkSlot();
   innerSleeveSlot.updateSizing();
-  innerSleeveSlot.draw();
 
   document.getElementById("format").addEventListener("change", ()=>{
     innerSleeveSlot.clear();
     innerSleeveSlot.updateSizing();
-    innerSleeveSlot.draw();
   });
 
   document.getElementById("innersleeve-printed").addEventListener("change", updateInnerSleeveMode);
@@ -204,10 +203,16 @@ function setInnerSleeveFileNamePlaceholder(name, originalName){
   }
 }
 
-function applyInnerSleeveSlotFile(fileName, originalFileName, fileMap){
+async function applyInnerSleeveSlotFile(fileName, originalFileName, fileMap){
   const file = fileMap && fileName && fileMap.get(fileName);
-  if(file) innerSleeveSlot.setFile(file, originalFileName || fileName);
-  else setInnerSleeveFileNamePlaceholder(fileName, originalFileName);
+  if(file){
+    await innerSleeveSlot.setFile(file, originalFileName || fileName);
+    const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"innersleeve"});
+    const previewImg = fileMap && fileMap.get(previewName);
+    if(previewImg) innerSleeveSlot.setPreviewImage(previewImg);
+  } else {
+    setInnerSleeveFileNamePlaceholder(fileName, originalFileName);
+  }
 }
 
 export function collectInnerSleeve(){
@@ -217,23 +222,20 @@ export function collectInnerSleeve(){
     mode: innerSleevePrinted ? "printed" : "unprinted",
     color: document.getElementById("innersleeveColor").value,
     cutout: document.getElementById("innersleeveCutout").checked,
-    simprint: document.getElementById("innersleevesimprint").checked,
     fileName: (innerSleevePrinted && file) ? innerSleeveSlotFileName(file) : null,
     originalFileName: (innerSleevePrinted && file) ? innerSleeveSlot.getOriginalFileName() : null
   };
 }
 
-export function applyInnerSleeve(data, fileMap){
+export async function applyInnerSleeve(data, fileMap){
   const is = data || {};
   document.getElementById("innersleeve-printed").checked = is.mode === "printed";
   document.getElementById("innersleeve-unprinted").checked = is.mode !== "printed";
   document.getElementById("innersleeveColor").value = is.color || "white";
   document.getElementById("innersleeveCutout").checked = is.cutout !== false;
-  document.getElementById("innersleevesimprint").checked = !!is.simprint;
-  applyInnerSleeveSlotFile(is.fileName, is.originalFileName, fileMap);
+  await applyInnerSleeveSlotFile(is.fileName, is.originalFileName, fileMap);
   updateInnerSleeveMode();
   innerSleeveSlot.updateSizing();
-  innerSleeveSlot.draw();
 }
 
 export async function collectInnerSleeveFiles(){
@@ -241,6 +243,11 @@ export async function collectInnerSleeveFiles(){
   if(document.getElementById("innersleeve-printed").checked){
     const sleeve = await collectInnerSleeveSlotFile();
     if(sleeve) files.push(sleeve);
+    const previewImg = innerSleeveSlot.getPreviewFile();
+    if(previewImg){
+      const name = previewFileName({catalogue: document.getElementById("catalogue").value, part:"innersleeve"});
+      files.push({name, data: await previewImg.arrayBuffer()});
+    }
   }
   return files;
 }

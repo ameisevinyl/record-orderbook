@@ -707,7 +707,7 @@ async function loadProject(file){
   await applyLabels(p.labels, fileMap);
   const cs = p.coverSleeve || {};
   await applyCover(cs.cover, fileMap);
-  applyInnerSleeve(cs.innerSleeve, fileMap);
+  await applyInnerSleeve(cs.innerSleeve, fileMap);
   applyInlay(cs.inlay, fileMap);
 
   ["A","B"].forEach(side=>{
