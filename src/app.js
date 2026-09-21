@@ -27,6 +27,24 @@ function initDebugMode(){
   document.body.append(banner);
 }
 
+// Safari's own PDF viewer renders artwork previews with an unremovable
+// margin (see print-artwork module comments), which throws off the
+// "simulate print" cutout overlay drawn on top of it — the overlay
+// still matches the target trim size, but the artwork underneath no
+// longer lines up with it. Runs once, after every module has built its
+// DOM (including labels.js's per-side checkboxes, generated at
+// initLabels), and finds every "simulate print" checkbox by the id
+// substring they all share.
+function warnSafariSimulatePrint(){
+  if(!isSafari(navigator.userAgent)) return;
+  document.querySelectorAll('input[id*="simprint"]').forEach(checkbox=>{
+    const label = checkbox.closest("label");
+    if(!label) return;
+    label.insertAdjacentHTML("afterend",
+      `<div class="safari-warn">⚠ simulate print is unreliable in Safari — you'll get an accurate proof from us after upload</div>`);
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initTracklist();
   initLabels();
@@ -36,4 +54,5 @@ document.addEventListener("DOMContentLoaded", () => {
   initVinylColor();
   initShippingBilling();
   initDebugMode();
+  warnSafariSimulatePrint();
 });

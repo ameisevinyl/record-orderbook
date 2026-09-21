@@ -273,6 +273,10 @@
   .labelwarnings li{ padding:2px 0; color:var(--warn); }
   .labelwarnings li.err{ color:var(--danger); font-weight:700; }
 
+  /* Inserted next to each "simulate print" checkbox for Safari visitors
+     only — see app.js's warnSafariSimulatePrint. */
+  .safari-warn{ font-size:11px; color:var(--warn); margin-top:4px; }
+
   /* ---------------- expert info toggles ---------------- */
   /* A native <details> — collapsed by default, no JS needed to open
      it. Used to tuck technical/reference detail behind an info icon so
@@ -399,6 +403,7 @@
     body{ background:#fff; padding:0; font-size:10px; line-height:1.35; }
     .no-print{ display:none !important; }
     .debugbanner{ display:none !important; }
+    .safari-warn{ display:none !important; }
     .sheet{ max-width:none; }
 
     /* Tight — every rule below only shrinks spacing that's generous
