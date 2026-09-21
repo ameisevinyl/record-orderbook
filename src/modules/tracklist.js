@@ -616,7 +616,7 @@ function baseEntryName(name){
 async function loadProject(file){
   let entries;
   try{
-    entries = parseZipBytes(new Uint8Array(await file.arrayBuffer()));
+    entries = await parseZipBytes(new Uint8Array(await file.arrayBuffer()));
   } catch(err){
     alert("Not a valid project file (" + err.message + ").");
     return;

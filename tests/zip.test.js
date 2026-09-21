@@ -1,6 +1,43 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { crc32, buildZipBytes, parseZipBytes } from "../src/lib/zip.js";
+import { crc32, concatBytes, buildZipBytes, parseZipBytes } from "../src/lib/zip.js";
+
+// Builds a single-entry zip with method 8 (DEFLATE) — buildZipBytes only
+// ever writes method 0 (store), so this mimics what a plant employee's
+// OS re-zipping a project with Finder/Explorer/7-Zip actually produces,
+// to test parseZipBytes's decompression path against something it
+// didn't write itself.
+function u16(n){ return new Uint8Array([n & 0xFF, (n>>>8) & 0xFF]); }
+function u32(n){ return new Uint8Array([n&0xFF,(n>>>8)&0xFF,(n>>>16)&0xFF,(n>>>24)&0xFF]); }
+
+async function deflateRaw(bytes){
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function buildDeflateZipBytes(name, plainBytes){
+  const nameBytes = new TextEncoder().encode(name);
+  const crc = crc32(plainBytes);
+  const compressed = await deflateRaw(plainBytes);
+
+  const localHeader = concatBytes([
+    u32(0x04034b50), u16(20), u16(0), u16(8), u16(0), u16(0),
+    u32(crc), u32(compressed.length), u32(plainBytes.length),
+    u16(nameBytes.length), u16(0)
+  ]);
+  const centralHeader = concatBytes([
+    u32(0x02014b50), u16(20), u16(20), u16(0), u16(8), u16(0), u16(0),
+    u32(crc), u32(compressed.length), u32(plainBytes.length),
+    u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0),
+    u32(0), u32(0)
+  ]);
+  const centralStart = localHeader.length + nameBytes.length + compressed.length;
+  const end = concatBytes([
+    u32(0x06054b50), u16(0), u16(0), u16(1), u16(1),
+    u32(centralHeader.length + nameBytes.length), u32(centralStart), u16(0)
+  ]);
+  return concatBytes([localHeader, nameBytes, compressed, centralHeader, nameBytes, end]);
+}
 
 test("crc32 matches the well-known reference value for 'hello'", () => {
   const bytes = new TextEncoder().encode("hello");
@@ -34,13 +71,13 @@ test("buildZipBytes handles multiple files without overlapping offsets", () => {
   assert.equal(dv.getUint16(10, true), 2);
 });
 
-test("parseZipBytes round-trips names and contents written by buildZipBytes", () => {
+test("parseZipBytes round-trips names and contents written by buildZipBytes", async () => {
   const files = [
     { name: "one.txt", data: new TextEncoder().encode("first file").buffer },
     { name: "folder/two.bin", data: new Uint8Array([0, 1, 2, 255, 254]).buffer },
   ];
   const zip = buildZipBytes(files);
-  const parsed = parseZipBytes(zip);
+  const parsed = await parseZipBytes(zip);
 
   assert.equal(parsed.length, 2);
   assert.equal(parsed[0].name, "one.txt");
@@ -49,6 +86,40 @@ test("parseZipBytes round-trips names and contents written by buildZipBytes", ()
   assert.deepEqual([...new Uint8Array(parsed[1].data)], [0, 1, 2, 255, 254]);
 });
 
-test("parseZipBytes rejects a non-zip buffer", () => {
-  assert.throws(() => parseZipBytes(new TextEncoder().encode("not a zip")));
+test("parseZipBytes rejects a non-zip buffer", async () => {
+  await assert.rejects(() => parseZipBytes(new TextEncoder().encode("not a zip")));
+});
+
+test("parseZipBytes decompresses a DEFLATE (method 8) entry, e.g. a re-zipped project", async () => {
+  const plain = new TextEncoder().encode("project.json contents ".repeat(30));
+  const zip = await buildDeflateZipBytes("project.json", plain);
+  const parsed = await parseZipBytes(zip);
+
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].name, "project.json");
+  assert.equal(new TextDecoder().decode(parsed[0].data), new TextDecoder().decode(plain));
+});
+
+test("parseZipBytes rejects an unsupported compression method", async () => {
+  // Method 12 (BZIP2) — exotic, never produced by Finder/Explorer/7-Zip's
+  // defaults, so an explicit error beats silently misreading the bytes.
+  const nameBytes = new TextEncoder().encode("x.txt");
+  const data = new TextEncoder().encode("hi");
+  const crc = crc32(data);
+  const localHeader = concatBytes([
+    u32(0x04034b50), u16(20), u16(0), u16(12), u16(0), u16(0),
+    u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0)
+  ]);
+  const centralHeader = concatBytes([
+    u32(0x02014b50), u16(20), u16(20), u16(0), u16(12), u16(0), u16(0),
+    u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length),
+    u16(0), u16(0), u16(0), u16(0), u32(0), u32(0)
+  ]);
+  const centralStart = localHeader.length + nameBytes.length + data.length;
+  const end = concatBytes([
+    u32(0x06054b50), u16(0), u16(0), u16(1), u16(1),
+    u32(centralHeader.length + nameBytes.length), u32(centralStart), u16(0)
+  ]);
+  const zip = concatBytes([localHeader, nameBytes, data, centralHeader, nameBytes, end]);
+  await assert.rejects(() => parseZipBytes(zip), /unsupported zip compression method 12/);
 });

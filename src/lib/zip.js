@@ -75,11 +75,39 @@ export async function buildZip(files){
   return new Blob([buildZipBytes(files)], {type:"application/zip"});
 }
 
-// Reads back a zip this tool wrote — used for reopening a saved project.
-// Only understands the STORE (uncompressed) method buildZipBytes uses, and
-// a single-disk archive with no trailing comment (also always true of our
-// own output) — anything else throws rather than guessing.
-export function parseZipBytes(bytes){
+// DecompressionStream("deflate-raw") is a native browser/Node API (no
+// external library, Chrome 80+/Firefox 113+/Safari 16.4+/Node 18+) for
+// raw DEFLATE — exactly zip method 8, no zlib/gzip wrapper. Needed
+// because a plant employee who unzips a saved project with Finder,
+// Explorer, or 7-Zip to inspect it, then re-zips it, gets back
+// DEFLATE-compressed entries (every mainstream OS zip tool's default) —
+// buildZipBytes above never produces that, but parseZipBytes below must
+// still accept it when reopening.
+async function inflateRaw(bytes){
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  const reader = stream.getReader();
+  const chunks = [];
+  let total = 0;
+  while(true){
+    const { done, value } = await reader.read();
+    if(done) break;
+    chunks.push(value);
+    total += value.length;
+  }
+  const out = new Uint8Array(total);
+  let o = 0;
+  chunks.forEach(c => { out.set(c, o); o += c.length; });
+  return out;
+}
+
+// Reads back a zip — buildZipBytes's own STORE (method 0) output, or a
+// DEFLATE (method 8) entry from re-zipping one with the OS's file
+// manager or a zip CLI (see inflateRaw above). Only a single-disk
+// archive with no trailing comment (also always true of our own
+// output) — anything else throws rather than guessing. Async because
+// DecompressionStream is stream-based; every caller already awaits
+// file reads around this.
+export async function parseZipBytes(bytes){
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const dec = new TextDecoder();
 
@@ -102,7 +130,7 @@ export function parseZipBytes(bytes){
     const commentLen = dv.getUint16(p + 32, true);
     const localOffset = dv.getUint32(p + 42, true);
     const name = dec.decode(bytes.subarray(p + 46, p + 46 + nameLen));
-    if(method !== 0) throw new Error(`${name}: compressed zip entries aren't supported — only zips this tool wrote`);
+    if(method !== 0 && method !== 8) throw new Error(`${name}: unsupported zip compression method ${method} (only store/deflate)`);
 
     // Local header's name/extra lengths are authoritative for where data
     // starts (the spec allows them to differ from the central directory).
@@ -111,7 +139,8 @@ export function parseZipBytes(bytes){
     const lNameLen = dv.getUint16(lp + 26, true);
     const lExtraLen = dv.getUint16(lp + 28, true);
     const dataStart = lp + 30 + lNameLen + lExtraLen;
-    const data = bytes.slice(dataStart, dataStart + compSize).buffer;
+    const raw = bytes.slice(dataStart, dataStart + compSize);
+    const data = (method === 8 ? await inflateRaw(raw) : raw).buffer;
 
     files.push({name, data});
     p += 46 + nameLen + extraLen + commentLen;
