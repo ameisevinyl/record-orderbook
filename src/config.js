@@ -1,107 +1,130 @@
 // CONFIG — edit these values for your own production line. Shared across every
 // module (tracklist, labels, covers, shipping...), so it lives here once.
+//
+// formats is an array; each entry is a fully self-contained description of
+// one physical format — array order is display order. `enabled` toggles a
+// format out of the dropdown without removing its configuration; it stays
+// fully usable everywhere else. At least one format must stay enabled.
+// Release-level data that doesn't vary by format (studio email, vinyl
+// colour, locale, info text) stays here as formats' siblings, not nested
+// under it.
+//
+// Currently only 12" and 7" are enabled — 10" is configured but off, for
+// testing.
 
 export const CONFIG = {
   // Email address customers should send SwissTransfer packages to.
   studioEmail: "cutting@example.com",
 
-  // Physical formats offered in the Release section's dropdown. `order`
-  // sets the dropdown's display order; `enabled` toggles a format on or
-  // off — a disabled format is simply left out of the dropdown at
-  // startup, it stays fully configured everywhere else below (RPM,
-  // label, cover-sleeve specs). At least one format must stay enabled.
-  //
-  // Currently only 7" is enabled, for testing.
-  formatCatalogue: {
-    order: [12, 10, 7],
-    labels: { 12: '12" LP', 10: '10" EP', 7: '7" SP' },
-    enabled: { 12: true, 10: false, 7: true }
-  },
-
-  // Default RPM per format, applied whenever the format is changed.
-  defaultRpm: { 7:45, 10:33, 12:33 },
-
-  // Recommended playing time in minutes, per format / RPM / cut type.
-  // "ideal"  — comfortably safe cutting level, no warning shown
-  // "max"    — hard ceiling; exceeding this shows a red warning
-  // "normal"      — standard release
-  // "soundsystem" — shorter, hotter cut (12"/10" club or soundsystem pressings)
-  timeLimits: {
-    7:  {
-      normal:      { ideal:{45:4.5, 33:6.5}, max:{45:6.0, 33:8.0} },
-      soundsystem: { ideal:{45:3.5, 33:5.0}, max:{45:4.5, 33:6.0} }
-    },
-    10: {
-      normal:      { ideal:{45:8,   33:12},  max:{45:8,   33:14} },
-      soundsystem: { ideal:{45:4.5, 33:7},   max:{45:6,   33:9} }
-    },
-    12: {
-      normal:      { ideal:{45:12,  33:20},  max:{45:15,  33:27} },
-      soundsystem: { ideal:{45:10,   33:15},  max:{45:10,   33:16} }
-    }
-  },
-
-  // Label artwork specs, per format. diameterMm is the trim size (the
-  // physical label after cutting); dataSizeMm is the full print file
-  // size including bleed on every side — these are independent, given
-  // values, not derived from one another, because bleed isn't uniform
-  // across formats (7" has 3mm bleed all round; 10"/12" has 3mm too,
-  // but a larger trim diameter).
-  label: {
-    formats: {
-      7:  { diameterMm: 92,  dataSizeMm: 98  },
-      10: { diameterMm: 100, dataSizeMm: 106 },
-      12: { diameterMm: 100, dataSizeMm: 106 }
-    },
-    // Spindle hole. "Big center" (jukebox-style 45s) only applies to 7".
-    centerHoleMm: { normal: 7.4, big: 38 },
-    bigCenterFormats: [7],
-    // Front-end checks here are best-effort — the studio's backend
-    // preprocessor does the real, authoritative validation on upload.
-    sizeToleranceMm: 0.5,
-    dpi: { min: 300, max: 1200 }
-  },
-
-  // Cover / inner sleeve / inlay specs, per format.
-  // trimMm — the finished, cut/folded size the customer sees.
-  // dataMm — the full flat print file size, delivered opened flat with
-  //          front on the right and back on the left, bleed included
-  //          (and, for the cover, the spine).
-  // Both are independent given values, not derived from one another —
-  // trim and data don't reduce to a single uniform bleed figure (the
-  // 7" cover is a rigid "box"-style sleeve with a 3mm spine, which
-  // skews its numbers differently than a simple bleed allowance would).
-  coverSleeve: {
-    sizeToleranceMm: 0.5,
-    dpi: { min: 300, max: 1200 },
-    outerCover: {
-      formats: {
-        7:  { trimMm: {w:373, h:185}, dataMm: {w:383,   h:201} }, // "box" style, 3mm spine
-        10: { trimMm: {w:523, h:260}, dataMm: {w:533,   h:276} },
-        12: { trimMm: {w:633, h:312}, dataMm: {w:638.5, h:324} }
+  formats: [
+    {
+      id: "12",
+      label: '12" LP',
+      enabled: true,
+      // Default RPM, applied whenever this format is selected — the RPM
+      // <select> itself still lets the customer pick either 33⅓ or 45
+      // for any format, this is only the pre-filled starting value.
+      rpm: 33,
+      // Spindle hole, in mm. "big" (jukebox-style 45s) is omitted for
+      // formats that don't offer it.
+      centerHole: { normal: 7.4 },
+      // Recommended playing time in minutes, per cut type and RPM.
+      // "ideal" — comfortably safe cutting level, no warning shown
+      // "max"   — hard ceiling; exceeding this shows a red warning
+      // "normal"      — standard release
+      // "soundsystem" — shorter, hotter cut (club/soundsystem pressings)
+      timeLimits: {
+        normal:      { ideal:{45:12,  33:20}, max:{45:15,  33:27} },
+        soundsystem: { ideal:{45:10,  33:15}, max:{45:10,  33:16} }
       },
-      unprintedColors: ["black", "brown", "white"]
+      // Front-end checks here are best-effort — the studio's backend
+      // preprocessor does the real, authoritative validation on upload.
+      printCheck: { sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 } },
+      printableParts: {
+        // diameterMm is the trim size (the physical label after
+        // cutting); dataSizeMm is the full print file size including
+        // bleed on every side.
+        label: { diameterMm: 100, dataSizeMm: 106 },
+        // trimMm — the finished, cut/folded size the customer sees.
+        // dataMm — the full flat print file size, delivered opened flat
+        //          with front on the right and back on the left, bleed
+        //          included (and, for the cover, the spine).
+        outerCover: {
+          trimMm: {w:633, h:312}, dataMm: {w:638.5, h:324},
+          unprintedColors: ["black", "brown", "white"]
+        },
+        innerSleeve: {
+          trimMm: {w:304, h:309}, dataMm: {w:614, h:315},
+          unprintedColors: ["black", "brown", "white"],
+          centerCutoutDefault: true
+        },
+        inlay: {
+          trimMm: {w:297, h:297}, dataMm: {w:303, h:303},
+          paperGsm: 170
+        }
+      }
     },
-    innerSleeve: {
-      formats: {
-        7:  { trimMm: {w:180, h:180}, dataMm: {w:366, h:186} },
-        10: { trimMm: {w:255, h:255}, dataMm: {w:516, h:261} },
-        12: { trimMm: {w:304, h:309}, dataMm: {w:614, h:315} }
+    {
+      id: "10",
+      label: '10" EP',
+      enabled: false,
+      rpm: 33,
+      centerHole: { normal: 7.4 },
+      timeLimits: {
+        normal:      { ideal:{45:8,   33:12}, max:{45:8,   33:14} },
+        soundsystem: { ideal:{45:4.5, 33:7},  max:{45:6,   33:9} }
       },
-      unprintedColors: ["black", "brown", "white"],
-      centerCutoutDefault: true
+      printCheck: { sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 } },
+      printableParts: {
+        label: { diameterMm: 100, dataSizeMm: 106 },
+        outerCover: {
+          trimMm: {w:523, h:260}, dataMm: {w:533, h:276},
+          unprintedColors: ["black", "brown", "white"]
+        },
+        innerSleeve: {
+          trimMm: {w:255, h:255}, dataMm: {w:516, h:261},
+          unprintedColors: ["black", "brown", "white"],
+          centerCutoutDefault: true
+        },
+        // Not supplied yet — guessed by interpolation, replace with the
+        // real spec.
+        inlay: {
+          trimMm: {w:250, h:250}, dataMm: {w:256, h:256},
+          paperGsm: 170
+        }
+      }
     },
-    inlay: {
-      paperGsm: 170,
-      formats: {
-        7:  { trimMm: {w:181, h:181}, dataMm: {w:187, h:187} },
-        // 10" not supplied yet — guessed by interpolation, replace with
-        // the real spec.
-        10: { trimMm: {w:250, h:250}, dataMm: {w:256, h:256} },
-        12: { trimMm: {w:297, h:297}, dataMm: {w:303, h:303} }
+    {
+      id: "7",
+      label: '7" SP',
+      enabled: true,
+      rpm: 45,
+      centerHole: { normal: 7.4, big: 38 },
+      timeLimits: {
+        normal:      { ideal:{45:4.5, 33:6.5}, max:{45:6.0, 33:8.0} },
+        soundsystem: { ideal:{45:3.5, 33:5.0}, max:{45:4.5, 33:6.0} }
+      },
+      printCheck: { sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 } },
+      printableParts: {
+        label: { diameterMm: 92, dataSizeMm: 98 },
+        // "box" style, 3mm spine — trim and data don't reduce to a
+        // single uniform bleed figure the way a simple allowance would.
+        outerCover: {
+          trimMm: {w:373, h:185}, dataMm: {w:383, h:201},
+          unprintedColors: ["black", "brown", "white"]
+        },
+        innerSleeve: {
+          trimMm: {w:180, h:180}, dataMm: {w:366, h:186},
+          unprintedColors: ["black", "brown", "white"],
+          centerCutoutDefault: true
+        },
+        inlay: {
+          trimMm: {w:181, h:181}, dataMm: {w:187, h:187},
+          paperGsm: 170
+        }
       }
     }
-  },
+  ],
 
   // Vinyl colour options. standardColor is the default (no surcharge,
   // no minimum). basicColors is the editable list of solid colour
