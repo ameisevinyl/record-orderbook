@@ -314,6 +314,24 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
   if(parsed.colorMode === "unknown") warnings.push("could not determine color mode automatically — please verify CMYK manually");
   else if(parsed.colorMode !== "CMYK") warnings.push(`file appears to be ${parsed.colorMode}, not CMYK`);
 
+  // A label's target is always square (w===h; covers/sleeves/inlays aren't,
+  // so this never fires for them). Ratio needs no mm/px/pt conversion —
+  // whichever raw dimension pair we have (a vector PDF's MediaBox, or a
+  // raster's pixel count) is enough, which matters because a vector PDF's
+  // exact physical size is sometimes unreadable (e.g. MediaBox inside a
+  // compressed object stream) even though its shape still is. A square
+  // result is trusted as correctly sized even when the absolute size
+  // above couldn't be independently verified.
+  if(targetMm.w === targetMm.h){
+    const dims = parsed.pageSizeMm || parsed.imagePx;
+    if(dims && dims.h > 0){
+      const ratio = dims.w / dims.h;
+      if(Math.abs(ratio - 1) > 0.01){
+        warnings.push(`not square: ${dims.w.toFixed(1)}×${dims.h.toFixed(1)} (ratio ${ratio.toFixed(2)}:1) — this print needs a 1:1 width:height ratio`);
+      }
+    }
+  }
+
   return { errors, warnings, impliedDpi, checkedSizeMm };
 }
 

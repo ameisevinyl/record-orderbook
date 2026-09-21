@@ -293,6 +293,35 @@ test("validateArtwork supports a non-square (rectangular) target, e.g. a cover f
   assert.ok(!result.warnings.some((w) => w.includes("wrong size")), result.warnings.join("; "));
 });
 
+test("validateArtwork flags a non-square vector PDF for a square (label) target", () => {
+  // MediaBox readable, but not square — a genuine crop mistake.
+  const parsed = { pageSizeMm: { w: 98, h: 90 }, imagePx: null, declaredDpi: null, colorMode: "CMYK" };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  assert.ok(result.warnings.some((w) => w.includes("not square")), result.warnings.join("; "));
+});
+
+test("validateArtwork does not flag a square vector PDF even when absolute size can't be verified", () => {
+  // Same shape as "validateArtwork treats vector PDFs... as resolution n/a"
+  // above (pageSizeMm read successfully and square) — ratio check must
+  // stay silent, size is trusted from shape alone.
+  const parsed = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK" };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  assert.ok(!result.warnings.some((w) => w.includes("not square")), result.warnings.join("; "));
+});
+
+test("validateArtwork's ratio check falls back to imagePx when a PDF's page size couldn't be read (e.g. MediaBox in a compressed object stream)", () => {
+  const parsed = { pageSizeMm: null, imagePx: { w: 1000, h: 800 }, declaredDpi: null, colorMode: "CMYK" };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  assert.ok(result.warnings.some((w) => w.includes("not square")), result.warnings.join("; "));
+});
+
+test("validateArtwork's ratio check never fires for a non-square target (covers/sleeves/inlays)", () => {
+  const targetMm = { w: 383, h: 201 };
+  const parsed = { pageSizeMm: { w: 383, h: 201 }, imagePx: null, declaredDpi: null, colorMode: "CMYK" };
+  const result = validateArtwork(parsed, targetMm, TOL, DPI_MIN, DPI_MAX);
+  assert.ok(!result.warnings.some((w) => w.includes("not square")), result.warnings.join("; "));
+});
+
 // ---- computePrintSimGeometry ----
 
 test("computePrintSimGeometry scales mm measurements into canvas pixels", () => {
