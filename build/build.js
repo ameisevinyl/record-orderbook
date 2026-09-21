@@ -52,7 +52,11 @@ const FILES = [
 
 function stripModuleSyntax(source, filePath){
   return source
-    .replace(/^import\s.*?;\s*$/gm, "")
+    // [\s\S]*? (not .*?) so a multi-line import (braces spanning several
+    // lines) still gets stripped in full, not left half-stripped as a
+    // dangling `import` keyword that breaks the flattened, module-less
+    // script this produces.
+    .replace(/^import\s[\s\S]*?;\s*$/gm, "")
     .replace(/^export\s+(?=(function|async function|const|let|class))/gm, "")
     .replace(/^\n+/, "")
     .replace(/\n+$/, "\n");
