@@ -49,37 +49,6 @@ function renderCoverWarnings(listEl, result){
   listEl.innerHTML = items.join("");
 }
 
-// Safari's built-in PDF viewer doesn't scale its rendered page to fill
-// the given iframe the way Chrome/Firefox do — it renders at its own
-// natural size instead, leaving grey showing around it whenever that's
-// smaller than the target box (reported for labels, same iframe
-// pattern here — Chrome already fills correctly regardless of any URL
-// fragment, verified live). Sizing the iframe to the PDF's own natural
-// page size and CSS-transform-scaling it up to the container doesn't
-// depend on the PDF viewer's own internal fit logic at all, so it
-// works the same in every browser.
-//
-// The scale factor comes from measuring both boxes' actual rendered
-// pixels (getBoundingClientRect), not from assuming a specific mm-to-px
-// conversion — this container is sized responsively (aspect-ratio + a
-// max-width cap via updateSizing above), not via literal CSS "mm"
-// units the way labels.js's equivalent container is, so the same
-// helper (copied there, see its identical comment) has to work either
-// way without knowing which.
-function fitPdfIframe(iframe, container, naturalMm){
-  if(!naturalMm) return; // couldn't determine the PDF's own page size — leave it at the CSS default (100%/100%)
-  iframe.style.position = "absolute";
-  iframe.style.top = "0";
-  iframe.style.left = "0";
-  iframe.style.width = naturalMm.w + "mm";
-  iframe.style.height = naturalMm.h + "mm";
-  iframe.style.transformOrigin = "top left";
-  const containerRect = container.getBoundingClientRect();
-  const iframeRect = iframe.getBoundingClientRect();
-  if(containerRect.width === 0 || iframeRect.width === 0) return; // box not laid out yet (e.g. still hidden) — nothing sane to scale to
-  iframe.style.transform = `scale(${containerRect.width / iframeRect.width}, ${containerRect.height / iframeRect.height})`;
-}
-
 function createCoverArtworkSlot(){
   const input = document.getElementById("coverinput");
   const meta = document.getElementById("covermeta");
@@ -159,8 +128,13 @@ function createCoverArtworkSlot(){
 
     url = URL.createObjectURL(f);
     if(kind === "pdf"){
+      // Fills via CSS (.label-preview iframe{width/height:100%}). Safari's
+      // built-in PDF viewer renders its own margin inside the page content
+      // itself — not reachable or fixable from the host page (verified: a
+      // CSS-transform-scale attempt scaled that margin right along with
+      // it) — so Safari shows a grey margin around the artwork here;
+      // Chrome/Firefox fill exactly.
       preview.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0"></iframe>`;
-      fitPdfIframe(preview.querySelector("iframe"), preview, parsed && parsed.pageSizeMm);
     } else if(kind === "jpeg"){
       preview.innerHTML = `<img src="${url}" alt="artwork">`;
     } else if(kind === "tiff"){
@@ -290,12 +264,8 @@ export function applyCover(data, fileMap){
   document.getElementById("cover-none").checked = c.mode !== "printed" && c.mode !== "printed-inside-out" && c.mode !== "unprinted";
   document.getElementById("coverColor").value = c.color || "white";
   document.getElementById("coversimprint").checked = !!c.simprint;
-  // Mode (and the visibility it drives) must be set before re-attaching
-  // the file: fitPdfIframe measures the preview box's rendered size, and
-  // a still-hidden box measures 0×0 — see the identical ordering fix in
-  // inner-sleeve.js/inlay.js.
-  updateCoverMode();
   applyCoverSlotFile(c.fileName, c.originalFileName, fileMap);
+  updateCoverMode();
   coverSlot.updateSizing();
   coverSlot.draw();
 }

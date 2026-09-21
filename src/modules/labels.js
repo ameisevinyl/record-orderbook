@@ -74,40 +74,6 @@ function setPreview(side, html){
   document.getElementById("labelpreview-"+side).innerHTML = html;
 }
 
-// Safari's built-in PDF viewer doesn't scale its rendered page to fill
-// the given iframe the way Chrome/Firefox do — it renders at its own
-// natural size instead, leaving grey showing around it whenever that's
-// smaller than the target box (reported: label artwork preview looked
-// shrunk with a visible frame around it, Safari-only — Chrome already
-// fills correctly regardless of any URL fragment, verified live).
-// Sizing the iframe to the PDF's own natural page size and CSS-
-// transform-scaling it up to the container doesn't depend on the PDF
-// viewer's own internal fit logic at all, so it works the same in
-// every browser. Requested behaviour either way: the preview always
-// represents the target data format exactly, filling the box, even if
-// the file's own page happens to be a different size (the "wrong
-// size" warning already flags that independently).
-//
-// The scale factor comes from measuring both boxes' actual rendered
-// pixels (getBoundingClientRect), not from assuming a specific mm-to-px
-// conversion — this container is sized via literal CSS "mm" units, but
-// cover.js/inner-sleeve.js/inlay.js's equivalent containers are sized
-// responsively instead (aspect-ratio + a max-width cap), so the same
-// helper has to work either way without knowing which.
-function fitPdfIframe(iframe, container, naturalMm){
-  if(!naturalMm) return; // couldn't determine the PDF's own page size — leave it at the CSS default (100%/100%)
-  iframe.style.position = "absolute";
-  iframe.style.top = "0";
-  iframe.style.left = "0";
-  iframe.style.width = naturalMm.w + "mm";
-  iframe.style.height = naturalMm.h + "mm";
-  iframe.style.transformOrigin = "top left";
-  const containerRect = container.getBoundingClientRect();
-  const iframeRect = iframe.getBoundingClientRect();
-  if(containerRect.width === 0 || iframeRect.width === 0) return; // box not laid out yet (e.g. still hidden) — nothing sane to scale to
-  iframe.style.transform = `scale(${containerRect.width / iframeRect.width}, ${containerRect.height / iframeRect.height})`;
-}
-
 // Sizes the preview box and its overlay canvas to the format's actual
 // data size in mm, so the on-screen preview is close to true print
 // size rather than an arbitrary fixed box — "close to" because CSS
@@ -203,9 +169,9 @@ async function handleFile(side, file){
   const url = URL.createObjectURL(file);
   box._url = url;
   if(kind === "pdf"){
+    // Fills via CSS (.label-preview iframe{width/height:100%}) — see
+    // cover.js's identical comment on Safari's PDF viewer margin.
     setPreview(side, `<iframe src="${url}#toolbar=0&navpanes=0"></iframe>`);
-    const previewEl = document.getElementById("labelpreview-"+side);
-    fitPdfIframe(previewEl.querySelector("iframe"), previewEl, parsed && parsed.pageSizeMm);
   } else if(kind === "jpeg"){
     setPreview(side, `<img src="${url}" alt="label ${side} artwork">`);
   } else if(kind === "tiff"){

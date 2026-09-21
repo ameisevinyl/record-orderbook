@@ -33,26 +33,6 @@ function renderInlayWarnings(listEl, result){
   listEl.innerHTML = items.join("");
 }
 
-// See labels.js's identical helper (same comment there) — Safari's PDF
-// viewer doesn't scale to fill the iframe, so size the iframe to the
-// PDF's own natural page size and CSS-transform-scale it to the
-// container, measured via getBoundingClientRect rather than assumed
-// mm-to-px math (this container is sized responsively, not via literal
-// CSS "mm" units).
-function fitPdfIframe(iframe, container, naturalMm){
-  if(!naturalMm) return;
-  iframe.style.position = "absolute";
-  iframe.style.top = "0";
-  iframe.style.left = "0";
-  iframe.style.width = naturalMm.w + "mm";
-  iframe.style.height = naturalMm.h + "mm";
-  iframe.style.transformOrigin = "top left";
-  const containerRect = container.getBoundingClientRect();
-  const iframeRect = iframe.getBoundingClientRect();
-  if(containerRect.width === 0 || iframeRect.width === 0) return; // box not laid out yet (e.g. still hidden) — nothing sane to scale to
-  iframe.style.transform = `scale(${containerRect.width / iframeRect.width}, ${containerRect.height / iframeRect.height})`;
-}
-
 // prefix is "inlayfront" or "inlayback" — the two sides share this
 // scaffolding (unlike cover.js/inner-sleeve.js, which each have exactly
 // one slot), since front/back are otherwise identical.
@@ -133,8 +113,9 @@ function createInlayArtworkSlot(prefix){
 
     url = URL.createObjectURL(f);
     if(kind === "pdf"){
+      // Fills via CSS (.label-preview iframe{width/height:100%}) — see
+      // cover.js's identical comment on Safari's PDF viewer margin.
       preview.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0"></iframe>`;
-      fitPdfIframe(preview.querySelector("iframe"), preview, parsed && parsed.pageSizeMm);
     } else if(kind === "jpeg"){
       preview.innerHTML = `<img src="${url}" alt="artwork">`;
     } else if(kind === "tiff"){
@@ -250,13 +231,11 @@ export function collectInlay(){
 export function applyInlay(data, fileMap){
   const inlay = data || {};
   document.getElementById("inlayInclude").checked = !!inlay.include;
-  // Visibility must be set before re-attaching files — see cover.js's
-  // identical ordering fix and its comment.
-  updateInlayVisibility();
   document.getElementById("inlayfrontsimprint").checked = !!(inlay.front && inlay.front.simprint);
   applyInlaySlotFile(inlayFrontSlot, "inlayfront", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap);
   document.getElementById("inlaybacksimprint").checked = !!(inlay.back && inlay.back.simprint);
   applyInlaySlotFile(inlayBackSlot, "inlayback", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap);
+  updateInlayVisibility();
   [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.updateSizing(); s.draw(); });
 }
 
