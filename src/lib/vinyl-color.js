@@ -6,13 +6,19 @@ function capitalize(s){
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// "random" (mixed/recycled colour vinyl) isn't a specific colour, so it
+// gets its own label rather than a capitalized "Random".
+export function colorLabel(color){
+  return color === "random" ? "Random colour" : capitalize(color);
+}
+
 // Standard colour first, then the configurable basic-colours list, then
-// "random" (mixed/recycled colour vinyl) last — it isn't a specific
-// colour, so it doesn't belong in the editable list.
+// "random" last — it isn't a specific colour, so it doesn't belong in
+// the editable list.
 export function buildColorOptions(vinylColorConfig){
-  const opts = [{ value: vinylColorConfig.standardColor, label: capitalize(vinylColorConfig.standardColor) }];
-  vinylColorConfig.basicColors.forEach(c => opts.push({ value: c, label: capitalize(c) }));
-  opts.push({ value: "random", label: "Random colour" });
+  const opts = [{ value: vinylColorConfig.standardColor, label: colorLabel(vinylColorConfig.standardColor) }];
+  vinylColorConfig.basicColors.forEach(c => opts.push({ value: c, label: colorLabel(c) }));
+  opts.push({ value: "random", label: colorLabel("random") });
   return opts;
 }
 

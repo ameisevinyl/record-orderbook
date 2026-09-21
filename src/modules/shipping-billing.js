@@ -32,6 +32,7 @@
 
 import { allocateQuantities, missingAddressFields, emailFormatValid, phoneFormatValid, vatIdFormatValid, eoriFormatValid } from "../lib/shipping.js";
 import { COUNTRIES } from "../lib/countries.js";
+import { colorLabel } from "../lib/vinyl-color.js";
 import { getColorBreakdown, onColorChange } from "./vinyl-color.js";
 
 const COUNTRY_OPTIONS_HTML = `<option value="">— select country —</option>`
@@ -390,9 +391,14 @@ export function applyShippingBilling(data){
   updateAll();
 }
 
-export function buildShippingBillingSummary(){
-  const { billing, shipping } = collectShippingBilling();
-  const overallBreakdown = getColorBreakdown().map(r => `${r.qty} ${r.label}`).join(", ");
+// shippingBilling/vinylColor are project.shippingBilling/project.vinylColor
+// — buildOrderSummaryText builds order_summary.txt from the project object
+// alone (never the live DOM), so this must too.
+export function buildShippingBillingSummary({billing, shipping}, vinylColor){
+  const overallBreakdown = vinylColor
+    .filter(r => Number(r.qty) > 0)
+    .map(r => `${r.qty} ${colorLabel(r.color)}`)
+    .join(", ");
 
   let out = "BILLING ADDRESS:\n";
   out += `  ${billing.recipientName}${billing.attention ? " — " + billing.attention : ""}\n`;

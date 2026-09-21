@@ -855,7 +855,7 @@ function buildOrderSummaryText(project){
     + filesManifestSection(project)
     + tracklistBody(project)
     + notesSection(project)
-    + "\n" + buildShippingBillingSummary();
+    + "\n" + buildShippingBillingSummary(project.shippingBilling, project.vinylColor);
 }
 
 // Same tracklist as above, minus the customer's billing/shipping details

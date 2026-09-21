@@ -1,12 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildColorOptions, belowMinimum } from "../src/lib/vinyl-color.js";
+import { buildColorOptions, belowMinimum, colorLabel } from "../src/lib/vinyl-color.js";
 
 const vinylColorConfig = {
   standardColor: "black",
   basicColors: ["yellow", "red"],
   minOrderQty: { black: 0, yellow: 300, red: 300, random: 300 }
 };
+
+test("colorLabel capitalizes a colour and special-cases random", () => {
+  assert.equal(colorLabel("black"), "Black");
+  assert.equal(colorLabel("transparent"), "Transparent");
+  assert.equal(colorLabel("random"), "Random colour");
+});
 
 test("buildColorOptions puts standard first, basics in order, random last", () => {
   const opts = buildColorOptions(vinylColorConfig);
