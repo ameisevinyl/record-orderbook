@@ -11,11 +11,9 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, computeSpreadInsetPx } from "../lib/print-artwork.js";
-import { printedPartFileName, fileExt } from "../lib/package-naming.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork } from "../lib/print-artwork.js";
+import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
-// See cover.js's identical comment — flattened build, must stay unique.
-const INLAY_PX_PER_MM = 4;
 const INLAY_PREVIEW_MAX_W = 640;
 
 function inlayCurrentFormat(){
@@ -41,10 +39,9 @@ function createInlayArtworkSlot(prefix){
   const meta = document.getElementById(prefix+"meta");
   const preview = document.getElementById(prefix+"preview");
   const wrap = document.getElementById(prefix+"previewwrap");
-  const canvas = document.getElementById(prefix+"sim");
   const warningsList = document.getElementById(prefix+"warnings");
-  const simChk = document.getElementById(prefix+"simprint");
   let file = null, url = null, originalFileName = null;
+  let previewFile = null, previewUrl = null;
 
   function updateSizing(){
     const { dataMm } = inlaySpec();
@@ -52,22 +49,6 @@ function createInlayArtworkSlot(prefix){
     wrap.style.maxWidth = INLAY_PREVIEW_MAX_W+"px";
     wrap.style.aspectRatio = dataMm.w+" / "+dataMm.h;
     preview.style.width = "100%"; preview.style.height = "100%";
-    canvas.width = Math.round(dataMm.w * INLAY_PX_PER_MM);
-    canvas.height = Math.round(dataMm.h * INLAY_PX_PER_MM);
-    canvas.style.width = "100%"; canvas.style.height = "100%";
-  }
-
-  function draw(){
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if(!simChk.checked) return;
-    const { dataMm, trimMm } = inlaySpec();
-    const inset = computeSpreadInsetPx(canvas.width, canvas.height, dataMm, trimMm);
-    ctx.beginPath();
-    ctx.rect(0, 0, canvas.width, canvas.height);
-    ctx.rect(inset.x, inset.y, canvas.width - 2*inset.x, canvas.height - 2*inset.y);
-    ctx.fillStyle = "#000";
-    ctx.fill("evenodd");
   }
 
   // "file: <current name>", plus a tight second line with the original
@@ -88,6 +69,20 @@ function createInlayArtworkSlot(prefix){
     }
   }
 
+  // Swaps the preview box to a plant-generated preview image, taking
+  // priority over the live-rendered original — see applyInlaySlotFile
+  // below, the only caller (a fresh manual pick never has one to show
+  // yet). Reuses the existing file-meta status-text slot instead of
+  // adding new markup/CSS for a separate caption. Shared by both the
+  // front and back slots (this factory is called once per side).
+  function showPreviewImage(previewImgFile){
+    previewFile = previewImgFile;
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(previewImgFile);
+    preview.innerHTML = `<img src="${previewUrl}" alt="plant preview">`;
+    renderInlayFileMeta(file.name, originalFileName, "plant preview");
+  }
+
   // origName defaults to the file's own name (a fresh manual pick);
   // applyInlaySlotFile passes the name recorded before renaming, on a
   // project reload, so renderInlayFileMeta can show it as the "was:" line.
@@ -97,6 +92,9 @@ function createInlayArtworkSlot(prefix){
     meta.classList.remove("empty");
     renderInlayFileMeta(f.name, origName, "checking…");
     if(url) URL.revokeObjectURL(url);
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewFile = null;
+    previewUrl = null;
 
     const buf = await f.arrayBuffer();
     const kind = sniffFileKind(buf);
@@ -125,7 +123,6 @@ function createInlayArtworkSlot(prefix){
       preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
     }
     renderInlayFileMeta(f.name, origName, null);
-    draw();
   }
 
   // A file picked for one format is sized for that format's dataMm —
@@ -134,6 +131,8 @@ function createInlayArtworkSlot(prefix){
   function clear(){
     if(url) URL.revokeObjectURL(url);
     file = null; url = null; originalFileName = null;
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewFile = null; previewUrl = null;
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
@@ -146,9 +145,11 @@ function createInlayArtworkSlot(prefix){
     const f = input.files[0];
     if(f) handleFile(f);
   });
-  simChk.addEventListener("change", draw);
 
-  return { updateSizing, draw, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName, setFile: handleFile };
+  return {
+    updateSizing, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName,
+    setFile: handleFile, setPreviewImage: showPreviewImage, getPreviewFile: ()=> previewFile
+  };
 }
 
 function inlaySlotFileName(variant, file){
@@ -170,10 +171,10 @@ function updateInlayVisibility(){
 export function initInlay(){
   inlayFrontSlot = createInlayArtworkSlot("inlayfront");
   inlayBackSlot = createInlayArtworkSlot("inlayback");
-  [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.updateSizing(); s.draw(); });
+  [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
 
   document.getElementById("format").addEventListener("change", ()=>{
-    [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.clear(); s.updateSizing(); s.draw(); });
+    [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.clear(); s.updateSizing(); });
   });
 
   document.getElementById("inlayInclude").addEventListener("change", updateInlayVisibility);
@@ -199,10 +200,16 @@ function setInlayFileNamePlaceholder(prefix, name, originalName){
   }
 }
 
-function applyInlaySlotFile(slot, prefix, fileName, originalFileName, fileMap){
+async function applyInlaySlotFile(slot, prefix, variant, fileName, originalFileName, fileMap){
   const file = fileMap && fileName && fileMap.get(fileName);
-  if(file) slot.setFile(file, originalFileName || fileName);
-  else setInlayFileNamePlaceholder(prefix, fileName, originalFileName);
+  if(file){
+    await slot.setFile(file, originalFileName || fileName);
+    const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"inlay", variant});
+    const previewImg = fileMap && fileMap.get(previewName);
+    if(previewImg) slot.setPreviewImage(previewImg);
+  } else {
+    setInlayFileNamePlaceholder(prefix, fileName, originalFileName);
+  }
 }
 
 export function collectInlay(){
@@ -216,27 +223,23 @@ export function collectInlay(){
   return {
     include: inlayInclude,
     front: {
-      simprint: document.getElementById("inlayfrontsimprint").checked,
       fileName: nameFor(inlayFrontSlot, "front"),
       originalFileName: originalNameFor(inlayFrontSlot)
     },
     back: {
-      simprint: document.getElementById("inlaybacksimprint").checked,
       fileName: nameFor(inlayBackSlot, "back"),
       originalFileName: originalNameFor(inlayBackSlot)
     }
   };
 }
 
-export function applyInlay(data, fileMap){
+export async function applyInlay(data, fileMap){
   const inlay = data || {};
   document.getElementById("inlayInclude").checked = !!inlay.include;
-  document.getElementById("inlayfrontsimprint").checked = !!(inlay.front && inlay.front.simprint);
-  applyInlaySlotFile(inlayFrontSlot, "inlayfront", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap);
-  document.getElementById("inlaybacksimprint").checked = !!(inlay.back && inlay.back.simprint);
-  applyInlaySlotFile(inlayBackSlot, "inlayback", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap);
+  await applyInlaySlotFile(inlayFrontSlot, "inlayfront", "front", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap);
+  await applyInlaySlotFile(inlayBackSlot, "inlayback", "back", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap);
   updateInlayVisibility();
-  [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.updateSizing(); s.draw(); });
+  [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
 }
 
 export async function collectInlayFiles(){
@@ -244,8 +247,18 @@ export async function collectInlayFiles(){
   if(document.getElementById("inlayInclude").checked){
     const front = await collectInlaySlotFile(inlayFrontSlot, "front");
     if(front) files.push(front);
+    const frontPreview = inlayFrontSlot.getPreviewFile();
+    if(frontPreview){
+      const name = previewFileName({catalogue: document.getElementById("catalogue").value, part:"inlay", variant:"front"});
+      files.push({name, data: await frontPreview.arrayBuffer()});
+    }
     const back = await collectInlaySlotFile(inlayBackSlot, "back");
     if(back) files.push(back);
+    const backPreview = inlayBackSlot.getPreviewFile();
+    if(backPreview){
+      const name = previewFileName({catalogue: document.getElementById("catalogue").value, part:"inlay", variant:"back"});
+      files.push({name, data: await backPreview.arrayBuffer()});
+    }
   }
   return files;
 }

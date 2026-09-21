@@ -708,7 +708,7 @@ async function loadProject(file){
   const cs = p.coverSleeve || {};
   await applyCover(cs.cover, fileMap);
   await applyInnerSleeve(cs.innerSleeve, fileMap);
-  applyInlay(cs.inlay, fileMap);
+  await applyInlay(cs.inlay, fileMap);
 
   ["A","B"].forEach(side=>{
     const s = (p.sides && p.sides[side]) || {tracks:[]};
