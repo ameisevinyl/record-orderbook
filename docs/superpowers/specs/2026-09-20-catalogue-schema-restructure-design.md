@@ -1,6 +1,6 @@
 # Catalogue schema restructure — design
 
-Status: approved, pending implementation plan
+Status: implemented
 Sub-project A of 4 (see "Related work" below)
 
 ## Context
