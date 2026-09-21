@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   slug, fileExt, sanitizeFileName, mimeType, trackFileName, continuousSideFileName,
-  printedPartFileName, dateStamp, projectFileName
+  printedPartFileName, dateStamp, humanDate, projectFileName
 } from "../src/lib/package-naming.js";
 
 test("slug lowercases and collapses non-alnum runs to single underscores", () => {
@@ -69,6 +69,11 @@ test("printedPartFileName builds catalogue/part/variant/version", () => {
 
 test("dateStamp formats as YYMMDD", () => {
   assert.equal(dateStamp(new Date(2026, 8, 19)), "260919");
+});
+
+test("humanDate formats as yyyy-mm-dd", () => {
+  assert.equal(humanDate(new Date(2026, 8, 19)), "2026-09-19");
+  assert.equal(humanDate(new Date(2026, 0, 5)), "2026-01-05");
 });
 
 test("projectFileName combines date, catalogue and customer email", () => {

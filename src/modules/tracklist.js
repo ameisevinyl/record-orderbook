@@ -7,12 +7,13 @@
 // lives in src/lib/ and is imported below.
 
 import { CONFIG } from "../config.js";
-import { formatTime, parseTime } from "../lib/time.js";
+import { formatTime, parseTime, trackGapSeconds } from "../lib/time.js";
 import { readAudioDuration, compressionWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
-import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType } from "../lib/package-naming.js";
+import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType, humanDate } from "../lib/package-naming.js";
 import { renderTable } from "../lib/text-table.js";
+import { defaultMatrix } from "../lib/matrix.js";
 import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
 import { collectCoverSleeveFiles, collectCoverSleeve, applyCoverSleeve } from "./cover-sleeve.js";
 import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
@@ -159,17 +160,6 @@ function syncAlbumArtistToLinkedTracks(){
   document.querySelectorAll(".track-row .artist[readonly]").forEach(input=>{
     input.value = albumArtist;
   });
-}
-
-// {gap, gapCustom} is the shape both a track-row's fields and a
-// serialized track object share, so this works for either — see
-// rowGapSeconds (DOM) and tracklistBody (project JSON) below.
-function trackGapSeconds({gap, gapCustom}, isFirst){
-  if(isFirst) return 0;
-  if(gap === "0") return 0;
-  if(gap === "2") return 2;
-  const v = parseFloat(gapCustom);
-  return isFinite(v) ? v : 0;
 }
 
 function rowGapSeconds(row, isFirst){
@@ -472,10 +462,6 @@ function applyDefaultRpm(){
 // with the field still on "auto" is itself persisted (see
 // serializeSide/loadProject) so that state survives a save/reload
 // round-trip and doesn't refreeze on a stale value.
-function defaultMatrix(catalogue, side){
-  return (catalogue ? catalogue + " " : "") + side;
-}
-
 function applyDefaultMatrix(){
   const catalogue = document.getElementById("catalogue").value;
   ["A","B"].forEach(side=>{
@@ -781,15 +767,6 @@ function tracksNeedArtistColumn(project){
   return ["A","B"].some(side =>
     project.sides[side].tracks.some(t => t.artist && t.artist !== project.albumArtist)
   );
-}
-
-// yyyy-mm-dd, local date — human-readable, as opposed to
-// package-naming.js's dateStamp() (compact yymmdd, used in filenames).
-function humanDate(date = new Date()){
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
 }
 
 function documentHeader(project, label){

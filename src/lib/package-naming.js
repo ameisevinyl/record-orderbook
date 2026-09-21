@@ -79,6 +79,15 @@ export function dateStamp(date = new Date()){
   return yy + mm + dd;
 }
 
+// yyyy-mm-dd, local date — human-readable, for document headers, as
+// opposed to dateStamp()'s compact form used in filenames.
+export function humanDate(date = new Date()){
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 // 260919_PNKRCK007_customer_example_com — the project package's file
 // name (also the single folder nested inside the zip).
 export function projectFileName({catalogue, customerEmail, date}){

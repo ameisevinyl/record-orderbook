@@ -20,3 +20,13 @@ export function parseTime(str){
   if(!isNaN(asNum)) return asNum; // bare seconds
   return null;
 }
+
+// {gap, gapCustom} is the shape both a track-row's fields and a
+// serialized track object share, so this works for either.
+export function trackGapSeconds({gap, gapCustom}, isFirst){
+  if(isFirst) return 0;
+  if(gap === "0") return 0;
+  if(gap === "2") return 2;
+  const v = parseFloat(gapCustom);
+  return isFinite(v) ? v : 0;
+}
