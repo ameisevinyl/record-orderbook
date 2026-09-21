@@ -44,7 +44,7 @@ function createInlayArtworkSlot(prefix){
   const canvas = document.getElementById(prefix+"sim");
   const warningsList = document.getElementById(prefix+"warnings");
   const simChk = document.getElementById(prefix+"simprint");
-  let file = null, url = null;
+  let file = null, url = null, originalFileName = null;
 
   function updateSizing(){
     const { dataMm } = inlaySpec();
@@ -70,10 +70,32 @@ function createInlayArtworkSlot(prefix){
     ctx.fill("evenodd");
   }
 
-  async function handleFile(f){
+  // "file: <current name>", plus a tight second line with the original
+  // filename when it differs — only true after a project reload
+  // re-attaches a file by its renamed (convention) name; a fresh manual
+  // pick has nothing to show there. Built with DOM nodes rather than
+  // innerHTML since file names are untrusted strings (the customer's
+  // own upload) — see tracklist.js's renderFileMeta for the same idea.
+  function renderInlayFileMeta(currentName, originalName, statusText){
+    meta.textContent = "";
+    meta.append(statusText ? `file: ${currentName} — ${statusText}` : `file: ${currentName}`);
+    if(originalName && originalName !== currentName){
+      meta.append(document.createElement("br"));
+      const orig = document.createElement("span");
+      orig.className = "filemeta-orig";
+      orig.textContent = "was: " + originalName;
+      meta.append(orig);
+    }
+  }
+
+  // origName defaults to the file's own name (a fresh manual pick);
+  // applyInlaySlotFile passes the name recorded before renaming, on a
+  // project reload, so renderInlayFileMeta can show it as the "was:" line.
+  async function handleFile(f, origName = f.name){
     file = f;
+    originalFileName = origName;
     meta.classList.remove("empty");
-    meta.textContent = "file: " + f.name + " — checking…";
+    renderInlayFileMeta(f.name, origName, "checking…");
     if(url) URL.revokeObjectURL(url);
 
     const buf = await f.arrayBuffer();
@@ -100,7 +122,7 @@ function createInlayArtworkSlot(prefix){
     } else{
       preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
     }
-    meta.textContent = "file: " + f.name;
+    renderInlayFileMeta(f.name, origName, null);
     draw();
   }
 
@@ -109,7 +131,7 @@ function createInlayArtworkSlot(prefix){
   // change listener), rather than leaving a now-wrong-size file attached.
   function clear(){
     if(url) URL.revokeObjectURL(url);
-    file = null; url = null;
+    file = null; url = null; originalFileName = null;
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
@@ -124,7 +146,7 @@ function createInlayArtworkSlot(prefix){
   });
   simChk.addEventListener("change", draw);
 
-  return { updateSizing, draw, clear, getFile: ()=> file, setFile: handleFile };
+  return { updateSizing, draw, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName, setFile: handleFile };
 }
 
 function inlaySlotFileName(variant, file){
@@ -156,21 +178,29 @@ export function initInlay(){
   updateInlayVisibility();
 }
 
-function setInlayFileNamePlaceholder(prefix, name){
+function setInlayFileNamePlaceholder(prefix, name, originalName){
   const meta = document.getElementById(prefix+"meta");
   if(name){
     meta.classList.remove("empty");
-    meta.textContent = "file: " + name + " — please re-select this file (not stored in the order file)";
+    meta.textContent = "";
+    meta.append(`file: ${name} — please re-select this file (not stored in the order file)`);
+    if(originalName && originalName !== name){
+      meta.append(document.createElement("br"));
+      const orig = document.createElement("span");
+      orig.className = "filemeta-orig";
+      orig.textContent = "was: " + originalName;
+      meta.append(orig);
+    }
   } else {
     meta.classList.add("empty");
     meta.textContent = "";
   }
 }
 
-function applyInlaySlotFile(slot, prefix, fileName, fileMap){
+function applyInlaySlotFile(slot, prefix, fileName, originalFileName, fileMap){
   const file = fileMap && fileName && fileMap.get(fileName);
-  if(file) slot.setFile(file);
-  else setInlayFileNamePlaceholder(prefix, fileName);
+  if(file) slot.setFile(file, originalFileName || fileName);
+  else setInlayFileNamePlaceholder(prefix, fileName, originalFileName);
 }
 
 export function collectInlay(){
@@ -180,15 +210,18 @@ export function collectInlay(){
     const file = slot.getFile();
     return file ? inlaySlotFileName(variant, file) : null;
   };
+  const originalNameFor = (slot) => inlayInclude && slot.getFile() ? slot.getOriginalFileName() : null;
   return {
     include: inlayInclude,
     front: {
       simprint: document.getElementById("inlayfrontsimprint").checked,
-      fileName: nameFor(inlayFrontSlot, "front")
+      fileName: nameFor(inlayFrontSlot, "front"),
+      originalFileName: originalNameFor(inlayFrontSlot)
     },
     back: {
       simprint: document.getElementById("inlaybacksimprint").checked,
-      fileName: nameFor(inlayBackSlot, "back")
+      fileName: nameFor(inlayBackSlot, "back"),
+      originalFileName: originalNameFor(inlayBackSlot)
     }
   };
 }
@@ -197,9 +230,9 @@ export function applyInlay(data, fileMap){
   const inlay = data || {};
   document.getElementById("inlayInclude").checked = !!inlay.include;
   document.getElementById("inlayfrontsimprint").checked = !!(inlay.front && inlay.front.simprint);
-  applyInlaySlotFile(inlayFrontSlot, "inlayfront", inlay.front && inlay.front.fileName, fileMap);
+  applyInlaySlotFile(inlayFrontSlot, "inlayfront", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap);
   document.getElementById("inlaybacksimprint").checked = !!(inlay.back && inlay.back.simprint);
-  applyInlaySlotFile(inlayBackSlot, "inlayback", inlay.back && inlay.back.fileName, fileMap);
+  applyInlaySlotFile(inlayBackSlot, "inlayback", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap);
   updateInlayVisibility();
   [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.updateSizing(); s.draw(); });
 }

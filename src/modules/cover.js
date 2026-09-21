@@ -1,10 +1,13 @@
-// Cover module — outer cover artwork (printed / plain colour / none),
-// delivered as a single flat print file with front on the right and back
-// on the left. Split out of the former cover-sleeve.js along with
-// inner-sleeve.js and inlay.js (see the catalogue schema restructure
-// design spec, Decision 8) — each owns its own copy of the artwork-slot
-// scaffolding on purpose, so each part can diverge later without
-// fighting a forced shared abstraction.
+// Cover module — outer cover artwork (printed / printed inside out /
+// plain colour / none), delivered as a single flat print file with
+// front on the right and back on the left. "Printed inside out" is the
+// same artwork file and dimensions as "printed" — it's an assembly
+// instruction to the plant (print faces inward once folded), not a
+// different layout, so it reuses the exact same artwork slot. Split out
+// of the former cover-sleeve.js along with inner-sleeve.js and inlay.js
+// (see the catalogue schema restructure design spec, Decision 8) — each
+// owns its own copy of the artwork-slot scaffolding on purpose, so each
+// part can diverge later without fighting a forced shared abstraction.
 //
 // Parsing/validation is the same pure logic labels.js uses, from
 // ../lib/print-artwork.js.
@@ -34,6 +37,11 @@ function coverSpec(){
   return getFormat(CONFIG, coverCurrentFormat()).printableParts.outerCover;
 }
 
+function coverHasArtwork(){
+  return document.getElementById("cover-printed").checked
+      || document.getElementById("cover-printed-inside-out").checked;
+}
+
 function renderCoverWarnings(listEl, result){
   const items = [];
   result.errors.forEach(e=> items.push(`<li class="err">⚠ ${e}</li>`));
@@ -50,7 +58,7 @@ function createCoverArtworkSlot(){
   const warningsList = document.getElementById("coverwarnings");
   const simChk = document.getElementById("coversimprint");
   const caption = document.getElementById("covercaption");
-  let file = null, url = null;
+  let file = null, url = null, originalFileName = null;
 
   function updateSizing(){
     const { dataMm } = coverSpec();
@@ -77,10 +85,32 @@ function createCoverArtworkSlot(){
     ctx.fill("evenodd");
   }
 
-  async function handleFile(f){
+  // "file: <current name>", plus a tight second line with the original
+  // filename when it differs — only true after a project reload
+  // re-attaches a file by its renamed (convention) name; a fresh manual
+  // pick has nothing to show there. Built with DOM nodes rather than
+  // innerHTML since file names are untrusted strings (the customer's
+  // own upload) — see tracklist.js's renderFileMeta for the same idea.
+  function renderCoverFileMeta(currentName, originalName, statusText){
+    meta.textContent = "";
+    meta.append(statusText ? `file: ${currentName} — ${statusText}` : `file: ${currentName}`);
+    if(originalName && originalName !== currentName){
+      meta.append(document.createElement("br"));
+      const orig = document.createElement("span");
+      orig.className = "filemeta-orig";
+      orig.textContent = "was: " + originalName;
+      meta.append(orig);
+    }
+  }
+
+  // origName defaults to the file's own name (a fresh manual pick);
+  // applyCoverSlotFile passes the name recorded before renaming, on a
+  // project reload, so renderCoverFileMeta can show it as the "was:" line.
+  async function handleFile(f, origName = f.name){
     file = f;
+    originalFileName = origName;
     meta.classList.remove("empty");
-    meta.textContent = "file: " + f.name + " — checking…";
+    renderCoverFileMeta(f.name, origName, "checking…");
     if(url) URL.revokeObjectURL(url);
 
     const buf = await f.arrayBuffer();
@@ -107,7 +137,7 @@ function createCoverArtworkSlot(){
     } else{
       preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
     }
-    meta.textContent = "file: " + f.name;
+    renderCoverFileMeta(f.name, origName, null);
     draw();
   }
 
@@ -116,7 +146,7 @@ function createCoverArtworkSlot(){
   // change listener), rather than leaving a now-wrong-size file attached.
   function clear(){
     if(url) URL.revokeObjectURL(url);
-    file = null; url = null;
+    file = null; url = null; originalFileName = null;
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
@@ -131,7 +161,7 @@ function createCoverArtworkSlot(){
   });
   simChk.addEventListener("change", draw);
 
-  return { updateSizing, draw, clear, getFile: ()=> file, setFile: handleFile };
+  return { updateSizing, draw, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName, setFile: handleFile };
 }
 
 function coverSlotFileName(file){
@@ -147,9 +177,8 @@ async function collectCoverSlotFile(){
 let coverSlot;
 
 function updateCoverMode(){
-  const printed = document.getElementById("cover-printed").checked;
   const unprinted = document.getElementById("cover-unprinted").checked;
-  document.getElementById("coverPrintedBody").classList.toggle("hidden", !printed);
+  document.getElementById("coverPrintedBody").classList.toggle("hidden", !coverHasArtwork());
   document.getElementById("coverColorWrap").classList.toggle("hidden", !unprinted);
 }
 
@@ -165,16 +194,25 @@ export function initCover(){
   });
 
   document.getElementById("cover-printed").addEventListener("change", updateCoverMode);
+  document.getElementById("cover-printed-inside-out").addEventListener("change", updateCoverMode);
   document.getElementById("cover-unprinted").addEventListener("change", updateCoverMode);
   document.getElementById("cover-none").addEventListener("change", updateCoverMode);
   updateCoverMode();
 }
 
-function setCoverFileNamePlaceholder(name){
+function setCoverFileNamePlaceholder(name, originalName){
   const meta = document.getElementById("covermeta");
   if(name){
     meta.classList.remove("empty");
-    meta.textContent = "file: " + name + " — please re-select this file (not stored in the order file)";
+    meta.textContent = "";
+    meta.append(`file: ${name} — please re-select this file (not stored in the order file)`);
+    if(originalName && originalName !== name){
+      meta.append(document.createElement("br"));
+      const orig = document.createElement("span");
+      orig.className = "filemeta-orig";
+      orig.textContent = "was: " + originalName;
+      meta.append(orig);
+    }
   } else {
     meta.classList.add("empty");
     meta.textContent = "";
@@ -185,10 +223,10 @@ function setCoverFileNamePlaceholder(name){
 // (see tracklist.js's loadProject). If the slot's stored name is in the
 // map, the file gets re-attached directly; otherwise it falls back to
 // the "please re-select" placeholder.
-function applyCoverSlotFile(fileName, fileMap){
+function applyCoverSlotFile(fileName, originalFileName, fileMap){
   const file = fileMap && fileName && fileMap.get(fileName);
-  if(file) coverSlot.setFile(file);
-  else setCoverFileNamePlaceholder(fileName);
+  if(file) coverSlot.setFile(file, originalFileName || fileName);
+  else setCoverFileNamePlaceholder(fileName, originalFileName);
 }
 
 // Exported for the tracklist module's project save/load, same
@@ -199,25 +237,28 @@ function applyCoverSlotFile(fileName, fileMap){
 // package, which is what lets the tracklist/order-summary exports build
 // their file manifest straight from this data, no DOM re-check needed.
 export function collectCover(){
-  const coverPrinted = document.getElementById("cover-printed").checked;
+  const hasArtwork = coverHasArtwork();
   const file = coverSlot.getFile();
   return {
-    mode: coverPrinted ? "printed"
+    mode: document.getElementById("cover-printed").checked ? "printed"
+        : document.getElementById("cover-printed-inside-out").checked ? "printed-inside-out"
         : document.getElementById("cover-unprinted").checked ? "unprinted" : "none",
     color: document.getElementById("coverColor").value,
     simprint: document.getElementById("coversimprint").checked,
-    fileName: (coverPrinted && file) ? coverSlotFileName(file) : null
+    fileName: (hasArtwork && file) ? coverSlotFileName(file) : null,
+    originalFileName: (hasArtwork && file) ? coverSlot.getOriginalFileName() : null
   };
 }
 
 export function applyCover(data, fileMap){
   const c = data || {};
   document.getElementById("cover-printed").checked = c.mode === "printed";
+  document.getElementById("cover-printed-inside-out").checked = c.mode === "printed-inside-out";
   document.getElementById("cover-unprinted").checked = c.mode === "unprinted";
-  document.getElementById("cover-none").checked = c.mode !== "printed" && c.mode !== "unprinted";
+  document.getElementById("cover-none").checked = c.mode !== "printed" && c.mode !== "printed-inside-out" && c.mode !== "unprinted";
   document.getElementById("coverColor").value = c.color || "white";
   document.getElementById("coversimprint").checked = !!c.simprint;
-  applyCoverSlotFile(c.fileName, fileMap);
+  applyCoverSlotFile(c.fileName, c.originalFileName, fileMap);
   updateCoverMode();
   coverSlot.updateSizing();
   coverSlot.draw();
@@ -227,7 +268,7 @@ export function applyCover(data, fileMap){
 // labels.js's collectLabelFiles — the only interface between modules.
 export async function collectCoverFiles(){
   const files = [];
-  if(document.getElementById("cover-printed").checked){
+  if(coverHasArtwork()){
     const cover = await collectCoverSlotFile();
     if(cover) files.push(cover);
   }

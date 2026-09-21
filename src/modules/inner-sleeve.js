@@ -41,7 +41,7 @@ function createInnerSleeveArtworkSlot(){
   const warningsList = document.getElementById("innersleevewarnings");
   const simChk = document.getElementById("innersleevesimprint");
   const caption = document.getElementById("innersleevecaption");
-  let file = null, url = null;
+  let file = null, url = null, originalFileName = null;
 
   function updateSizing(){
     const { dataMm } = innerSleeveSpec();
@@ -68,10 +68,33 @@ function createInnerSleeveArtworkSlot(){
     ctx.fill("evenodd");
   }
 
-  async function handleFile(f){
+  // "file: <current name>", plus a tight second line with the original
+  // filename when it differs — only true after a project reload
+  // re-attaches a file by its renamed (convention) name; a fresh manual
+  // pick has nothing to show there. Built with DOM nodes rather than
+  // innerHTML since file names are untrusted strings (the customer's
+  // own upload) — see tracklist.js's renderFileMeta for the same idea.
+  function renderInnerSleeveFileMeta(currentName, originalName, statusText){
+    meta.textContent = "";
+    meta.append(statusText ? `file: ${currentName} — ${statusText}` : `file: ${currentName}`);
+    if(originalName && originalName !== currentName){
+      meta.append(document.createElement("br"));
+      const orig = document.createElement("span");
+      orig.className = "filemeta-orig";
+      orig.textContent = "was: " + originalName;
+      meta.append(orig);
+    }
+  }
+
+  // origName defaults to the file's own name (a fresh manual pick);
+  // applyInnerSleeveSlotFile passes the name recorded before renaming, on
+  // a project reload, so renderInnerSleeveFileMeta can show it as the
+  // "was:" line.
+  async function handleFile(f, origName = f.name){
     file = f;
+    originalFileName = origName;
     meta.classList.remove("empty");
-    meta.textContent = "file: " + f.name + " — checking…";
+    renderInnerSleeveFileMeta(f.name, origName, "checking…");
     if(url) URL.revokeObjectURL(url);
 
     const buf = await f.arrayBuffer();
@@ -98,7 +121,7 @@ function createInnerSleeveArtworkSlot(){
     } else{
       preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
     }
-    meta.textContent = "file: " + f.name;
+    renderInnerSleeveFileMeta(f.name, origName, null);
     draw();
   }
 
@@ -108,7 +131,7 @@ function createInnerSleeveArtworkSlot(){
   // attached.
   function clear(){
     if(url) URL.revokeObjectURL(url);
-    file = null; url = null;
+    file = null; url = null; originalFileName = null;
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
@@ -123,7 +146,7 @@ function createInnerSleeveArtworkSlot(){
   });
   simChk.addEventListener("change", draw);
 
-  return { updateSizing, draw, clear, getFile: ()=> file, setFile: handleFile };
+  return { updateSizing, draw, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName, setFile: handleFile };
 }
 
 function innerSleeveSlotFileName(file){
@@ -160,21 +183,29 @@ export function initInnerSleeve(){
   updateInnerSleeveMode();
 }
 
-function setInnerSleeveFileNamePlaceholder(name){
+function setInnerSleeveFileNamePlaceholder(name, originalName){
   const meta = document.getElementById("innersleevemeta");
   if(name){
     meta.classList.remove("empty");
-    meta.textContent = "file: " + name + " — please re-select this file (not stored in the order file)";
+    meta.textContent = "";
+    meta.append(`file: ${name} — please re-select this file (not stored in the order file)`);
+    if(originalName && originalName !== name){
+      meta.append(document.createElement("br"));
+      const orig = document.createElement("span");
+      orig.className = "filemeta-orig";
+      orig.textContent = "was: " + originalName;
+      meta.append(orig);
+    }
   } else {
     meta.classList.add("empty");
     meta.textContent = "";
   }
 }
 
-function applyInnerSleeveSlotFile(fileName, fileMap){
+function applyInnerSleeveSlotFile(fileName, originalFileName, fileMap){
   const file = fileMap && fileName && fileMap.get(fileName);
-  if(file) innerSleeveSlot.setFile(file);
-  else setInnerSleeveFileNamePlaceholder(fileName);
+  if(file) innerSleeveSlot.setFile(file, originalFileName || fileName);
+  else setInnerSleeveFileNamePlaceholder(fileName, originalFileName);
 }
 
 export function collectInnerSleeve(){
@@ -185,7 +216,8 @@ export function collectInnerSleeve(){
     color: document.getElementById("innersleeveColor").value,
     cutout: document.getElementById("innersleeveCutout").checked,
     simprint: document.getElementById("innersleevesimprint").checked,
-    fileName: (innerSleevePrinted && file) ? innerSleeveSlotFileName(file) : null
+    fileName: (innerSleevePrinted && file) ? innerSleeveSlotFileName(file) : null,
+    originalFileName: (innerSleevePrinted && file) ? innerSleeveSlot.getOriginalFileName() : null
   };
 }
 
@@ -196,7 +228,7 @@ export function applyInnerSleeve(data, fileMap){
   document.getElementById("innersleeveColor").value = is.color || "white";
   document.getElementById("innersleeveCutout").checked = is.cutout !== false;
   document.getElementById("innersleevesimprint").checked = !!is.simprint;
-  applyInnerSleeveSlotFile(is.fileName, fileMap);
+  applyInnerSleeveSlotFile(is.fileName, is.originalFileName, fileMap);
   updateInnerSleeveMode();
   innerSleeveSlot.updateSizing();
   innerSleeveSlot.draw();
