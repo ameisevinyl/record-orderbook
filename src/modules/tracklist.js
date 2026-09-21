@@ -704,7 +704,7 @@ async function loadProject(file){
   document.getElementById("notes").value = p.notes || "";
   applyVinylColor(p.vinylColor);
   applyShippingBilling(p.shippingBilling);
-  applyLabels(p.labels, fileMap);
+  await applyLabels(p.labels, fileMap);
   const cs = p.coverSleeve || {};
   applyCover(cs.cover, fileMap);
   applyInnerSleeve(cs.innerSleeve, fileMap);

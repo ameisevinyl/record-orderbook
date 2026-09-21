@@ -1,7 +1,7 @@
 // Labels module — per-side artwork upload, best-effort validation
-// (physical size, resolution, CMYK) and print simulation. All the
-// parsing/validation logic is pure and lives in ../lib/label-artwork.js;
-// this file is DOM wiring only.
+// (physical size, resolution, CMYK). All the parsing/validation logic
+// is pure and lives in ../lib/label-artwork.js; this file is DOM
+// wiring only.
 //
 // This is a front-end sanity check, not the real gate — the studio's
 // backend preprocessor does the authoritative validation on upload and
@@ -10,14 +10,11 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, computePrintSimGeometry } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork } from "../lib/print-artwork.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
-import { printedPartFileName, fileExt } from "../lib/package-naming.js";
+import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
 const SIDES = ["A", "B"];
-// Canvas render resolution in pixels-per-mm — plenty crisp at the
-// on-screen (CSS mm) display size, independent of it.
-const PX_PER_MM = 4;
 
 function currentFormat(){
   return document.getElementById("format").value;
@@ -40,7 +37,6 @@ function labelSideTemplate(side){
       <h2>Label ${side}</h2>
       <div class="side-opts">
         <label class="chk"><input type="checkbox" id="whitelabel-${side}"> whitelabel (blank)</label>
-        <label class="chk"><input type="checkbox" id="simprint-${side}" data-warnfor="labelwarnings-${side}"> simulate print</label>
       </div>
     </div>
 
@@ -61,7 +57,6 @@ function labelSideTemplate(side){
         <div class="label-preview" id="labelpreview-${side}">
           <div class="label-placeholder">no artwork selected</div>
         </div>
-        <canvas class="label-simcanvas" id="labelsim-${side}"></canvas>
       </div>
 
       <ul class="labelwarnings" id="labelwarnings-${side}"></ul>
@@ -74,25 +69,34 @@ function setPreview(side, html){
   document.getElementById("labelpreview-"+side).innerHTML = html;
 }
 
-// Sizes the preview box and its overlay canvas to the format's actual
-// data size in mm, so the on-screen preview is close to true print
-// size rather than an arbitrary fixed box — "close to" because CSS
-// absolute units (mm) are only as accurate as the browser's mapping to
-// the real display, which isn't perfectly calibrated on every device.
+// Swaps the preview box to a plant-generated preview image, taking
+// priority over the live-rendered original — see applyLabels below,
+// which is the only caller (a fresh manual pick never has one to show
+// yet). Reuses the existing "file: <name> — <status>" meta line instead
+// of adding new markup/CSS for a separate caption.
+function showPreviewImage(side, previewImgFile){
+  const box = document.getElementById("labelbox-"+side);
+  const meta = document.getElementById("labelmeta-"+side);
+  if(box._previewUrl) URL.revokeObjectURL(box._previewUrl);
+  box._previewFile = previewImgFile;
+  box._previewUrl = URL.createObjectURL(previewImgFile);
+  setPreview(side, `<img src="${box._previewUrl}" alt="plant preview">`);
+  meta.textContent = "file: " + box._file.name + " — plant preview";
+}
+
+// Sizes the preview box to the format's actual data size in mm, so the
+// on-screen preview is close to true print size rather than an
+// arbitrary fixed box — "close to" because CSS absolute units (mm) are
+// only as accurate as the browser's mapping to the real display, which
+// isn't perfectly calibrated on every device.
 function updatePreviewSizing(){
   const mm = formatSpec().dataSizeMm;
-  const px = Math.round(mm * PX_PER_MM);
   SIDES.forEach(side=>{
     const mmStr = mm + "mm";
     document.getElementById("labelpreviewwrap-"+side).style.width = mmStr;
     document.getElementById("labelpreviewwrap-"+side).style.height = mmStr;
     document.getElementById("labelpreview-"+side).style.width = mmStr;
     document.getElementById("labelpreview-"+side).style.height = mmStr;
-    const canvas = document.getElementById("labelsim-"+side);
-    canvas.width = px;
-    canvas.height = px;
-    canvas.style.width = mmStr;
-    canvas.style.height = mmStr;
   });
 }
 
@@ -105,34 +109,6 @@ function updateLabelInfo(){
     + infoText(CONFIG.infoText, CONFIG.locale, "labelArtwork");
   const html = renderInfoIcon(text);
   SIDES.forEach(side=> document.getElementById("labelinfo-"+side).innerHTML = html);
-}
-
-function drawSimGuides(side){
-  const canvas = document.getElementById("labelsim-"+side);
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if(!document.getElementById("simprint-"+side).checked) return;
-
-  const spec = formatSpec();
-  const geo = computePrintSimGeometry(canvas.width, spec.dataSizeMm, spec.diameterMm, centerHoleMm());
-
-  // Black out everything outside the trim circle (the bleed that gets
-  // cut away) using an even-odd fill between the canvas rect and the
-  // circle subpath.
-  ctx.beginPath();
-  ctx.rect(0, 0, canvas.width, canvas.height);
-  ctx.arc(geo.center, geo.center, geo.trimRadiusPx, 0, Math.PI*2, true);
-  ctx.fillStyle = "#000";
-  ctx.fill("evenodd");
-
-  // Punched spindle hole.
-  ctx.beginPath();
-  ctx.arc(geo.center, geo.center, geo.centerHoleRadiusPx, 0, Math.PI*2);
-  ctx.fillStyle = "#fff";
-  ctx.fill();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "#000";
-  ctx.stroke();
 }
 
 function renderWarnings(side, result){
@@ -150,6 +126,9 @@ async function handleFile(side, file){
 
   if(box._url) URL.revokeObjectURL(box._url);
   box._file = file;
+  if(box._previewUrl) URL.revokeObjectURL(box._previewUrl);
+  box._previewFile = null;
+  box._previewUrl = null;
 
   const buf = await file.arrayBuffer();
   const kind = sniffFileKind(buf);
@@ -182,7 +161,6 @@ async function handleFile(side, file){
   }
 
   meta.textContent = "file: " + file.name;
-  drawSimGuides(side);
 }
 
 // A file picked for one format is sized for that format's dataSizeMm —
@@ -193,6 +171,9 @@ function clearLabelArtwork(side){
   if(box._url) URL.revokeObjectURL(box._url);
   box._file = null;
   box._url = null;
+  if(box._previewUrl) URL.revokeObjectURL(box._previewUrl);
+  box._previewFile = null;
+  box._previewUrl = null;
   document.getElementById("labelinput-"+side).value = "";
   const meta = document.getElementById("labelmeta-"+side);
   meta.classList.add("empty");
@@ -209,8 +190,6 @@ function wireLabelSide(side){
     if(f) handleFile(side, f);
   });
 
-  document.getElementById("simprint-"+side).addEventListener("change", ()=> drawSimGuides(side));
-
   document.getElementById("whitelabel-"+side).addEventListener("change", (e)=>{
     document.getElementById("labelbody-"+side).classList.toggle("hidden", e.target.checked);
     document.getElementById("labelblanknote-"+side).classList.toggle("hidden", !e.target.checked);
@@ -221,10 +200,7 @@ export function initLabels(){
   document.getElementById("labelSides").innerHTML = SIDES.map(labelSideTemplate).join("");
   updatePreviewSizing();
   updateLabelInfo();
-  SIDES.forEach(side=>{
-    wireLabelSide(side);
-    drawSimGuides(side);
-  });
+  SIDES.forEach(wireLabelSide);
 
   const bigCenterWrap = document.getElementById("bigCenterWrap");
   bigCenterWrap.insertAdjacentHTML("beforeend",
@@ -232,13 +208,11 @@ export function initLabels(){
   const updateBigCenterVisibility = ()=>{
     bigCenterWrap.classList.toggle("hidden", !getFormat(CONFIG, currentFormat()).centerHole.big);
   };
-  document.getElementById("bigCenter").addEventListener("change", ()=> SIDES.forEach(drawSimGuides));
   document.getElementById("format").addEventListener("change", ()=>{
     SIDES.forEach(clearLabelArtwork);
     updateBigCenterVisibility();
     updatePreviewSizing();
     updateLabelInfo();
-    SIDES.forEach(drawSimGuides);
   });
   updateBigCenterVisibility();
 }
@@ -265,7 +239,6 @@ export function collectLabels(){
       const file = document.getElementById("labelbox-"+side)._file;
       return [side, {
         whitelabel,
-        simprint: document.getElementById("simprint-"+side).checked,
         fileName: (!whitelabel && file) ? labelFileName(side, file) : null
       }];
     }))
@@ -275,23 +248,25 @@ export function collectLabels(){
 // fileMap: canonical package name -> File, from a reopened project zip
 // (see tracklist.js's loadProject). Omitted for a plain-JSON load, where
 // there's nothing to re-attach.
-export function applyLabels(data, fileMap){
+export async function applyLabels(data, fileMap){
   const d = data || {};
   const bigCenter = document.getElementById("bigCenter");
   bigCenter.checked = !!d.bigCenter;
   bigCenter.dispatchEvent(new Event("change"));
 
-  SIDES.forEach(side=>{
+  for(const side of SIDES){
     const s = (d.sides && d.sides[side]) || {};
     const whitelabel = document.getElementById("whitelabel-"+side);
     whitelabel.checked = !!s.whitelabel;
     whitelabel.dispatchEvent(new Event("change"));
-    document.getElementById("simprint-"+side).checked = !!s.simprint;
 
     const meta = document.getElementById("labelmeta-"+side);
     const file = fileMap && s.fileName && fileMap.get(s.fileName);
     if(file){
-      handleFile(side, file);
+      await handleFile(side, file);
+      const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"labels", variant:side});
+      const previewImg = fileMap && fileMap.get(previewName);
+      if(previewImg) showPreviewImage(side, previewImg);
     } else if(s.fileName){
       meta.classList.remove("empty");
       meta.textContent = "file: " + s.fileName + " — please re-select this file (not stored in the order file)";
@@ -299,8 +274,7 @@ export function applyLabels(data, fileMap){
       meta.classList.add("empty");
       meta.textContent = "";
     }
-    drawSimGuides(side);
-  });
+  }
 }
 
 // Exported for the tracklist module's package export — labels doesn't
@@ -310,9 +284,14 @@ export async function collectLabelFiles(){
   const files = [];
   for(const side of SIDES){
     if(document.getElementById("whitelabel-"+side).checked) continue;
-    const file = document.getElementById("labelbox-"+side)._file;
+    const box = document.getElementById("labelbox-"+side);
+    const file = box._file;
     if(!file) continue;
     files.push({ name: labelFileName(side, file), data: await file.arrayBuffer() });
+    if(box._previewFile){
+      const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"labels", variant:side});
+      files.push({ name: previewName, data: await box._previewFile.arrayBuffer() });
+    }
   }
   return files;
 }
