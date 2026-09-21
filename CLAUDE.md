@@ -117,7 +117,7 @@ configured on purpose — keep it that way unless asked.
   ZIP writer, WAV/AIFF duration parsing, playing-time threshold logic.
   Anything here should be unit-testable without a browser.
 - `src/modules/*.js` — one file per artifact type (tracklist, labels,
-  cover-sleeve, vinyl-color, shipping-billing). Each module owns its own
+  cover, inner-sleeve, inlay, vinyl-color, shipping-billing). Each module owns its own
   DOM template and reads/writes fields on the shared release object; it
   should not reach into another module's DOM. `tracklist.js` owns the
   project JSON save/load and the zip package — other modules expose a
