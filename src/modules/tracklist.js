@@ -536,6 +536,15 @@ export function initTracklist(){
   document.getElementById("albumTitle").addEventListener("input", updateChecklist);
   document.getElementById("albumArtist").addEventListener("input", syncAlbumArtistToLinkedTracks);
 
+  // Delegated, page-wide: every checkbox/radio/select/file-input's native
+  // "change" event bubbles to document, including ones in modules whose
+  // DOM doesn't exist yet at this point (labels/cover/inner-sleeve/inlay
+  // init after this) — so a file attach or a mode toggle there refreshes
+  // the checklist live, not just at print/send time (updateChecklist()
+  // is cheap and idempotent; printOrder()/confirmIncompleteSend() already
+  // force a final fresh call regardless of this).
+  document.addEventListener("change", updateChecklist);
+
   applyDefaultRpm();
   applyDefaultMatrix();
   recompute();
