@@ -368,7 +368,7 @@ function updateChecklist(){
   const missingArtwork = Array.from(document.querySelectorAll(".filemeta.empty[id]"))
     .filter(el => !el.closest(".hidden")).length;
   if(missingArtwork > 0){
-    items.push([false, `${missingArtwork} artwork file(s) not yet attached`]);
+    items.push([false, `${missingArtwork} artwork file(s) not yet attached`, true]);
   }
 
   // Errors from label/cover/inner-sleeve/inlay's own validateArtwork
@@ -376,11 +376,17 @@ function updateChecklist(){
   // unrecognized file, not merely a size/DPI warning.
   const erroredArtwork = document.querySelectorAll(".labelwarnings li.err").length;
   if(erroredArtwork > 0){
-    items.push([false, `${erroredArtwork} artwork file(s) have errors — check labels/cover/inner sleeve/inlay`]);
+    items.push([false, `${erroredArtwork} artwork file(s) have errors — check labels/cover/inner sleeve/inlay`, true]);
   }
 
-  list.innerHTML = items.map(([ok, text])=>
-    `<li class="${ok?'ok':'bad'}"><span class="mark">${ok?'✓':'!'}</span>${text}</li>`
+  // The third, optional element marks a checklist item as "blocking" —
+  // Send to Plant refuses outright on these (see confirmIncompleteSend
+  // below), unlike every other item here, which stays a dismissible
+  // warning. Only missingArtwork/erroredArtwork set it; every earlier
+  // items.push(...) in this function omits it, so it's undefined/falsy
+  // there — see CONFIG.blockIncompleteArtworkOnSend for the on/off switch.
+  list.innerHTML = items.map(([ok, text, blocking])=>
+    `<li class="${ok?'ok':'bad'}${blocking?' blocking':''}"><span class="mark">${ok?'✓':'!'}</span>${text}</li>`
   ).join("");
 }
 
@@ -952,6 +958,21 @@ function buildTracklistText(project){
 function confirmIncompleteSend(){
   // Same reasoning as printOrder() — force a fresh check before gating.
   updateChecklist();
+
+  // Missing/unreadable required artwork can't be sent at all — unlike
+  // every other checklist item, there's no "send anyway" here. Gated by
+  // CONFIG.blockIncompleteArtworkOnSend so a plant that wants the old
+  // fully-dismissible behavior back gets it with one setting. Save
+  // Project never calls this function, so it's never affected.
+  if(CONFIG.blockIncompleteArtworkOnSend){
+    const blocking = document.querySelectorAll(".checklist li.bad.blocking");
+    if(blocking.length > 0){
+      blocking[0].scrollIntoView({behavior:"smooth", block:"center"});
+      alert(`Can't send yet — ${blocking.length} artwork item${blocking.length===1?"":"s"} still missing or unreadable, starting with:\n\n${blocking[0].textContent.trim()}`);
+      return false;
+    }
+  }
+
   const missing = document.querySelectorAll(".checklist li.bad");
   if(missing.length === 0) return true;
   return confirm(
