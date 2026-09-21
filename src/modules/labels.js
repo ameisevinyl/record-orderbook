@@ -169,7 +169,12 @@ async function handleFile(side, file){
   const url = URL.createObjectURL(file);
   box._url = url;
   if(kind === "pdf"){
-    setPreview(side, `<iframe src="${url}#toolbar=0&navpanes=0&view=Fit"></iframe>`);
+    // No view=Fit — Safari's PDF viewer handles the Acrobat open-
+    // parameters fragment inconsistently and can render smaller than
+    // the iframe with it present; Chrome/Firefox already fill correctly
+    // via the CSS width/height:100% on .label-preview iframe regardless
+    // of this fragment, so dropping it is safe for them.
+    setPreview(side, `<iframe src="${url}#toolbar=0&navpanes=0"></iframe>`);
   } else if(kind === "jpeg"){
     setPreview(side, `<img src="${url}" alt="label ${side} artwork">`);
   } else if(kind === "tiff"){
