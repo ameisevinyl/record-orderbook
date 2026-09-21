@@ -136,6 +136,57 @@ ${extraObjects}`;
   return concatBytes([pre, new Uint8Array(compressed), post]);
 }
 
+// A minimal but structurally real ICC profile: the "acsp" signature at
+// its fixed header offset (all real ICC readers key off this, not a
+// well-formed header otherwise — nothing else here reads any other
+// header field) plus a one-entry tag table pointing at a v2
+// textDescriptionType 'desc' tag containing the given name.
+function buildIccProfileBytes(name, { descTypeSig = "desc" } = {}) {
+  const nameBytes = Uint8Array.from(name, c => c.charCodeAt(0));
+  const asciiCount = nameBytes.length + 1; // includes the trailing NUL
+  const tagDataOffset = 132 + 12; // right after a 1-entry tag table
+  const tagDataSize = 12 + asciiCount; // type sig + reserved + count + string+NUL
+  const buf = new Uint8Array(tagDataOffset + tagDataSize);
+  const dv = new DataView(buf.buffer);
+  const setSig = (offset, sig) => { for (let i = 0; i < 4; i++) buf[offset + i] = sig.charCodeAt(i); };
+
+  setSig(36, "acsp");
+  dv.setUint32(128, 1, false); // tag count
+
+  setSig(132, "desc"); // tag id
+  dv.setUint32(136, tagDataOffset, false); // tag data offset
+  dv.setUint32(140, tagDataSize, false); // tag data size
+
+  setSig(tagDataOffset, descTypeSig); // tag data's own type signature
+  dv.setUint32(tagDataOffset + 4, 0, false); // reserved
+  dv.setUint32(tagDataOffset + 8, asciiCount, false);
+  buf.set(nameBytes, tagDataOffset + 12);
+  // buf[tagDataOffset + 12 + nameBytes.length] is already 0 (NUL) — Uint8Array starts zeroed.
+
+  return buf;
+}
+
+// Wraps a (possibly fake) ICC profile as an indirectly-referenced
+// /ICCBased colourspace resource — this codebase never actually
+// resolves that "2 0 R" reference (see detectIccProfileName's
+// comment), it just needs /ICCBased present somewhere and a
+// Flate-compressed non-image stream to check for the "acsp" signature.
+function iccProfilePdfBuffer(profileBytes, { mediaBoxPt = [0, 0, 283.5, 283.5] } = {}) {
+  const compressed = deflateSync(Buffer.from(profileBytes));
+  const pre = `%PDF-1.4
+1 0 obj
+<< /Type /Page /MediaBox [${mediaBoxPt.join(" ")}] /Resources << /ColorSpace << /CS0 [/ICCBased 2 0 R] >> >> >>
+endobj
+2 0 obj
+<< /N 4 /Length ${compressed.length} /Filter /FlateDecode >>
+stream
+`;
+  const post = `
+endstream
+endobj`;
+  return concatBytes([pre, new Uint8Array(compressed), post]);
+}
+
 // ---- sniffFileKind ----
 
 test("sniffFileKind detects PDF, JPEG, TIFF, and unknown", () => {
@@ -383,6 +434,44 @@ endobj`
   });
   const info = await parsePdfArtwork(buf);
   assert.equal(info.colorMode, "RGB");
+});
+
+// ---- parsePdfArtwork: ICC profile name extraction ----
+
+test("parsePdfArtwork extracts an ICC profile's description from a v2 textDescriptionType 'desc' tag", async () => {
+  const profile = buildIccProfileBytes("ISO Coated v2 (ECI)");
+  const buf = iccProfilePdfBuffer(profile);
+  const info = await parsePdfArtwork(buf);
+  assert.equal(info.iccProfileName, "ISO Coated v2 (ECI)");
+});
+
+test("parsePdfArtwork reports no ICC profile when the file never references one", async () => {
+  const pdf = `<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace /DeviceCMYK >>`;
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.iccProfileName, null);
+});
+
+test("parsePdfArtwork falls back to a generic message when a profile is found but its 'desc' tag isn't the recognized v2 textDescriptionType", async () => {
+  // A v4 profile would typically use 'mluc' (multiLocalizedUnicodeType)
+  // here instead — not attempted, per the agreed scope.
+  const profile = buildIccProfileBytes("Some Name", { descTypeSig: "mluc" });
+  const buf = iccProfilePdfBuffer(profile);
+  const info = await parsePdfArtwork(buf);
+  assert.equal(info.iccProfileName, "embedded ICC profile (name unavailable)");
+});
+
+test("parsePdfArtwork's ICC detection doesn't crash on a Flate stream that isn't actually a valid profile", async () => {
+  // /ICCBased is mentioned (so the cheap prefilter doesn't skip this),
+  // but the only Flate-compressed non-image stream in the file is a
+  // page content stream, not real ICC data — no "acsp" signature.
+  const buf = vectorPdfBuffer({
+    content: "0 0.55 0.86 0 k\n0 0 50 50 re f",
+    extraObjects: `3 0 obj
+<< /Type /Page /Resources << /ColorSpace << /CS0 [/ICCBased 9 0 R] >> >> >>
+endobj`
+  });
+  const info = await parsePdfArtwork(buf);
+  assert.equal(info.iccProfileName, null);
 });
 
 // ---- validateArtwork ----

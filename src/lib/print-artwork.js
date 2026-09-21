@@ -9,7 +9,7 @@
 // the obvious mistakes.
 //
 // All three parsers return the same shape (or null if unreadable):
-//   { pageSizeMm, imagePx, declaredDpi, colorMode, spotColors }
+//   { pageSizeMm, imagePx, declaredDpi, colorMode, spotColors, iccProfileName }
 // - pageSizeMm  — {w,h} in mm, from a PDF's /BleedBox, /TrimBox, or
 //                 /MediaBox (first one present, in that priority order —
 //                 see parsePdfArtwork). null for JPEG/TIFF, which have no
@@ -26,6 +26,12 @@
 // - spotColors  — string[] of decoded spot/Pantone colourant names found
 //                 in the file, [] if none. Always [] for JPEG/TIFF, which
 //                 have no colour-space concept beyond their raw pixels.
+// - iccProfileName — the embedded ICC profile's description (e.g. "ISO
+//                 Coated v2 (ECI)"), a generic fallback string when a
+//                 profile is found but its name can't be parsed, or
+//                 null when there's no profile at all. Always null for
+//                 JPEG/TIFF — this file never reads their (much rarer)
+//                 embedded-profile markers, only a PDF's /ICCBased.
 
 // ---- format sniffing (magic bytes, not file extension) ----------------
 
@@ -95,7 +101,7 @@ export function parseJpegArtwork(arrayBuffer){
   else if(components === 3) colorMode = "RGB";
   else if(components === 4) colorMode = "CMYK"; // Adobe CMYK/YCCK JPEG — plain baseline JPEG has no 4th channel
 
-  return { pageSizeMm: null, imagePx: {w:widthPx, h:heightPx}, declaredDpi: dpi, colorMode, spotColors: [] };
+  return { pageSizeMm: null, imagePx: {w:widthPx, h:heightPx}, declaredDpi: dpi, colorMode, spotColors: [], iccProfileName: null };
 }
 
 // ---- TIFF: read the IFD tag directory -----------------------------------
@@ -168,7 +174,8 @@ export function parseTiffArtwork(arrayBuffer){
     imagePx: {w:widthPx, h:heightPx},
     declaredDpi: (xres && yres) ? {x:xres, y:yres} : null,
     colorMode,
-    spotColors: []
+    spotColors: [],
+    iccProfileName: null
   };
 }
 
@@ -262,7 +269,7 @@ function dictBefore(text, closeEndIndex){
 // plus an Adler-32 trailer around the raw deflate data — unlike a zip
 // entry's raw DEFLATE (RFC 1951, see zip.js's inflateRaw), so this
 // needs the "deflate" format, not "deflate-raw".
-async function inflateFlateDecode(bytes){
+async function inflateFlateDecodeBytes(bytes){
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"));
   const reader = stream.getReader();
   const chunks = [];
@@ -276,7 +283,40 @@ async function inflateFlateDecode(bytes){
   const out = new Uint8Array(total);
   let o = 0;
   chunks.forEach(c => { out.set(c, o); o += c.length; });
-  return new TextDecoder("latin1").decode(out);
+  return out;
+}
+
+async function inflateFlateDecodeText(bytes){
+  return new TextDecoder("latin1").decode(await inflateFlateDecodeBytes(bytes));
+}
+
+// Every Flate-compressed stream in the document that isn't image pixel
+// data or another internal PDF structure (a compressed object stream,
+// cross-reference stream, or metadata stream) — the shared candidate
+// pool detectVectorColorMode and detectIccProfileName both draw from,
+// each applying its own policy for how many candidates it trusts.
+function findFlateStreamCandidates(text){
+  const candidates = [];
+  const streamOpenRe = /(>>)\s*stream\r?\n/g;
+  let m;
+  while((m = streamOpenRe.exec(text)) !== null){
+    const dictText = dictBefore(text, m.index + 2);
+    if(!dictText) continue;
+    if(!/\/FlateDecode\b/.test(dictText)) continue;
+    if(/\/Subtype\s*\/Image/.test(dictText)) continue;
+    if(/\/Type\s*\/(ObjStm|XRef|Metadata)\b/.test(dictText)) continue;
+
+    const dataStart = streamOpenRe.lastIndex;
+    let dataEnd = text.indexOf("endstream", dataStart);
+    if(dataEnd === -1) continue;
+    // A single EOL conventionally separates the stream data from the
+    // "endstream" keyword (PDF spec) — part of the file's framing, not
+    // part of the compressed payload, so left in it trips zlib's
+    // trailing-data check on an otherwise perfectly valid stream.
+    if(text[dataEnd-1] === "\n"){ dataEnd--; if(text[dataEnd-1] === "\r") dataEnd--; }
+    candidates.push({ start: dataStart, end: dataEnd });
+  }
+  return candidates;
 }
 
 // True when a bare content-stream operator token appears preceded by a
@@ -316,35 +356,86 @@ function vectorColorModeFromOperators(content){
 // — stays "unknown" rather than risk guessing wrong, which would be
 // worse than today's honest "can't tell".
 async function detectVectorColorMode(text, bytes){
-  const candidates = [];
-  const streamOpenRe = /(>>)\s*stream\r?\n/g;
-  let m;
-  while((m = streamOpenRe.exec(text)) !== null){
-    const dictText = dictBefore(text, m.index + 2);
-    if(!dictText) continue;
-    if(!/\/FlateDecode\b/.test(dictText)) continue;
-    if(/\/Subtype\s*\/Image/.test(dictText)) continue;
-    if(/\/Type\s*\/(ObjStm|XRef|Metadata)\b/.test(dictText)) continue;
-
-    const dataStart = streamOpenRe.lastIndex;
-    let dataEnd = text.indexOf("endstream", dataStart);
-    if(dataEnd === -1) continue;
-    // A single EOL conventionally separates the stream data from the
-    // "endstream" keyword (PDF spec) — part of the file's framing, not
-    // part of the compressed payload, so left in it trips zlib's
-    // trailing-data check on an otherwise perfectly valid stream.
-    if(text[dataEnd-1] === "\n"){ dataEnd--; if(text[dataEnd-1] === "\r") dataEnd--; }
-    candidates.push({ start: dataStart, end: dataEnd });
-  }
-
+  const candidates = findFlateStreamCandidates(text);
   if(candidates.length !== 1) return "unknown";
 
   try{
-    const content = await inflateFlateDecode(bytes.slice(candidates[0].start, candidates[0].end));
+    const content = await inflateFlateDecodeText(bytes.slice(candidates[0].start, candidates[0].end));
     return vectorColorModeFromOperators(content);
   } catch{
     return "unknown"; // not actually valid deflate data — stay honest, don't guess
   }
+}
+
+// Every valid ICC profile carries this ASCII signature ("acsp") at a
+// fixed byte offset in its own header (ICC.1:2010 §7.2.15) — checking
+// it is what lets this find an embedded profile without resolving the
+// /ICCBased N 0 R reference to it, the same indirect-object problem
+// this file avoids everywhere else. Unlike detectVectorColorMode, a
+// false match here is self-excluding (no signature, no profile — no
+// risk of a wrong colour-mode guess), so this doesn't need to stay
+// conservative about how many candidate streams exist.
+function isIccProfile(bytes){
+  return bytes.length >= 132
+    && bytes[36]===0x61 && bytes[37]===0x63 && bytes[38]===0x73 && bytes[39]===0x70; // "acsp"
+}
+
+function readUint32BE(bytes, offset){
+  return (bytes[offset]<<24 | bytes[offset+1]<<16 | bytes[offset+2]<<8 | bytes[offset+3]) >>> 0;
+}
+
+// Reads the profile's 'desc' tag and decodes it as a v2 profile's
+// textDescriptionType (ICC.1:2001-04 §6.5.17) — an ASCII-count-prefixed
+// string, the format the overwhelming majority of real-world print and
+// display profiles use (ISO Coated v2, PSO Coated, U.S. Web Coated
+// SWOP, sRGB, Adobe RGB...). Returns null — not an error — for anything
+// this doesn't recognize: a v4 profile whose 'desc' tag instead uses
+// multiLocalizedUnicodeType, a missing tag, or malformed/truncated data.
+function iccProfileDescription(bytes){
+  if(bytes.length < 132) return null;
+  const tagCount = readUint32BE(bytes, 128);
+  for(let i=0; i<tagCount; i++){
+    const entryOff = 132 + i*12;
+    if(entryOff + 12 > bytes.length) break;
+    const sig = String.fromCharCode(bytes[entryOff], bytes[entryOff+1], bytes[entryOff+2], bytes[entryOff+3]);
+    if(sig !== "desc") continue;
+
+    const dataOff = readUint32BE(bytes, entryOff+4);
+    const dataSize = readUint32BE(bytes, entryOff+8);
+    if(dataOff + 12 > bytes.length || dataOff + dataSize > bytes.length) return null;
+
+    const typeSig = String.fromCharCode(bytes[dataOff], bytes[dataOff+1], bytes[dataOff+2], bytes[dataOff+3]);
+    if(typeSig !== "desc") return null; // e.g. a v4 profile's multiLocalizedUnicodeType — not handled
+
+    const asciiCount = readUint32BE(bytes, dataOff+8); // includes the trailing NUL
+    const strStart = dataOff + 12;
+    if(asciiCount === 0 || strStart + asciiCount > bytes.length) return null;
+
+    let str = "";
+    for(let j=0; j<asciiCount-1; j++) str += String.fromCharCode(bytes[strStart+j]);
+    return str.trim() || null;
+  }
+  return null;
+}
+
+// Only bothers scanning at all when /ICCBased appears somewhere in the
+// document — cheap enough to always check first, and skips the
+// decompress-and-inspect work entirely for the common case of a file
+// with no embedded profile at all. Checks every Flate-stream candidate
+// (not just one, unlike detectVectorColorMode — see isIccProfile's
+// comment on why that's safe here) and keeps the first genuine profile
+// found; a print file normally embeds at most one.
+async function detectIccProfileName(text, bytes){
+  if(!/\/ICCBased\b/.test(text)) return null;
+
+  for(const {start, end} of findFlateStreamCandidates(text)){
+    let raw;
+    try{ raw = await inflateFlateDecodeBytes(bytes.slice(start, end)); }
+    catch{ continue; }
+    if(!isIccProfile(raw)) continue;
+    return iccProfileDescription(raw) || "embedded ICC profile (name unavailable)";
+  }
+  return null;
 }
 
 export async function parsePdfArtwork(arrayBuffer){
@@ -432,7 +523,9 @@ export async function parsePdfArtwork(arrayBuffer){
     colorMode = await detectVectorColorMode(text, bytes);
   }
 
-  return { pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors };
+  const iccProfileName = await detectIccProfileName(text, bytes);
+
+  return { pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors, iccProfileName };
 }
 
 // ---- validation ----------------------------------------------------------
