@@ -9,6 +9,7 @@
 // customer service a round trip.
 
 import { CONFIG } from "../config.js";
+import { getFormat } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, computePrintSimGeometry } from "../lib/print-artwork.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
 import { printedPartFileName, fileExt } from "../lib/package-naming.js";
@@ -19,17 +20,17 @@ const SIDES = ["A", "B"];
 const PX_PER_MM = 4;
 
 function currentFormat(){
-  return parseInt(document.getElementById("format").value, 10);
+  return document.getElementById("format").value;
 }
 
 function formatSpec(){
-  return CONFIG.label.formats[currentFormat()];
+  return getFormat(CONFIG, currentFormat()).printableParts.label;
 }
 
 function centerHoleMm(){
-  const big = CONFIG.label.bigCenterFormats.includes(currentFormat())
-    && document.getElementById("bigCenter").checked;
-  return big ? CONFIG.label.centerHoleMm.big : CONFIG.label.centerHoleMm.normal;
+  const centerHole = getFormat(CONFIG, currentFormat()).centerHole;
+  const big = !!centerHole.big && document.getElementById("bigCenter").checked;
+  return big ? centerHole.big : centerHole.normal;
 }
 
 function labelSideTemplate(side){
@@ -95,7 +96,7 @@ function updatePreviewSizing(){
   });
 }
 
-// End/data format come from CONFIG.label.formats (they vary by format,
+// End/data format come from getFormat (they vary by format,
 // same numbers the preview above sizes itself to) rather than being
 // duplicated as static text in CONFIG.infoText.
 function updateLabelInfo(){
@@ -159,8 +160,9 @@ async function handleFile(side, file){
   else if(kind === "tiff") parsed = parseTiffArtwork(buf);
 
   const spec = formatSpec();
+  const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
   const result = validateArtwork(
-    parsed, {w:spec.dataSizeMm, h:spec.dataSizeMm}, CONFIG.label.sizeToleranceMm, CONFIG.label.dpi.min, CONFIG.label.dpi.max);
+    parsed, {w:spec.dataSizeMm, h:spec.dataSizeMm}, printCheck.sizeToleranceMm, printCheck.dpi.min, printCheck.dpi.max);
   if(kind === "unknown") result.errors.unshift("unrecognized file — expected PDF, JPG, or TIFF");
   renderWarnings(side, result);
 
@@ -210,7 +212,7 @@ export function initLabels(){
   bigCenterWrap.insertAdjacentHTML("beforeend",
     renderInfoIcon(infoText(CONFIG.infoText, CONFIG.locale, "bigCenter")));
   const updateBigCenterVisibility = ()=>{
-    bigCenterWrap.classList.toggle("hidden", !CONFIG.label.bigCenterFormats.includes(currentFormat()));
+    bigCenterWrap.classList.toggle("hidden", !getFormat(CONFIG, currentFormat()).centerHole.big);
   };
   document.getElementById("bigCenter").addEventListener("change", ()=> SIDES.forEach(drawSimGuides));
   document.getElementById("format").addEventListener("change", ()=>{
