@@ -232,41 +232,58 @@ function updateAll(){
 /* ============================================================
    "Same as billing address"
    ============================================================ */
-function wireSameAsBilling(){
+// Looks up the CURRENT primary shipping address fresh on every call,
+// rather than closing over it at wire time — applyShippingBilling
+// rebuilds #shipAddrs (and with it the primary element) on every
+// project load, so a captured reference would go stale.
+function mirrorBillingToPrimary(){
   const primary = shipAddrEls()[0];
-  const chk = primary.querySelector(".sameAsBilling");
   const billing = document.getElementById("billingAddress");
+  MIRROR_FIELDS.forEach(cls=> primary.querySelector("."+cls).value = billing.querySelector("."+cls).value);
+  primary.querySelector(".isResidential").checked = billing.querySelector(".isResidential").checked;
+}
 
-  function mirror(){
-    MIRROR_FIELDS.forEach(cls=> primary.querySelector("."+cls).value = billing.querySelector("."+cls).value);
-    primary.querySelector(".isResidential").checked = billing.querySelector(".isResidential").checked;
-  }
-  function setReadonly(on){
-    // readOnly is a no-op on <select> (countryCode) — it needs disabled,
-    // same as the isResidential checkbox, or the field stays editable
-    // while the checkbox claims it matches billing.
-    MIRROR_FIELDS.forEach(cls=>{
-      const field = primary.querySelector("."+cls);
-      if(field.tagName === "SELECT") field.disabled = on;
-      else field.readOnly = on;
-    });
-    primary.querySelector(".isResidential").disabled = on;
-  }
+function setPrimaryReadonly(on){
+  const primary = shipAddrEls()[0];
+  // readOnly is a no-op on <select> (countryCode) — it needs disabled,
+  // same as the isResidential checkbox, or the field stays editable
+  // while the checkbox claims it matches billing.
+  MIRROR_FIELDS.forEach(cls=>{
+    const field = primary.querySelector("."+cls);
+    if(field.tagName === "SELECT") field.disabled = on;
+    else field.readOnly = on;
+  });
+  primary.querySelector(".isResidential").disabled = on;
+}
 
+// The primary shipping address's own "same as billing" checkbox — this
+// element is fresh DOM every time applyShippingBilling rebuilds
+// #shipAddrs, so it needs rewiring on every load (unlike
+// wireBillingMirrorSource below, whose target DOM is built once).
+function wireSameAsBillingCheckbox(){
+  const chk = shipAddrEls()[0].querySelector(".sameAsBilling");
   chk.addEventListener("change", ()=>{
-    setReadonly(chk.checked);
-    if(chk.checked) mirror();
+    setPrimaryReadonly(chk.checked);
+    if(chk.checked) mirrorBillingToPrimary();
     updateAll();
   });
+}
+
+// The billing address's own fields, wired to re-mirror into the primary
+// shipping address when edited — #billingAddress is built once
+// (initShippingBilling) and never rebuilt, so unlike the primary
+// shipping checkbox above, wiring this more than once would accumulate
+// duplicate listeners across repeat project loads.
+function wireBillingMirrorSource(){
+  const billing = document.getElementById("billingAddress");
+  const mirrorIfSame = ()=>{
+    if(shipAddrEls()[0].querySelector(".sameAsBilling").checked){ mirrorBillingToPrimary(); updateAll(); }
+  };
   MIRROR_FIELDS.forEach(cls=>{
     const field = billing.querySelector("."+cls);
-    field.addEventListener(field.tagName === "SELECT" ? "change" : "input", ()=>{
-      if(chk.checked){ mirror(); updateAll(); }
-    });
+    field.addEventListener(field.tagName === "SELECT" ? "change" : "input", mirrorIfSame);
   });
-  billing.querySelector(".isResidential").addEventListener("change", ()=>{
-    if(chk.checked){ mirror(); updateAll(); }
-  });
+  billing.querySelector(".isResidential").addEventListener("change", mirrorIfSame);
 }
 
 /* ============================================================
@@ -304,7 +321,8 @@ export function initShippingBilling(){
   document.getElementById("shipAddrs").innerHTML = shipAddrTemplate(true);
   renumberShipAddrs();
   wireShipAddrEvents(shipAddrEls()[0]);
-  wireSameAsBilling();
+  wireSameAsBillingCheckbox();
+  wireBillingMirrorSource();
 
   document.getElementById("addShipAddrBtn").addEventListener("click", addShipAddr);
   onColorChange(updateAll);
@@ -351,7 +369,7 @@ export function applyShippingBilling(data){
     wireShipAddrEvents(el);
   });
   renumberShipAddrs();
-  wireSameAsBilling();
+  wireSameAsBillingCheckbox();
   const primaryChk = shipAddrEls()[0].querySelector(".sameAsBilling");
   primaryChk.checked = !!(entries[0] && entries[0].sameAsBilling);
   primaryChk.dispatchEvent(new Event("change"));
