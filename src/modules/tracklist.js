@@ -354,6 +354,31 @@ function updateChecklist(){
     items.push([false, `${compressedCount} compressed file(s) attached — replace with WAV/AIFF`]);
   }
 
+  // Every printed-part module (labels/cover/inner-sleeve/inlay) hides its
+  // file-picker body entirely when that part doesn't need a file
+  // (whitelabel, unprinted, none, or inlay not included — see each
+  // module's own mode toggle), so a still-empty artwork .filemeta whose
+  // section isn't hidden means a file the order still needs is missing.
+  // [id] excludes the per-track .filemeta (tracklist.js's own row
+  // template) — those are unlabelled by design and already covered by
+  // the "has timed tracks" check above; .filemeta.empty is always
+  // display:none itself (a separate, cosmetic CSS rule — see
+  // src/index.html), so applicability has to come from an ancestor's
+  // .hidden class, not this element's own visibility.
+  const missingArtwork = Array.from(document.querySelectorAll(".filemeta.empty[id]"))
+    .filter(el => !el.closest(".hidden")).length;
+  if(missingArtwork > 0){
+    items.push([false, `${missingArtwork} artwork file(s) not yet attached`]);
+  }
+
+  // Errors from label/cover/inner-sleeve/inlay's own validateArtwork
+  // results (see each module's render*Warnings) — an unreadable or
+  // unrecognized file, not merely a size/DPI warning.
+  const erroredArtwork = document.querySelectorAll(".labelwarnings li.err").length;
+  if(erroredArtwork > 0){
+    items.push([false, `${erroredArtwork} artwork file(s) have errors — check labels/cover/inner sleeve/inlay`]);
+  }
+
   list.innerHTML = items.map(([ok, text])=>
     `<li class="${ok?'ok':'bad'}"><span class="mark">${ok?'✓':'!'}</span>${text}</li>`
   ).join("");
@@ -465,12 +490,21 @@ function applyDefaultMatrix(){
   });
 }
 
-// Every module renders its own checklist the same way (<ul class="checklist">
-// with <li class="ok"|"bad">) — tracklist.js, as the page's thin router,
-// checks all of them at once rather than importing each module's own
-// completeness check. Refuses to print while anything is flagged, so a
-// half-filled order can't go out as a finished-looking PDF.
+// The querySelectorAll(".checklist li.bad") below aggregates every
+// <ul class="checklist"> on the page at once, by shared class rather
+// than per-module import: tracklist's own #checklist (this function),
+// shipping-billing's billing/each-shipping-address checklist, and
+// vinyl-color's #colourChecklist all render the same <li class="ok"|
+// "bad"> shape independently. labels/cover/inner-sleeve/inlay never
+// render their own checklist — updateChecklist() folds their state in
+// directly instead, via the .filemeta/.labelwarnings classes they do
+// share. Refuses to print while anything is flagged, so a half-filled
+// order can't go out as a finished-looking PDF.
 function printOrder(){
+  // Force a fresh check rather than trusting whatever last triggered
+  // updateChecklist() — artwork state (a file attached, a mode toggled)
+  // lives in other modules' DOM and doesn't reactively re-run this.
+  updateChecklist();
   const missing = document.querySelectorAll(".checklist li.bad");
   if(missing.length > 0){
     missing[0].scrollIntoView({behavior:"smooth", block:"center"});
@@ -873,6 +907,8 @@ function buildTracklistText(project){
 // plant can still receive and fix an incomplete order if the customer
 // chooses to send it anyway. See CLAUDE.md's Workflow, step 4.
 function confirmIncompleteSend(){
+  // Same reasoning as printOrder() — force a fresh check before gating.
+  updateChecklist();
   const missing = document.querySelectorAll(".checklist li.bad");
   if(missing.length === 0) return true;
   return confirm(
