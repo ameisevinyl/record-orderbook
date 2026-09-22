@@ -10,7 +10,7 @@
 //
 // All three parsers return the same shape (or null if unreadable):
 //   { pageSizeMm, imagePx, declaredDpi, colorMode, spotColors, iccProfileName,
-//     hasOutputIntent, hasTrimBox, encrypted }
+//     hasOutputIntent, hasTrimBox, encrypted, hasUnembeddedFonts }
 // - pageSizeMm  — {w,h} in mm, from a PDF's /BleedBox, /TrimBox, or
 //                 /MediaBox (first one present, in that priority order —
 //                 see parsePdfArtwork). null for JPEG/TIFF, which have no
@@ -39,6 +39,10 @@
 //                 false, so validateArtwork never wrongly warns a flat
 //                 raster upload about a "missing" TrimBox/OutputIntent
 //                 that was never applicable to begin with.
+// - hasUnembeddedFonts — true when the file uses text but embeds no
+//                 font program at all (a heuristic, not a precise
+//                 per-font check — see parsePdfArtwork). null for
+//                 JPEG/TIFF, same reasoning as the PDF/X checks above.
 
 // ---- format sniffing (magic bytes, not file extension) ----------------
 
@@ -110,7 +114,7 @@ export function parseJpegArtwork(arrayBuffer){
 
   return {
     pageSizeMm: null, imagePx: {w:widthPx, h:heightPx}, declaredDpi: dpi, colorMode, spotColors: [],
-    iccProfileName: null, hasOutputIntent: null, hasTrimBox: null, encrypted: null
+    iccProfileName: null, hasOutputIntent: null, hasTrimBox: null, encrypted: null, hasUnembeddedFonts: null
   };
 }
 
@@ -188,7 +192,8 @@ export function parseTiffArtwork(arrayBuffer){
     iccProfileName: null,
     hasOutputIntent: null,
     hasTrimBox: null,
-    encrypted: null
+    encrypted: null,
+    hasUnembeddedFonts: null
   };
 }
 
@@ -549,7 +554,27 @@ export async function parsePdfArtwork(arrayBuffer){
   const hasTrimBox = /\/TrimBox\b/.test(text);
   const encrypted = /\/Encrypt\b/.test(text);
 
-  return { pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors, iccProfileName, hasOutputIntent, hasTrimBox, encrypted };
+  // A missing font, resolved precisely, would mean following a /Font
+  // resource to its /FontDescriptor to its /FontFile* — the same
+  // indirect-reference chain this file avoids everywhere else. Counting
+  // /BaseFont against /FontFile* occurrences instead is tempting but
+  // wrong: a composite/CID font (the default shape for virtually any
+  // modern OpenType export) legitimately repeats /BaseFont twice — once
+  // on the /Type0 wrapper, once on its descendant CIDFont — for exactly
+  // one embedded font program, which would false-positive on the
+  // majority of correctly-embedded real-world files. The reliable
+  // signal instead: does this document use any font at all, and does
+  // it embed *any* font program anywhere? True only when it uses fonts
+  // but embeds none whatsoever — coarser (won't catch "3 of 5 fonts
+  // embedded"), but doesn't cry wolf on a fine file.
+  const usesFonts = /\/BaseFont\b/.test(text);
+  const embedsAnyFont = /\/FontFile[0-9]?\b/.test(text);
+  const hasUnembeddedFonts = usesFonts && !embedsAnyFont;
+
+  return {
+    pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors, iccProfileName,
+    hasOutputIntent, hasTrimBox, encrypted, hasUnembeddedFonts
+  };
 }
 
 // ---- validation ----------------------------------------------------------
@@ -637,6 +662,14 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
   }
   if(parsed.hasTrimBox === false){
     warnings.push("no TrimBox found — a print-ready PDF/X export should declare the exact trim size on every page");
+  }
+
+  // A warning, not an error: this is a coarse heuristic (see
+  // parsePdfArtwork's comment) — could miss a partially-embedded file,
+  // and there's no zero-ambiguity way to hard-block on it the way a
+  // missing/unreadable file can be.
+  if(parsed.hasUnembeddedFonts){
+    warnings.push("uses text with no embedded fonts — the plant's system may substitute a different font, please embed all fonts or convert text to outlines");
   }
 
   // A label's target is always square (w===h; covers/sleeves/inlays aren't,

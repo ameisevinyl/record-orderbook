@@ -227,6 +227,7 @@ test("parseJpegArtwork reports the PDF/X-3 proxy checks as not applicable (null)
   assert.equal(info.hasOutputIntent, null);
   assert.equal(info.hasTrimBox, null);
   assert.equal(info.encrypted, null);
+  assert.equal(info.hasUnembeddedFonts, null);
 });
 
 // ---- parseTiffArtwork ----
@@ -265,6 +266,7 @@ test("parseTiffArtwork reports the PDF/X-3 proxy checks as not applicable (null)
   assert.equal(info.hasOutputIntent, null);
   assert.equal(info.hasTrimBox, null);
   assert.equal(info.encrypted, null);
+  assert.equal(info.hasUnembeddedFonts, null);
 });
 
 // ---- parsePdfArtwork ----
@@ -530,6 +532,62 @@ trailer
   assert.equal(info.encrypted, true);
 });
 
+// ---- parsePdfArtwork: font-embedding check ----
+
+test("parsePdfArtwork reports no unembedded-font problem when a used font is embedded", async () => {
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Page /MediaBox [0 0 300 300] >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+MyFont /FontDescriptor 3 0 R >>
+endobj
+3 0 obj
+<< /Type /FontDescriptor /FontFile2 4 0 R >>
+endobj`;
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.hasUnembeddedFonts, false);
+});
+
+test("parsePdfArtwork flags a font used with no embedded font program anywhere in the file", async () => {
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Page /MediaBox [0 0 300 300] >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj`;
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.hasUnembeddedFonts, true);
+});
+
+test("parsePdfArtwork reports no font problem for a file with no text at all (nothing to embed)", async () => {
+  const pdf = `<< /Type /XObject /Subtype /Image /Width 500 /Height 500 /ColorSpace /DeviceCMYK >>`;
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.hasUnembeddedFonts, false);
+});
+
+test("parsePdfArtwork doesn't false-positive on a composite/CID font, whose BaseFont legitimately appears twice for one embedded font program", async () => {
+  // A Type0 wrapper and its CIDFontType2 descendant both carry the same
+  // /BaseFont value per spec — the normal shape for any modern OpenType
+  // export — but there's still only ONE actual embedded font program.
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Page /MediaBox [0 0 300 300] >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /ABCDEF+MyFont /DescendantFonts [3 0 R] /Encoding /Identity-H >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ABCDEF+MyFont /FontDescriptor 4 0 R >>
+endobj
+4 0 obj
+<< /Type /FontDescriptor /FontFile2 5 0 R >>
+endobj`;
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.hasUnembeddedFonts, false);
+});
+
 // ---- validateArtwork ----
 
 const TARGET = {w:98, h:98}, TOL = 0.5, DPI_MIN = 300, DPI_MAX = 1200;
@@ -630,6 +688,22 @@ test("validateArtwork doesn't warn about OutputIntent/TrimBox/encryption when al
     const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
     assert.ok(!result.warnings.some((w) => w.includes("OutputIntent") || w.includes("TrimBox")), result.warnings.join("; "));
     assert.ok(!result.errors.some((e) => e.includes("encrypted")), result.errors.join("; "));
+  }
+});
+
+test("validateArtwork warns (not errors) when hasUnembeddedFonts is true — a heuristic, not a certain failure", () => {
+  const parsed = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasUnembeddedFonts: true };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  assert.ok(result.warnings.some((w) => w.includes("font")), result.warnings.join("; "));
+  assert.ok(!result.errors.some((e) => e.includes("font")), result.errors.join("; "));
+});
+
+test("validateArtwork doesn't warn about fonts when hasUnembeddedFonts is false or not applicable", () => {
+  const embedded = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasUnembeddedFonts: false };
+  const notApplicable = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", hasUnembeddedFonts: null };
+  for (const parsed of [embedded, notApplicable]) {
+    const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+    assert.ok(!result.warnings.some((w) => w.includes("font")), result.warnings.join("; "));
   }
 });
 
