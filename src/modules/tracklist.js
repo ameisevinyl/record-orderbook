@@ -991,20 +991,20 @@ async function sendToPlant(){
 
   const cat = document.getElementById("catalogue").value.trim() || "(no catalogue number)";
   const page = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Send via SwissTransfer</title>
+<title>Send — ${cat}</title>
 <style>
-  body{font-family:ui-monospace,"JetBrains Mono","IBM Plex Mono",Consolas,monospace;
-       background:#eeece3;color:#1c1b18;max-width:520px;margin:60px auto;padding:0 20px;line-height:1.6;}
-  h1{font-size:16px;letter-spacing:.04em;}
-  .box{border:1px solid #bdb7a4;border-radius:2px;padding:16px 18px;margin:18px 0;background:#fff;}
-  .label{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#5c584e;}
-  .val{font-size:15px;font-weight:700;margin-top:2px;}
-  a.btn{display:inline-block;margin-top:14px;padding:9px 16px;background:#1c1b18;color:#eeece3;
-        text-decoration:none;border-radius:2px;font-size:12px;}
-  a.btn:hover{background:#d1470f;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+       background:#ffffff;color:#161616;max-width:520px;margin:60px auto;padding:0 20px;line-height:1.6;}
+  h1{font-size:15px;padding-bottom:8px;border-bottom:1px solid #d6d6d3;margin-bottom:14px;}
+  .box{border:1px solid #d6d6d3;border-radius:3px;padding:12px 14px;margin:14px 0;background:#f6f6f5;}
+  .label{font-size:12px;color:#5c5c59;}
+  .val{font-size:14px;font-weight:700;margin-top:2px;}
+  a.btn{display:inline-block;margin-top:14px;padding:8px 14px;border:1px solid #d6d6d3;color:#161616;
+        text-decoration:none;border-radius:3px;font-size:13px;}
+  a.btn:hover{background:#f6f6f5;border-color:#161616;}
 </style></head>
 <body>
-  <h1>Send via SwissTransfer — ${cat}</h1>
+  <h1>Send — ${cat}</h1>
   <div class="box">
     <div class="label">Upload this file</div>
     <div class="val">${fileName}</div>
