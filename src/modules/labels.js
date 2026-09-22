@@ -32,19 +32,20 @@ function labelSideTemplate(side){
       <h3>Label ${side}</h3>
     </div>
 
-    <div id="labelbody-${side}">
-      <div class="row" style="align-items:center;">
-        <button type="button" class="pickbtn no-print" id="labelpick-${side}" title="Choose label artwork">↑</button>
-        <label class="chk"><input type="checkbox" id="whitelabel-${side}"> whitelabel (blank)</label>
-        <div class="filemeta empty" id="labelmeta-${side}" style="margin:0;"></div>
-        <span id="labelinfo-${side}" style="margin-left:auto;"></span>
-      </div>
-      <input type="file" id="labelinput-${side}" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+    <div class="row" style="align-items:center;">
+      <button type="button" class="pickbtn no-print" id="labelpick-${side}" title="Choose label artwork">↑</button>
+      <label class="chk"><input type="checkbox" id="whitelabel-${side}"> whitelabel (blank)</label>
+      <div class="filemeta empty" id="labelmeta-${side}" style="margin:0;"></div>
+      <span id="labelinfo-${side}" style="margin-left:auto;"></span>
+    </div>
+    <input type="file" id="labelinput-${side}" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
 
+    <div id="labelbody-${side}">
       <div class="label-preview-wrap" id="labelpreviewwrap-${side}">
         <div class="label-preview" id="labelpreview-${side}">
           <div class="label-placeholder">no artwork selected</div>
         </div>
+        <div class="label-blank-disc hidden" id="labelblankdisc-${side}"></div>
       </div>
 
       <table class="labelwarnings" id="labelwarnings-${side}"></table>
@@ -78,13 +79,19 @@ function showPreviewImage(side, previewImgFile){
 // only as accurate as the browser's mapping to the real display, which
 // isn't perfectly calibrated on every device.
 function updatePreviewSizing(){
-  const mm = formatSpec().dataSizeMm;
+  const { dataSizeMm, diameterMm } = formatSpec();
+  const mmStr = dataSizeMm + "mm";
+  // Inset the blank-whitelabel disc from the full data square by the
+  // same margin a real label file's trim circle would sit at, so it
+  // reads as "this side's actual label, just blank" rather than an
+  // arbitrary placeholder circle.
+  const insetPct = ((dataSizeMm - diameterMm) / (2 * dataSizeMm) * 100) + "%";
   SIDES.forEach(side=>{
-    const mmStr = mm + "mm";
     document.getElementById("labelpreviewwrap-"+side).style.width = mmStr;
     document.getElementById("labelpreviewwrap-"+side).style.height = mmStr;
     document.getElementById("labelpreview-"+side).style.width = mmStr;
     document.getElementById("labelpreview-"+side).style.height = mmStr;
+    document.getElementById("labelblankdisc-"+side).style.inset = insetPct;
   });
 }
 
@@ -179,7 +186,8 @@ function wireLabelSide(side){
   });
 
   document.getElementById("whitelabel-"+side).addEventListener("change", (e)=>{
-    document.getElementById("labelbody-"+side).classList.toggle("hidden", e.target.checked);
+    document.getElementById("labelblankdisc-"+side).classList.toggle("hidden", !e.target.checked);
+    document.getElementById("labelwarnings-"+side).classList.toggle("hidden", e.target.checked);
     document.getElementById("labelblanknote-"+side).classList.toggle("hidden", !e.target.checked);
   });
 }
