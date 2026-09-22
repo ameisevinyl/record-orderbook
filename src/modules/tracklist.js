@@ -395,19 +395,20 @@ function sideTemplate(side){
   <div id="sidebox-${side}">
     <div class="side-head">
       <h2>Side ${side}</h2>
-      <div class="side-opts">
-        ${isB ? `<label class="chk"><input type="checkbox" id="blankB"> blank / not used</label>` : ""}
+      ${isB ? `<div class="side-opts"><label class="chk"><input type="checkbox" id="blankB"> blank / not used</label></div>` : ""}
+    </div>
+
+    <div id="body-${side}">
+      <div class="row" style="align-items:center;">
         <label class="chk">RPM
           <select id="rpm-${side}" class="rpm-select">
             <option value="33">33⅓</option>
             <option value="45">45</option>
           </select>
         </label>
-        <label class="chk"><input type="checkbox" id="cont-${side}"> one continuous file </label>
+        <label class="chk"><input type="checkbox" id="cont-${side}"> all tracks in one file per side</label>
       </div>
-    </div>
 
-    <div id="body-${side}">
       <div class="hidden" id="contfile-${side}">
         <div class="row" style="align-items:end;">
           <div class="field" style="flex:0 0 auto;">
