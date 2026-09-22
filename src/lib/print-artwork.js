@@ -10,7 +10,7 @@
 //
 // All three parsers return the same shape (or null if unreadable):
 //   { pageSizeMm, imagePx, declaredDpi, colorMode, spotColors, iccProfileName,
-//     hasOutputIntent, hasTrimBox, encrypted, hasUnembeddedFonts }
+//     trimBoxMm, encrypted, hasUnembeddedFonts, pdfVersion }
 // - pageSizeMm  — {w,h} in mm, from a PDF's /BleedBox, /TrimBox, or
 //                 /MediaBox (first one present, in that priority order —
 //                 see parsePdfArtwork). null for JPEG/TIFF, which have no
@@ -33,16 +33,21 @@
 //                 null when there's no profile at all. Always null for
 //                 JPEG/TIFF — this file never reads their (much rarer)
 //                 embedded-profile markers, only a PDF's /ICCBased.
-// - hasOutputIntent, hasTrimBox, encrypted — PDF/X-3 proxy checks (see
-//                 parsePdfArtwork), true/false for a PDF. null for
-//                 JPEG/TIFF, which have no PDF/X concept at all — not
-//                 false, so validateArtwork never wrongly warns a flat
-//                 raster upload about a "missing" TrimBox/OutputIntent
-//                 that was never applicable to begin with.
+// - encrypted   — a PDF/X-3 proxy check (see parsePdfArtwork), true/false
+//                 for a PDF. null for JPEG/TIFF, which have no PDF/X
+//                 concept at all — not false, so buildChecklistRows never
+//                 wrongly flags a flat raster upload for something that
+//                 was never applicable to begin with.
+// - trimBoxMm   — {w,h} in mm, the PDF's own /TrimBox rectangle (the
+//                 finished, cut size — see the comment on pageSizeMm's
+//                 box priority below), or null when the page declares
+//                 no TrimBox at all. Always null for JPEG/TIFF.
 // - hasUnembeddedFonts — true when the file uses text but embeds no
 //                 font program at all (a heuristic, not a precise
 //                 per-font check — see parsePdfArtwork). null for
 //                 JPEG/TIFF, same reasoning as the PDF/X checks above.
+// - pdfVersion  — the literal "%PDF-X.Y" header version string (e.g.
+//                 "1.4"), or null for JPEG/TIFF/an unreadable file.
 
 // ---- format sniffing (magic bytes, not file extension) ----------------
 
@@ -114,7 +119,8 @@ export function parseJpegArtwork(arrayBuffer){
 
   return {
     pageSizeMm: null, imagePx: {w:widthPx, h:heightPx}, declaredDpi: dpi, colorMode, spotColors: [],
-    iccProfileName: null, hasOutputIntent: null, hasTrimBox: null, encrypted: null, hasUnembeddedFonts: null
+    iccProfileName: null, trimBoxMm: null, encrypted: null, hasUnembeddedFonts: null,
+    pdfVersion: null
   };
 }
 
@@ -190,10 +196,10 @@ export function parseTiffArtwork(arrayBuffer){
     colorMode,
     spotColors: [],
     iccProfileName: null,
-    hasOutputIntent: null,
-    hasTrimBox: null,
+    trimBoxMm: null,
     encrypted: null,
-    hasUnembeddedFonts: null
+    hasUnembeddedFonts: null,
+    pdfVersion: null
   };
 }
 
@@ -544,15 +550,26 @@ export async function parsePdfArtwork(arrayBuffer){
   const iccProfileName = await detectIccProfileName(text, bytes);
 
   // PDF/X (what a pressing plant requires — ISO 15930-3:2002, based on
-  // PDF 1.4) mandates an OutputIntent (the target printing condition/
-  // ICC profile), a TrimBox on every page, and no encryption. These are
-  // proxy checks, not full conformance validation (see this file's
-  // header comment on scope) — plain presence checks in the same
-  // plaintext structure everything else here already scans, cheap
+  // PDF 1.4) mandates a TrimBox on every page and no encryption. These
+  // are proxy checks, not full conformance validation (see this file's
+  // header comment on scope) — a plain presence/rectangle check in the
+  // same plaintext structure everything else here already scans, cheap
   // enough to always run.
-  const hasOutputIntent = /\/OutputIntents\b/.test(text);
-  const hasTrimBox = /\/TrimBox\b/.test(text);
   const encrypted = /\/Encrypt\b/.test(text);
+
+  // The TrimBox is the finished, cut size (no bleed) — checked against
+  // each printable part's own trim size (CONFIG's trimMm/diameterMm),
+  // independently of pageSizeMm above (which prefers BleedBox, the
+  // bleed-inclusive data size). Same rectangle-parsing regex as
+  // pageBoxMatch, just always keyed to /TrimBox specifically rather than
+  // whichever box wins that fallback chain.
+  const trimBoxRectMatch = boxMatch("TrimBox");
+  let trimBoxMm = null;
+  if(trimBoxRectMatch){
+    const x0 = parseFloat(trimBoxRectMatch[1]), y0 = parseFloat(trimBoxRectMatch[2]);
+    const x1 = parseFloat(trimBoxRectMatch[3]), y1 = parseFloat(trimBoxRectMatch[4]);
+    trimBoxMm = { w: Math.abs(x1-x0) * 25.4/72, h: Math.abs(y1-y0) * 25.4/72 };
+  }
 
   // A missing font, resolved precisely, would mean following a /Font
   // resource to its /FontDescriptor to its /FontFile* — the same
@@ -571,62 +588,100 @@ export async function parsePdfArtwork(arrayBuffer){
   const embedsAnyFont = /\/FontFile[0-9]?\b/.test(text);
   const hasUnembeddedFonts = usesFonts && !embedsAnyFont;
 
+  // The literal header bytes every PDF starts with — "%PDF-1.4" etc. —
+  // no ambiguity, no indirect reference to resolve.
+  const versionMatch = text.match(/%PDF-(\d\.\d)/);
+  const pdfVersion = versionMatch ? versionMatch[1] : null;
+
   return {
     pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors, iccProfileName,
-    hasOutputIntent, hasTrimBox, encrypted, hasUnembeddedFonts
+    trimBoxMm, encrypted, hasUnembeddedFonts, pdfVersion
   };
 }
 
-// ---- validation ----------------------------------------------------------
-// targetMm is {w,h} — labels happen to be square (w===h) but covers,
-// sleeves and inlays generally aren't, so this always takes both.
+// ---- per-artwork-slot checklist rows (for each module's UI table) -------
+// One row per check — Size, Resolution, Colour mode, Colour profile, PDF
+// version, TrimBox, Encryption, Fonts — each row reporting
+// {feature, severity, detected, expected}: `detected` is always the
+// actual value found (or a status word like "present"/"missing"),
+// `expected` is only filled in when the row isn't "info" (nothing to
+// show past what's already wrong). Spot/Pantone colourants fold into
+// the Colour mode row's `detected` text rather than getting a row of
+// their own. PDF-only checks (Colour profile, PDF version, TrimBox,
+// Encryption, Fonts) are omitted entirely for a JPEG/TIFF upload —
+// never shown as "n/a", since that's one more row a customer has to
+// read past for no reason.
+//
+// `targetMm` is the data/bleed size (what Size checks against);
+// `trimMm` is the finished cut size (what TrimBox checks against) —
+// distinct targets, see package-naming's dataMm-vs-trimMm distinction.
+// `printCheck` is a format's CONFIG.printCheck (sizeToleranceMm, dpi,
+// and a `checks` map giving each check's accepted values and severity —
+// see config.js). Every check is fully specified there; this file never
+// defaults a missing config field, matching CLAUDE.md's "trust internal
+// code" guidance for data only this codebase ever produces.
+//
+// Severity is one flat, config-driven vocabulary — "debug" | "info" |
+// "warn" | "error" — no separate visibility flag. `resolveSeverity`
+// below is the single rule: a check configured "debug" stays "debug"
+// regardless of pass/fail (the whole check is plant-technical, never a
+// customer's business, win or lose); everything else resolves to "info"
+// on pass or to its own configured severity on fail — so a plant can
+// turn a check from invisible ("debug") to customer-visible-and-
+// dismissible ("warn") to customer-visible-and-blocking ("error") just
+// by editing CONFIG, no code change. `pushRow` is what actually keeps a
+// "debug" row out of a production customer's checklist: it's the same
+// mechanism (still) used for a row with no real pass/fail to report —
+// ambiguous detection (size/colour mode/colour profile — we genuinely
+// can't tell) or a confidently-absent-but-optional check (TrimBox/
+// colour profile when not `required`) — both get severity "debug"
+// directly, independent of what the check's own configured severity is.
+export const CHECKLIST_ICON = { debug: "?", info: "✓", warn: "⚠", error: "✗" };
 
-export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
-  // findings is the single source of truth — errors/warnings (flat,
-  // unchanged in content and order from before this was refactored) are
-  // derived from it below, so every existing consumer (the checklist's
-  // erroredArtwork count, each module's flat warning list) keeps working
-  // unmodified. category tags each finding for the categorized-checklist
-  // UI (see buildChecklistRows) — decided here, at the point each
-  // message is created, rather than re-derived later by matching on
-  // message text, which would be one more thing to keep in sync.
-  const findings = [];
-  const err = (category, message) => findings.push({category, severity:"err", message});
-  const warn = (category, message) => findings.push({category, severity:"warn", message});
-  const deriveErrorsWarnings = () => ({
-    errors: findings.filter(f=>f.severity==="err").map(f=>f.message),
-    warnings: findings.filter(f=>f.severity==="warn").map(f=>f.message)
-  });
+function colourModeLabel(mode){
+  return mode === "Gray" ? "Greyscale" : mode; // "CMYK"/"RGB" read fine as-is
+}
 
+// configSeverity: a check's CONFIG.printCheck.checks.<name>.severity.
+// passed: whether this particular row's check succeeded.
+function resolveSeverity(configSeverity, passed){
+  if(configSeverity === "debug") return "debug";
+  return passed ? "info" : configSeverity;
+}
+
+// Only pushes a "debug" row when debugMode is on — this is the sole
+// place production visibility is enforced, so every row (regardless of
+// why it ended up "debug") goes through it.
+function pushRow(rows, debugMode, row){
+  if(row.severity === "debug" && !debugMode) return;
+  rows.push(row);
+}
+
+export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, debugMode){
+  if(kind === "unknown"){
+    return [{ feature: "File", severity: "error", detected: "unrecognized file — expected PDF, JPG, or TIFF", expected: null }];
+  }
   if(!parsed){
-    err("file", "could not read this file — please check it is a valid PDF, JPG, or TIFF");
-    return { ...deriveErrorsWarnings(), impliedDpi:null, checkedSizeMm:null, findings };
+    return [{ feature: "File", severity: "error", detected: "could not read this file", expected: null }];
   }
 
-  // An error, not a warning: an encrypted PDF can't be processed by the
-  // plant's system at all (and most of what else this function checks
-  // can't be trusted either, since the actual content stream is
-  // encrypted garbage to this parser too).
-  if(parsed.encrypted) err("printReady", "file appears to be encrypted — please export without a password/permissions lock");
+  const rows = [];
+  const checks = printCheck.checks;
+  const isPdf = parsed.encrypted !== null; // set (true/false) only by parsePdfArtwork
 
+  // ---- Size + implied DPI (from page size for a PDF, from pixel count
+  // vs. target for a raster file — see parsePdfArtwork/parseJpegArtwork/
+  // parseTiffArtwork's shape comment) ----
   let impliedDpi = null;
   let checkedSizeMm = null;
-
   if(parsed.pageSizeMm){
-    // PDF: the page itself is the physical artwork canvas.
     checkedSizeMm = parsed.pageSizeMm;
     if(parsed.imagePx && parsed.pageSizeMm.w > 0){
       impliedDpi = parsed.imagePx.w / (parsed.pageSizeMm.w / 25.4);
     }
   } else if(parsed.imagePx){
-    // Raster file: the only question that actually matters for print is
-    // "does this pixel count support the target size at a usable DPI" —
-    // computed from pixel count vs. the target, not from (possibly
-    // absent, possibly wrong) embedded metadata.
     impliedDpi = parsed.imagePx.w / (targetMm.w / 25.4);
     if(parsed.declaredDpi){
-      // Independent second signal: what physical size the file *claims*
-      // to be, from its own declared resolution.
       checkedSizeMm = {
         w: parsed.imagePx.w / parsed.declaredDpi.x * 25.4,
         h: parsed.imagePx.h / parsed.declaredDpi.y * 25.4
@@ -635,14 +690,15 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
   }
 
   if(checkedSizeMm){
-    const dw = Math.abs(checkedSizeMm.w - targetMm.w);
-    const dh = Math.abs(checkedSizeMm.h - targetMm.h);
-    if(dw > toleranceMm || dh > toleranceMm){
-      warn("size",
-        `wrong size: ${checkedSizeMm.w.toFixed(1)}×${checkedSizeMm.h.toFixed(1)}mm, expected ${targetMm.w}×${targetMm.h}mm`);
-    }
+    const passed = Math.abs(checkedSizeMm.w - targetMm.w) <= printCheck.sizeToleranceMm
+      && Math.abs(checkedSizeMm.h - targetMm.h) <= printCheck.sizeToleranceMm;
+    pushRow(rows, debugMode, {
+      feature: "Size", severity: resolveSeverity(checks.size.severity, passed),
+      detected: `${checkedSizeMm.w.toFixed(1)}×${checkedSizeMm.h.toFixed(1)}mm`,
+      expected: passed ? null : `${targetMm.w}×${targetMm.h}mm`
+    });
   } else{
-    warn("size", "could not independently verify physical size (no resolution metadata found) — checked by implied resolution only");
+    pushRow(rows, debugMode, { feature: "Size", severity: "debug", detected: "not detected", expected: null });
   }
 
   if(impliedDpi != null){
@@ -651,114 +707,111 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
     // (98/25.4*300 = 1157.48), which computes back to 299.84dpi — a
     // rounding artifact of integer pixels, not an actually low-res file.
     const rounded = Math.round(impliedDpi);
-    if(rounded < dpiMin) warn("size", `resolution too low for a ${targetMm.w}×${targetMm.h}mm print: ~${rounded} dpi, need at least ${dpiMin}`);
-    else if(rounded > dpiMax) warn("size", `resolution far exceeds requirement: ~${rounded} dpi (max recommended ${dpiMax})`);
+    const { min, max } = printCheck.dpi;
+    const passed = rounded >= min && rounded <= max;
+    pushRow(rows, debugMode, {
+      feature: "Resolution", severity: resolveSeverity(checks.resolution.severity, passed),
+      detected: `~${rounded}dpi`,
+      expected: passed ? null : (rounded < min ? `≥${min}dpi` : `≤${max}dpi`)
+    });
   } else{
-    warn("size", "vector content — resolution check not applicable");
+    // Vector content genuinely has no pixel resolution to check — a
+    // known, always-relevant fact, not a pass/fail outcome, so this is
+    // never gated by config or debugMode.
+    rows.push({ feature: "Resolution", severity: "info", detected: "n/a (vector)", expected: null });
   }
 
-  if(parsed.colorMode === "unknown") warn("colour", "could not determine color mode automatically — please verify CMYK manually");
-  else if(parsed.colorMode !== "CMYK") warn("colour", `file appears to be ${parsed.colorMode}, not CMYK`);
-
-  // Independent of the CMYK check above — a file can be perfectly valid
-  // CMYK and still carry a spot ink, which the plant typically charges
-  // extra for (an additional printing plate/pass per spot colour).
-  if(parsed.spotColors && parsed.spotColors.length){
-    warn("colour", `uses spot colour(s): ${parsed.spotColors.join(", ")} — may incur additional cost, please confirm with the plant`);
+  if(parsed.colorMode === "unknown"){
+    pushRow(rows, debugMode, { feature: "Colour mode", severity: "debug", detected: "not detected", expected: null });
+  } else{
+    const modeOk = checks.colorMode.accepted.includes(parsed.colorMode);
+    const spotPresent = !!(parsed.spotColors && parsed.spotColors.length);
+    const spotOk = checks.spotColors.accepted || !spotPresent;
+    const passed = modeOk && spotOk;
+    let detected = colourModeLabel(parsed.colorMode);
+    if(spotPresent) detected += ` + Spot Colour (${parsed.spotColors.join(", ")})`;
+    let expected = null, severity;
+    if(passed){
+      severity = resolveSeverity(checks.colorMode.severity, true);
+    } else{
+      const parts = [];
+      if(!modeOk) parts.push(checks.colorMode.accepted.join("/"));
+      if(!spotOk) parts.push("no spot colour");
+      expected = parts.join(", ");
+      severity = !modeOk ? checks.colorMode.severity : checks.spotColors.severity;
+    }
+    pushRow(rows, debugMode, { feature: "Colour mode", severity, detected, expected });
   }
 
-  // PDF/X-3 proxy checks (see parsePdfArtwork) — hasOutputIntent/
-  // hasTrimBox are only ever true/false for a PDF, null (skipped here)
-  // for JPEG/TIFF, which have no PDF/X concept to check against.
-  if(parsed.hasOutputIntent === false){
-    warn("printReady", "no OutputIntent found — a print-ready PDF/X export should declare its target printing condition (e.g. ISO Coated v2)");
-  }
-  if(parsed.hasTrimBox === false){
-    warn("printReady", "no TrimBox found — a print-ready PDF/X export should declare the exact trim size on every page");
-  }
-
-  // A warning, not an error: this is a coarse heuristic (see
-  // parsePdfArtwork's comment) — could miss a partially-embedded file,
-  // and there's no zero-ambiguity way to hard-block on it the way a
-  // missing/unreadable file can be.
-  if(parsed.hasUnembeddedFonts){
-    warn("printReady", "uses text with no embedded fonts — the plant's system may substitute a different font, please embed all fonts or convert text to outlines");
-  }
-
-  // A label's target is always square (w===h; covers/sleeves/inlays aren't,
-  // so this never fires for them). Ratio needs no mm/px/pt conversion —
-  // whichever raw dimension pair we have (a vector PDF's MediaBox, or a
-  // raster's pixel count) is enough, which matters because a vector PDF's
-  // exact physical size is sometimes unreadable (e.g. MediaBox inside a
-  // compressed object stream) even though its shape still is. A square
-  // result is trusted as correctly sized even when the absolute size
-  // above couldn't be independently verified.
-  if(targetMm.w === targetMm.h){
-    const dims = parsed.pageSizeMm || parsed.imagePx;
-    if(dims && dims.h > 0){
-      const ratio = dims.w / dims.h;
-      if(Math.abs(ratio - 1) > 0.01){
-        warn("ratio", `not square: ${dims.w.toFixed(1)}×${dims.h.toFixed(1)} (ratio ${ratio.toFixed(2)}:1) — this print needs a 1:1 width:height ratio`);
-      }
+  if(isPdf){
+    if(parsed.iccProfileName){
+      pushRow(rows, debugMode, { feature: "Colour profile", severity: resolveSeverity(checks.colorProfile.severity, true), detected: parsed.iccProfileName, expected: null });
+    } else if(checks.colorProfile.required){
+      pushRow(rows, debugMode, { feature: "Colour profile", severity: checks.colorProfile.severity, detected: "none", expected: "required" });
+    } else{
+      // Could be genuinely absent, or an indirect /ICCBased reference
+      // the no-object-resolution scan didn't follow — see
+      // detectIccProfileName's comment. No way to tell which, and it
+      // isn't required anyway, so there's nothing worth a customer's
+      // attention either way.
+      pushRow(rows, debugMode, { feature: "Colour profile", severity: "debug", detected: "not detected", expected: null });
     }
   }
 
-  return { ...deriveErrorsWarnings(), impliedDpi, checkedSizeMm, findings };
-}
-
-// ---- categorized checklist rows (for each module's artwork slot UI) -----
-// Groups validateArtwork's findings into the four fixed rows the UI
-// shows — exactly one per category, worst severity wins ("err" beats
-// "warn"), joined by "; " when a category has more than one finding.
-// When a category has none, the row is "ok" and shows a positive
-// summary built from the detected facts (parsed/result) rather than an
-// absence of complaints — "nothing wrong" isn't itself informative.
-// Ratio is omitted for a non-square target (covers/sleeves/inlays, which
-// the underlying check never runs for anyway) and Print-ready is
-// omitted for JPEG/TIFF (hasOutputIntent/hasTrimBox/hasUnembeddedFonts/
-// encrypted are null for those formats — no PDF/X concept applies).
-const CHECKLIST_CATEGORY_LABEL = { colour: "Colour", size: "Size", ratio: "Ratio", printReady: "Print-ready" };
-
-// Exported so every module renders rows with the same icons instead of
-// each declaring its own identically-named constant — build.js flattens
-// every module into one shared top-level scope (see its header
-// comment), so four modules each declaring their own top-level
-// CHECKLIST_ICON would collide.
-export const CHECKLIST_ICON = { ok: "✓", warn: "⚠", err: "✗" };
-
-export function buildChecklistRows(parsed, result, targetMm){
-  if(!parsed){
-    return [{ category: "File", severity: "err", text: result.errors[0] || "could not read this file" }];
+  // PDF version is always reliably readable (the literal header bytes)
+  // for anything that got this far — no ambiguous case here; whether it
+  // ever reaches a customer is purely down to checks.pdfVersion.severity.
+  if(parsed.pdfVersion){
+    const passed = checks.pdfVersion.accepted.includes(parsed.pdfVersion);
+    pushRow(rows, debugMode, {
+      feature: "PDF version", severity: resolveSeverity(checks.pdfVersion.severity, passed),
+      detected: parsed.pdfVersion, expected: passed ? null : checks.pdfVersion.accepted.join("/")
+    });
   }
 
-  const categories = ["colour", "size"];
-  if(targetMm.w === targetMm.h) categories.push("ratio");
-  if(parsed.encrypted !== null) categories.push("printReady"); // null only for JPEG/TIFF
-
-  return categories.map(category => {
-    const items = result.findings.filter(f => f.category === category);
-    if(items.length === 0){
-      return { category: CHECKLIST_CATEGORY_LABEL[category], severity: "ok", text: positiveSummary(category, parsed, result) };
+  // TrimBox is a size check against the part's finished trim size, not
+  // a mere presence check — a missing TrimBox isn't itself a problem
+  // (an "extra", not a requirement, unless a plant opts in via
+  // checks.trimBox.required), so it stays "debug" (hidden in
+  // production) when absent rather than warning like a real failure.
+  if(isPdf){
+    if(parsed.trimBoxMm){
+      const passed = Math.abs(parsed.trimBoxMm.w - trimMm.w) <= printCheck.sizeToleranceMm
+        && Math.abs(parsed.trimBoxMm.h - trimMm.h) <= printCheck.sizeToleranceMm;
+      pushRow(rows, debugMode, {
+        feature: "TrimBox", severity: resolveSeverity(checks.trimBox.severity, passed),
+        detected: `${parsed.trimBoxMm.w.toFixed(1)}×${parsed.trimBoxMm.h.toFixed(1)}mm`,
+        expected: passed ? null : `${trimMm.w}×${trimMm.h}mm`
+      });
+    } else if(checks.trimBox.required){
+      pushRow(rows, debugMode, { feature: "TrimBox", severity: checks.trimBox.severity, detected: "missing", expected: "present" });
+    } else{
+      pushRow(rows, debugMode, { feature: "TrimBox", severity: "debug", detected: "not present", expected: null });
     }
-    const severity = items.some(f => f.severity === "err") ? "err" : "warn";
-    return { category: CHECKLIST_CATEGORY_LABEL[category], severity, text: items.map(f => f.message).join("; ") };
-  });
-}
+  }
 
-function positiveSummary(category, parsed, result){
-  if(category === "colour"){
-    return parsed.iccProfileName ? `${parsed.colorMode} (${parsed.iccProfileName})` : parsed.colorMode;
+  // Whether an encrypted file reaches a customer at all — and whether it
+  // hard-blocks Send to Plant (tracklist.js's `.labelwarnings .error`
+  // scan) — is purely a function of checks.encryption.severity: "error"
+  // shows it and blocks, "debug" hides it from everyone but the plant
+  // and never blocks, "warn" shows it as a dismissible warning.
+  if(isPdf){
+    const passed = !parsed.encrypted;
+    pushRow(rows, debugMode, {
+      feature: "Encryption", severity: resolveSeverity(checks.encryption.severity, passed),
+      detected: parsed.encrypted ? "encrypted" : "none", expected: passed ? null : "none"
+    });
   }
-  if(category === "size"){
-    // checkedSizeMm null always produces a "size" finding above (the
-    // "could not independently verify" warning fires unconditionally in
-    // that case), so this branch is only ever reached with it set.
-    const rounded = result.impliedDpi != null ? ` @ ~${Math.round(result.impliedDpi)}dpi` : "";
-    return `${result.checkedSizeMm.w.toFixed(1)}×${result.checkedSizeMm.h.toFixed(1)}mm${rounded}`;
+
+  if(parsed.hasUnembeddedFonts !== null){
+    const passed = !parsed.hasUnembeddedFonts;
+    pushRow(rows, debugMode, {
+      feature: "Fonts", severity: resolveSeverity(checks.fonts.severity, passed),
+      detected: passed ? "embedded" : "not embedded", expected: passed ? null : "embedded"
+    });
   }
-  if(category === "ratio") return "matches target";
-  if(category === "printReady") return "PDF/X print-ready checks passed";
-  return "";
+
+  return rows;
 }
 
 // ---- print-simulation geometry -------------------------------------------

@@ -10,7 +10,8 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
+import { isDebugMode } from "../lib/debug-mode.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
@@ -53,7 +54,7 @@ function labelSideTemplate(side){
         </div>
       </div>
 
-      <ul class="labelwarnings" id="labelwarnings-${side}"></ul>
+      <table class="labelwarnings" id="labelwarnings-${side}"></table>
     </div>
     <div class="hidden blank-note" id="labelblanknote-${side}">Whitelabel — blank, no artwork required.</div>
   </div>`;
@@ -105,11 +106,12 @@ function updateLabelInfo(){
   SIDES.forEach(side=> document.getElementById("labelinfo-"+side).innerHTML = html);
 }
 
-function renderChecklist(side, parsed, result, targetMm){
-  const rows = buildChecklistRows(parsed, result, targetMm);
-  const items = rows.map(row =>
-    `<li class="${row.severity}">${CHECKLIST_ICON[row.severity]} ${row.category}: ${row.text}</li>`);
-  document.getElementById("labelwarnings-"+side).innerHTML = items.join("");
+function renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck){
+  const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode());
+  const body = rows.map(row =>
+    `<tr class="${row.severity}"><td>${CHECKLIST_ICON[row.severity]}</td><td>${row.feature}</td><td>${row.detected}</td><td>${row.expected || ""}</td></tr>`).join("");
+  document.getElementById("labelwarnings-"+side).innerHTML =
+    `<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead><tbody>${body}</tbody>`;
 }
 
 async function handleFile(side, file){
@@ -135,9 +137,8 @@ async function handleFile(side, file){
   const spec = formatSpec();
   const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
   const targetMm = {w:spec.dataSizeMm, h:spec.dataSizeMm};
-  const result = validateArtwork(parsed, targetMm, printCheck.sizeToleranceMm, printCheck.dpi.min, printCheck.dpi.max);
-  if(kind === "unknown") result.errors.unshift("unrecognized file — expected PDF, JPG, or TIFF");
-  renderChecklist(side, parsed, result, targetMm);
+  const trimMm = {w:spec.diameterMm, h:spec.diameterMm};
+  renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck);
 
   const url = URL.createObjectURL(file);
   box._url = url;

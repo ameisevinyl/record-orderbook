@@ -14,7 +14,8 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
+import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
 // On-screen preview cap, in px. A flat cover spread can be 600+mm wide —
@@ -35,11 +36,11 @@ function coverHasArtwork(){
       || document.getElementById("cover-printed-inside-out").checked;
 }
 
-function renderCoverChecklist(listEl, parsed, result, targetMm){
-  const rows = buildChecklistRows(parsed, result, targetMm);
-  const items = rows.map(row =>
-    `<li class="${row.severity}">${CHECKLIST_ICON[row.severity]} ${row.category}: ${row.text}</li>`);
-  listEl.innerHTML = items.join("");
+function renderCoverChecklist(tableEl, parsed, kind, targetMm, trimMm, printCheck){
+  const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode());
+  const body = rows.map(row =>
+    `<tr class="${row.severity}"><td>${CHECKLIST_ICON[row.severity]}</td><td>${row.feature}</td><td>${row.detected}</td><td>${row.expected || ""}</td></tr>`).join("");
+  tableEl.innerHTML = `<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead><tbody>${body}</tbody>`;
 }
 
 function createCoverArtworkSlot(){
@@ -112,11 +113,9 @@ function createCoverArtworkSlot(){
     else if(kind === "jpeg") parsed = parseJpegArtwork(buf);
     else if(kind === "tiff") parsed = parseTiffArtwork(buf);
 
-    const { dataMm } = coverSpec();
+    const { dataMm, trimMm } = coverSpec();
     const printCheck = getFormat(CONFIG, coverCurrentFormat()).printCheck;
-    const result = validateArtwork(parsed, dataMm, printCheck.sizeToleranceMm, printCheck.dpi.min, printCheck.dpi.max);
-    if(kind === "unknown") result.errors.unshift("unrecognized file — expected PDF, JPG, or TIFF");
-    renderCoverChecklist(warningsList, parsed, result, dataMm);
+    renderCoverChecklist(warningsList, parsed, kind, dataMm, trimMm, printCheck);
 
     url = URL.createObjectURL(f);
     if(kind === "pdf"){

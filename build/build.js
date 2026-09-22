@@ -32,6 +32,7 @@ const FILES = [
   "src/lib/audio-duration.js",
   "src/lib/playing-time.js",
   "src/lib/print-artwork.js",
+  "src/lib/debug-mode.js",
   "src/lib/shipping.js",
   "src/lib/countries.js",
   "src/lib/vinyl-color.js",

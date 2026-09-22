@@ -268,17 +268,28 @@
   }
   .label-preview iframe, .label-preview img{ width:100%; height:100%; border:0; object-fit:contain; display:block; }
   .label-placeholder{ color:var(--ink-dim); font-size:11px; text-align:center; padding:10px; line-height:1.5; }
-  /* One row per category (Colour/Size/Ratio/Print-ready) — see
-     buildChecklistRows in print-artwork.js. Every <li> carries an
-     explicit .ok/.warn/.err class; the ok rows aren't just a lighter
-     warning, they're a genuinely different fact (a detected value, not
-     a complaint), so they get the checklist's own neutral "passed" tone
-     rather than looking like a muted warning. */
-  .labelwarnings{ list-style:none; margin:8px 0 0; padding:0; font-size:11px; }
-  .labelwarnings li{ padding:2px 0; }
-  .labelwarnings li.ok{ color:var(--ok); }
-  .labelwarnings li.warn{ color:var(--warn); }
-  .labelwarnings li.err{ color:var(--danger); font-weight:700; }
+  /* A 4-column check table — status/Check/Detected/Expected, one row per
+     check (Size/Resolution/Colour mode/…) — see buildChecklistRows in
+     print-artwork.js. Every <tr> carries an explicit .info/.warn/.error/
+     .debug class — one flat, CONFIG-driven vocabulary (CONFIG.printCheck.
+     checks.<name>.severity), not a fixed rule: whether a given check's
+     row ever reaches a customer, and whether failing it hard-blocks Send
+     to Plant, is entirely down to what severity the plant assigned that
+     check. .info rows aren't just a lighter warning, they're a genuinely
+     different fact (a detected value, not a complaint), so they get
+     their own neutral "passed" tone rather than looking like a muted
+     warning. .debug rows (severity "debug", or a check with nothing
+     confident to report — ambiguous detection, or a confidently-absent
+     optional check like TrimBox) are never rendered here in production
+     at all — see buildChecklistRows' pushRow — only real rows reach
+     this markup, so no CSS visibility rule is needed for them. */
+  .labelwarnings{ width:100%; border-collapse:collapse; margin:8px 0 0; font-size:11px; }
+  .labelwarnings th{ text-align:left; font-weight:600; color:var(--ink-dim); padding:2px 8px 2px 0; border-bottom:1px solid var(--edge-lo); }
+  .labelwarnings td{ padding:2px 8px 2px 0; white-space:nowrap; }
+  .labelwarnings tr.info{ color:var(--ok); }
+  .labelwarnings tr.warn{ color:var(--warn); }
+  .labelwarnings tr.error{ color:var(--danger); font-weight:700; }
+  .labelwarnings tr.debug{ color:var(--ink-dim); }
 
   /* ---------------- expert info toggles ---------------- */
   /* A native <details> — collapsed by default, no JS needed to open
@@ -580,7 +591,7 @@
         <div class="label-preview" id="innersleevepreview"><div class="label-placeholder">no artwork selected</div></div>
       </div>
       <div class="spread-caption" id="innersleevecaption"><span>back</span><span>front</span></div>
-      <ul class="labelwarnings" id="innersleevewarnings"></ul>
+      <table class="labelwarnings" id="innersleevewarnings"></table>
     </div>
   </fieldset>
 
@@ -636,7 +647,7 @@
         <div class="label-preview" id="coverpreview"><div class="label-placeholder">no artwork selected</div></div>
       </div>
       <div class="spread-caption" id="covercaption"><span>back</span><span>front</span></div>
-      <ul class="labelwarnings" id="coverwarnings"></ul>
+      <table class="labelwarnings" id="coverwarnings"></table>
     </div>
   </fieldset>
 
@@ -670,7 +681,7 @@
           <div class="label-preview-wrap" id="inlayfrontpreviewwrap">
             <div class="label-preview" id="inlayfrontpreview"><div class="label-placeholder">no artwork selected</div></div>
           </div>
-          <ul class="labelwarnings" id="inlayfrontwarnings"></ul>
+          <table class="labelwarnings" id="inlayfrontwarnings"></table>
         </div>
         <div class="side-box">
           <div class="side-head">
@@ -690,7 +701,7 @@
           <div class="label-preview-wrap" id="inlaybackpreviewwrap">
             <div class="label-preview" id="inlaybackpreview"><div class="label-placeholder">no artwork selected</div></div>
           </div>
-          <ul class="labelwarnings" id="inlaybackwarnings"></ul>
+          <table class="labelwarnings" id="inlaybackwarnings"></table>
         </div>
       </div>
     </div>

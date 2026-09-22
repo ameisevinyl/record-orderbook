@@ -6,11 +6,32 @@ import {
   parseJpegArtwork,
   parseTiffArtwork,
   parsePdfArtwork,
-  validateArtwork,
   buildChecklistRows,
   computePrintSimGeometry,
   computeSpreadInsetPx,
 } from "../src/lib/print-artwork.js";
+
+// A format's CONFIG.printCheck shape (see config.js) — reused across the
+// buildChecklistRows tests below, and by one parsePdfArtwork regression
+// test that needs to check its size result through the real row builder
+// rather than duplicating its tolerance logic.
+const TARGET = { w: 98, h: 98 }; // data/bleed size
+const TRIM = { w: 92, h: 92 };   // finished trim size
+const TOL = 0.5, DPI_MIN = 300, DPI_MAX = 1200;
+const PRINT_CHECK = {
+  sizeToleranceMm: TOL, dpi: { min: DPI_MIN, max: DPI_MAX },
+  checks: {
+    size:         { severity: "warn" },
+    resolution:   { severity: "warn" },
+    colorMode:    { accepted: ["CMYK"], severity: "warn" },
+    spotColors:   { accepted: true,     severity: "warn" },
+    colorProfile: { required: false,    severity: "warn" },
+    pdfVersion:   { accepted: ["1.4"],  severity: "debug" },
+    trimBox:      { required: false,    severity: "warn" },
+    encryption:   { severity: "error" },
+    fonts:        { requireEmbedded: true, severity: "debug" }
+  }
+};
 
 // ---- helpers to build synthetic file headers ----
 
@@ -221,12 +242,11 @@ test("parseJpegArtwork returns null for non-JPEG bytes", () => {
 
 test("parseJpegArtwork reports the PDF/X-3 proxy checks as not applicable (null), not false", () => {
   // A raster upload has no PDF/X concept at all — false would wrongly
-  // suggest validateArtwork should warn about a missing OutputIntent/
-  // TrimBox on a plain JPEG, which was never applicable to begin with.
+  // suggest buildChecklistRows should flag a missing TrimBox on a plain
+  // JPEG, which was never applicable to begin with.
   const buf = buildJpegHeader({ width: 500, height: 500, components: 3, jfifUnits: 1, jfifX: 300, jfifY: 300 });
   const info = parseJpegArtwork(buf);
-  assert.equal(info.hasOutputIntent, null);
-  assert.equal(info.hasTrimBox, null);
+  assert.equal(info.trimBoxMm, null);
   assert.equal(info.encrypted, null);
   assert.equal(info.hasUnembeddedFonts, null);
 });
@@ -264,8 +284,7 @@ test("parseTiffArtwork reports the PDF/X-3 proxy checks as not applicable (null)
     xres: [300, 1], yres: [300, 1], resUnit: 2,
   });
   const info = parseTiffArtwork(buf);
-  assert.equal(info.hasOutputIntent, null);
-  assert.equal(info.hasTrimBox, null);
+  assert.equal(info.trimBoxMm, null);
   assert.equal(info.encrypted, null);
   assert.equal(info.hasUnembeddedFonts, null);
 });
@@ -296,17 +315,17 @@ test("parsePdfArtwork falls back to TrimBox over MediaBox when there's no BleedB
   assert.ok(Math.abs(info.pageSizeMm.w - 98) < 0.05, info.pageSizeMm.w);
 });
 
-test("parsePdfArtwork + validateArtwork: a correctly-bled prepress export doesn't false-flag as wrong size", async () => {
+test("parsePdfArtwork + buildChecklistRows: a correctly-bled prepress export doesn't false-flag as wrong size", async () => {
   // Regression case: MediaBox 120mm (crop marks), BleedBox 106mm
   // (matches a 12\" label's dataSizeMm exactly), TrimBox 100mm (matches
   // its diameterMm) — BleedBox must win, or this reads as 100mm and
-  // wrongly warns against the 106mm target.
+  // wrongly flags against the 106mm target.
   const pt = mm => mm / 25.4 * 72;
   const pdf = `%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 ${pt(120)} ${pt(120)}] /BleedBox [${pt(7)} ${pt(7)} ${pt(113)} ${pt(113)}] /TrimBox [${pt(10)} ${pt(10)} ${pt(110)} ${pt(110)}] >>\nendobj\n`;
   const parsed = await parsePdfArtwork(pdfBuffer(pdf));
   assert.ok(Math.abs(parsed.pageSizeMm.w - 106) < 0.05, parsed.pageSizeMm.w);
-  const result = validateArtwork(parsed, { w: 106, h: 106 }, 0.5, 300, 1200);
-  assert.ok(!result.warnings.some(w => w.includes("wrong size")), result.warnings.join("; "));
+  const rows = buildChecklistRows(parsed, "pdf", { w: 106, h: 106 }, { w: 100, h: 100 }, PRINT_CHECK, false);
+  assert.equal(rows.find(r => r.feature === "Size").severity, "info", JSON.stringify(rows));
 });
 
 test("parsePdfArtwork finds an embedded image XObject's size and CMYK colorspace", async () => {
@@ -499,27 +518,32 @@ endobj`
   assert.equal(info.iccProfileName, null);
 });
 
-// ---- parsePdfArtwork: PDF/X-3 proxy checks (OutputIntent, TrimBox, encryption) ----
+// ---- parsePdfArtwork: PDF/X-3 proxy checks (TrimBox, encryption) ----
 
-test("parsePdfArtwork detects an OutputIntent and a TrimBox when both are present", async () => {
+test("parsePdfArtwork parses the TrimBox rectangle when present", async () => {
   const pdf = `%PDF-1.4
 1 0 obj
-<< /Type /Catalog /OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (ISO Coated v2) >>] >>
-endobj
-2 0 obj
 << /Type /Page /MediaBox [0 0 300 300] /TrimBox [10 10 290 290] >>
 endobj`;
   const info = await parsePdfArtwork(pdfBuffer(pdf));
-  assert.equal(info.hasOutputIntent, true);
-  assert.equal(info.hasTrimBox, true);
+  // TrimBox is 280pt x 280pt -> 280 * 25.4/72 mm.
+  assert.ok(Math.abs(info.trimBoxMm.w - (280 * 25.4 / 72)) < 0.01, info.trimBoxMm.w);
+  assert.ok(Math.abs(info.trimBoxMm.h - (280 * 25.4 / 72)) < 0.01, info.trimBoxMm.h);
   assert.equal(info.encrypted, false);
 });
 
-test("parsePdfArtwork reports a missing OutputIntent and TrimBox when neither is present", async () => {
+test("parsePdfArtwork reports no TrimBox when none is present", async () => {
   const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 300 300] >>\nendobj\n";
   const info = await parsePdfArtwork(pdfBuffer(pdf));
-  assert.equal(info.hasOutputIntent, false);
-  assert.equal(info.hasTrimBox, false);
+  assert.equal(info.trimBoxMm, null);
+});
+
+test("parsePdfArtwork's TrimBox rectangle is independent of BleedBox — pageSizeMm prefers BleedBox, trimBoxMm always reads /TrimBox itself", async () => {
+  const pt = mm => mm / 25.4 * 72;
+  const pdf = `%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 ${pt(120)} ${pt(120)}] /BleedBox [${pt(7)} ${pt(7)} ${pt(113)} ${pt(113)}] /TrimBox [${pt(10)} ${pt(10)} ${pt(110)} ${pt(110)}] >>\nendobj\n`;
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.ok(Math.abs(info.pageSizeMm.w - 106) < 0.05, info.pageSizeMm.w); // BleedBox
+  assert.ok(Math.abs(info.trimBoxMm.w - 100) < 0.05, info.trimBoxMm.w);   // TrimBox itself
 });
 
 test("parsePdfArtwork detects encryption via /Encrypt in the trailer", async () => {
@@ -589,231 +613,178 @@ endobj`;
   assert.equal(info.hasUnembeddedFonts, false);
 });
 
-// ---- validateArtwork ----
+// ---- parsePdfArtwork: PDF version ----
 
-const TARGET = {w:98, h:98}, TOL = 0.5, DPI_MIN = 300, DPI_MAX = 1200;
-
-test("validateArtwork accepts a correctly sized, correctly resolved CMYK raster file", () => {
-  const parsed = {
-    pageSizeMm: null,
-    imagePx: { w: 1158, h: 1158 }, // ~98mm @ 300dpi (98/25.4*300 = 1157.48, rounded up)
-    declaredDpi: { x: 300, y: 300 },
-    colorMode: "CMYK",
-  };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.deepEqual(result.errors, []);
-  assert.deepEqual(result.warnings, []);
+test("parsePdfArtwork reads the literal %PDF-X.Y header version", async () => {
+  const pdf = "%PDF-1.6\n1 0 obj\n<< /Type /Page /MediaBox [0 0 300 300] >>\nendobj\n";
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.pdfVersion, "1.6");
 });
 
-test("validateArtwork flags a size mismatch from declared DPI", () => {
-  const parsed = {
-    pageSizeMm: null,
-    imagePx: { w: 900, h: 900 },
-    declaredDpi: { x: 300, y: 300 }, // -> ~76mm, not 98mm
-    colorMode: "CMYK",
-  };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.warnings.some((w) => w.includes("wrong size")));
-});
-
-test("validateArtwork does not false-positive on a genuine ~300dpi file (integer-pixel rounding)", () => {
-  // 98mm @ 300dpi = 1157.48px -> a real export rounds this down to 1157,
-  // which computes back to 299.84dpi. That must not read as "too low".
-  const parsed = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: null, colorMode: "CMYK" };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(!result.warnings.some((w) => w.includes("too low")), result.warnings.join("; "));
-});
-
-test("validateArtwork flags resolution below the configured minimum", () => {
-  const parsed = {
-    pageSizeMm: null,
-    imagePx: { w: 500, h: 500 }, // implied dpi for 98mm target is well under 300
-    declaredDpi: null,
-    colorMode: "CMYK",
-  };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.warnings.some((w) => w.includes("too low")));
-});
-
-test("validateArtwork flags resolution above the configured maximum", () => {
-  const parsed = {
-    pageSizeMm: null,
-    imagePx: { w: 6000, h: 6000 },
-    declaredDpi: null,
-    colorMode: "CMYK",
-  };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.warnings.some((w) => w.includes("exceeds")));
-});
-
-test("validateArtwork warns on RGB instead of CMYK", () => {
-  const parsed = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "RGB" };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.warnings.some((w) => w.includes("RGB")));
-});
-
-test("validateArtwork warns about spot colours, naming them, when spotColors is non-empty", () => {
-  const parsed = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", spotColors: ["PANTONE 186 C"] };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  const w = result.warnings.find((w) => w.includes("spot colour"));
-  assert.ok(w, result.warnings.join("; "));
-  assert.ok(w.includes("PANTONE 186 C"));
-});
-
-test("validateArtwork doesn't warn about spot colours for a plain process-colour file (spotColors absent or empty)", () => {
-  const withoutField = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK" };
-  const withEmptyArray = { ...withoutField, spotColors: [] };
-  for (const parsed of [withoutField, withEmptyArray]) {
-    const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-    assert.ok(!result.warnings.some((w) => w.includes("spot colour")), result.warnings.join("; "));
-  }
-});
-
-test("validateArtwork errors (not just warns) on an encrypted file — the plant's system can't process it", () => {
-  const parsed = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", encrypted: true };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.errors.some((e) => e.includes("encrypted")), result.errors.join("; "));
-});
-
-test("validateArtwork warns when a PDF is missing an OutputIntent or a TrimBox", () => {
-  const parsed = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasOutputIntent: false, hasTrimBox: false };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.warnings.some((w) => w.includes("OutputIntent")), result.warnings.join("; "));
-  assert.ok(result.warnings.some((w) => w.includes("TrimBox")), result.warnings.join("; "));
-});
-
-test("validateArtwork doesn't warn about OutputIntent/TrimBox/encryption when all three checks pass or are not applicable", () => {
-  const allGood = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasOutputIntent: true, hasTrimBox: true, encrypted: false };
-  const notApplicable = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", hasOutputIntent: null, hasTrimBox: null, encrypted: null };
-  for (const parsed of [allGood, notApplicable]) {
-    const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-    assert.ok(!result.warnings.some((w) => w.includes("OutputIntent") || w.includes("TrimBox")), result.warnings.join("; "));
-    assert.ok(!result.errors.some((e) => e.includes("encrypted")), result.errors.join("; "));
-  }
-});
-
-test("validateArtwork warns (not errors) when hasUnembeddedFonts is true — a heuristic, not a certain failure", () => {
-  const parsed = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasUnembeddedFonts: true };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.warnings.some((w) => w.includes("font")), result.warnings.join("; "));
-  assert.ok(!result.errors.some((e) => e.includes("font")), result.errors.join("; "));
-});
-
-test("validateArtwork doesn't warn about fonts when hasUnembeddedFonts is false or not applicable", () => {
-  const embedded = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasUnembeddedFonts: false };
-  const notApplicable = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", hasUnembeddedFonts: null };
-  for (const parsed of [embedded, notApplicable]) {
-    const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-    assert.ok(!result.warnings.some((w) => w.includes("font")), result.warnings.join("; "));
-  }
-});
-
-test("validateArtwork treats vector PDFs (page size, no image) as resolution n/a", () => {
-  const parsed = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "unknown" };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.warnings.some((w) => w.includes("not applicable")));
-  assert.ok(result.warnings.some((w) => w.includes("verify CMYK manually")));
-  assert.equal(result.checkedSizeMm.w, 98);
-});
-
-test("validateArtwork flags an unreadable file as an error", () => {
-  const result = validateArtwork(null, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.errors.some((e) => e.includes("could not read")));
-});
-
-test("validateArtwork supports a non-square (rectangular) target, e.g. a cover flat spread", () => {
-  // 7" cover data size, from a PDF whose MediaBox matches exactly.
-  const targetMm = { w: 383, h: 201 };
-  const parsed = { pageSizeMm: { w: 383, h: 201 }, imagePx: null, declaredDpi: null, colorMode: "CMYK" };
-  const result = validateArtwork(parsed, targetMm, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(!result.warnings.some((w) => w.includes("wrong size")), result.warnings.join("; "));
-});
-
-test("validateArtwork flags a non-square vector PDF for a square (label) target", () => {
-  // MediaBox readable, but not square — a genuine crop mistake.
-  const parsed = { pageSizeMm: { w: 98, h: 90 }, imagePx: null, declaredDpi: null, colorMode: "CMYK" };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.warnings.some((w) => w.includes("not square")), result.warnings.join("; "));
-});
-
-test("validateArtwork does not flag a square vector PDF even when absolute size can't be verified", () => {
-  // Same shape as "validateArtwork treats vector PDFs... as resolution n/a"
-  // above (pageSizeMm read successfully and square) — ratio check must
-  // stay silent, size is trusted from shape alone.
-  const parsed = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK" };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(!result.warnings.some((w) => w.includes("not square")), result.warnings.join("; "));
-});
-
-test("validateArtwork's ratio check falls back to imagePx when a PDF's page size couldn't be read (e.g. MediaBox in a compressed object stream)", () => {
-  const parsed = { pageSizeMm: null, imagePx: { w: 1000, h: 800 }, declaredDpi: null, colorMode: "CMYK" };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.warnings.some((w) => w.includes("not square")), result.warnings.join("; "));
-});
-
-test("validateArtwork's ratio check never fires for a non-square target (covers/sleeves/inlays)", () => {
-  const targetMm = { w: 383, h: 201 };
-  const parsed = { pageSizeMm: { w: 383, h: 201 }, imagePx: null, declaredDpi: null, colorMode: "CMYK" };
-  const result = validateArtwork(parsed, targetMm, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(!result.warnings.some((w) => w.includes("not square")), result.warnings.join("; "));
-});
-
-test("validateArtwork tags each finding with its category", () => {
-  const parsed = { pageSizeMm: null, imagePx: { w: 900, h: 900 }, declaredDpi: { x: 300, y: 300 }, colorMode: "RGB", encrypted: true };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  assert.ok(result.findings.some((f) => f.category === "printReady" && f.severity === "err" && f.message.includes("encrypted")));
-  assert.ok(result.findings.some((f) => f.category === "colour" && f.severity === "warn" && f.message.includes("RGB")));
-  assert.ok(result.findings.some((f) => f.category === "size" && f.severity === "warn" && f.message.includes("wrong size")));
+test("parsePdfArtwork reads PDF/X-3's target version (1.4) the same way", async () => {
+  const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 300 300] >>\nendobj\n";
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.pdfVersion, "1.4");
 });
 
 // ---- buildChecklistRows ----
+// (parsed, kind, targetMm, trimMm, printCheck, debugMode) — see PRINT_CHECK
+// above for the CONFIG.printCheck shape this reads its accepted
+// values/severities from.
 
-test("buildChecklistRows shows a single 'File' row for an unreadable file, skipping every category", () => {
-  const result = validateArtwork(null, TARGET, TOL, DPI_MIN, DPI_MAX);
-  const rows = buildChecklistRows(null, result, TARGET);
-  assert.deepEqual(rows.map((r) => r.category), ["File"]);
-  assert.equal(rows[0].severity, "err");
-  assert.ok(rows[0].text.includes("could not read"));
+const CLEAN_PDF_PARSED = {
+  pageSizeMm: null, imagePx: { w: 1158, h: 1158 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK",
+  spotColors: [], iccProfileName: "ISO Coated v2 (ECI)", pdfVersion: "1.4",
+  trimBoxMm: { w: 92, h: 92 }, encrypted: false, hasUnembeddedFonts: false,
+};
+
+test("buildChecklistRows shows a single 'File' row for an unreadable file, skipping every check", () => {
+  const rows = buildChecklistRows(null, "pdf", TARGET, TRIM, PRINT_CHECK, false);
+  assert.deepEqual(rows.map((r) => r.feature), ["File"]);
+  assert.equal(rows[0].severity, "error");
+  assert.ok(rows[0].detected.includes("could not read"));
+  assert.equal(rows[0].expected, null);
 });
 
-test("buildChecklistRows shows all four rows as 'ok' with positive summaries for a clean square (label) file", () => {
+test("buildChecklistRows shows a distinct message for an unrecognized file kind", () => {
+  const rows = buildChecklistRows(null, "unknown", TARGET, TRIM, PRINT_CHECK, false);
+  assert.equal(rows[0].severity, "error");
+  assert.equal(rows[0].detected, "unrecognized file — expected PDF, JPG, or TIFF");
+});
+
+test("buildChecklistRows shows six rows as 'info' for a clean PDF in production — PDF version/Fonts stay hidden (severity 'debug' in PRINT_CHECK)", () => {
+  const rows = buildChecklistRows(CLEAN_PDF_PARSED, "pdf", TARGET, TRIM, PRINT_CHECK, false);
+  assert.deepEqual(rows.map((r) => r.feature), [
+    "Size", "Resolution", "Colour mode", "Colour profile", "TrimBox", "Encryption",
+  ]);
+  assert.ok(rows.every((r) => r.severity === "info"), JSON.stringify(rows));
+  assert.ok(rows.every((r) => r.expected === null), JSON.stringify(rows));
+  assert.equal(rows.find((r) => r.feature === "Colour mode").detected, "CMYK");
+  assert.equal(rows.find((r) => r.feature === "Colour profile").detected, "ISO Coated v2 (ECI)");
+  assert.equal(rows.find((r) => r.feature === "TrimBox").detected, "92.0×92.0mm");
+  assert.equal(rows.find((r) => r.feature === "Encryption").detected, "none");
+  assert.ok(rows.find((r) => r.feature === "Size").detected.includes("mm"));
+  assert.ok(rows.find((r) => r.feature === "Resolution").detected.includes("dpi"));
+});
+
+test("buildChecklistRows shows PDF version/Fonts with debugMode, but always as severity 'debug' — text carries the real pass/fail story, not colour", () => {
+  const passing = buildChecklistRows(CLEAN_PDF_PARSED, "pdf", TARGET, TRIM, PRINT_CHECK, true);
+  assert.deepEqual(passing.find((r) => r.feature === "PDF version"), { feature: "PDF version", severity: "debug", detected: "1.4", expected: null });
+  assert.deepEqual(passing.find((r) => r.feature === "Fonts"), { feature: "Fonts", severity: "debug", detected: "embedded", expected: null });
+
+  const failing = { ...CLEAN_PDF_PARSED, pdfVersion: "1.6", hasUnembeddedFonts: true };
+  const failingRows = buildChecklistRows(failing, "pdf", TARGET, TRIM, PRINT_CHECK, true);
+  assert.deepEqual(failingRows.find((r) => r.feature === "PDF version"), { feature: "PDF version", severity: "debug", detected: "1.6", expected: "1.4" });
+  assert.deepEqual(failingRows.find((r) => r.feature === "Fonts"), { feature: "Fonts", severity: "debug", detected: "not embedded", expected: "embedded" });
+});
+
+test("buildChecklistRows folds spot colours into the Colour mode row instead of a row of their own", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, spotColors: ["PANTONE 186 C"] };
+  const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, false);
+  assert.ok(!rows.some((r) => r.feature.toLowerCase().includes("spot")), rows.map((r) => r.feature).join(","));
+  const cm = rows.find((r) => r.feature === "Colour mode");
+  assert.equal(cm.detected, "CMYK + Spot Colour (PANTONE 186 C)");
+  assert.equal(cm.severity, "info"); // PRINT_CHECK.checks.spotColors.accepted: true
+});
+
+test("buildChecklistRows flags spot colours as a warning when the config's spotColors.accepted is false", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, spotColors: ["PANTONE 186 C"] };
+  const printCheck = { ...PRINT_CHECK, checks: { ...PRINT_CHECK.checks, spotColors: { accepted: false, severity: "warn" } } };
+  const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, printCheck, false);
+  const cm = rows.find((r) => r.feature === "Colour mode");
+  assert.equal(cm.severity, "warn");
+  assert.equal(cm.expected, "no spot colour");
+});
+
+test("buildChecklistRows shows a Detected/Expected pair for confirmed problems, using each check's own severity", () => {
   const parsed = {
-    pageSizeMm: null, imagePx: { w: 1158, h: 1158 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK",
-    spotColors: [], iccProfileName: "ISO Coated v2 (ECI)",
-    hasOutputIntent: true, hasTrimBox: true, encrypted: false, hasUnembeddedFonts: false,
+    ...CLEAN_PDF_PARSED,
+    colorMode: "RGB", trimBoxMm: { w: 80, h: 80 }, encrypted: true,
   };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  const rows = buildChecklistRows(parsed, result, TARGET);
-  assert.deepEqual(rows.map((r) => r.category), ["Colour", "Size", "Ratio", "Print-ready"]);
-  assert.ok(rows.every((r) => r.severity === "ok"), JSON.stringify(rows));
-  const colour = rows.find((r) => r.category === "Colour");
-  assert.equal(colour.text, "CMYK (ISO Coated v2 (ECI))");
-  const size = rows.find((r) => r.category === "Size");
-  assert.ok(size.text.includes("mm"));
+  const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, false);
+  const byFeature = (f) => rows.find((r) => r.feature === f);
+
+  assert.deepEqual(byFeature("Colour mode"), { feature: "Colour mode", severity: "warn", detected: "RGB", expected: "CMYK" });
+  assert.deepEqual(byFeature("TrimBox"), { feature: "TrimBox", severity: "warn", detected: "80.0×80.0mm", expected: "92×92mm" });
+  // Encryption is "error" (not "warn") per PRINT_CHECK.checks.encryption —
+  // a hard-block row, visible to the customer so they know why sending
+  // is blocked (unlike PDF version/Fonts, whose severity is "debug" —
+  // see the dedicated debugMode test above for what that means).
+  assert.deepEqual(byFeature("Encryption"), { feature: "Encryption", severity: "error", detected: "encrypted", expected: "none" });
 });
 
-test("buildChecklistRows omits the Ratio row for a non-square target (cover/sleeve/inlay)", () => {
-  const targetMm = { w: 383, h: 201 };
-  const parsed = { pageSizeMm: { w: 383, h: 201 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasOutputIntent: true, hasTrimBox: true, encrypted: false };
-  const result = validateArtwork(parsed, targetMm, TOL, DPI_MIN, DPI_MAX);
-  const rows = buildChecklistRows(parsed, result, targetMm);
-  assert.ok(!rows.some((r) => r.category === "Ratio"), rows.map((r) => r.category).join(","));
+test("buildChecklistRows uses the config's per-check severity, not a fixed one, for a failing check", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, colorMode: "RGB" };
+  const printCheck = { ...PRINT_CHECK, checks: { ...PRINT_CHECK.checks, colorMode: { accepted: ["CMYK"], severity: "error" } } };
+  const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, printCheck, false);
+  assert.equal(rows.find((r) => r.feature === "Colour mode").severity, "error");
 });
 
-test("buildChecklistRows omits the Print-ready row for JPEG/TIFF (no PDF/X concept applies)", () => {
-  const parsed = { pageSizeMm: null, imagePx: { w: 1158, h: 1158 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", encrypted: null };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  const rows = buildChecklistRows(parsed, result, TARGET);
-  assert.ok(!rows.some((r) => r.category === "Print-ready"), rows.map((r) => r.category).join(","));
+test("buildChecklistRows hides a check entirely from production — pass or fail — when its config severity is 'debug', and reveals it with debugMode", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, encrypted: true }; // encryption fails here, but let's debug-gate it via config
+  const printCheck = { ...PRINT_CHECK, checks: { ...PRINT_CHECK.checks, encryption: { severity: "debug" } } };
+
+  const prodRows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, printCheck, false);
+  assert.ok(!prodRows.some((r) => r.feature === "Encryption"), prodRows.map((r) => r.feature).join(","));
+
+  const debugRows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, printCheck, true);
+  assert.deepEqual(debugRows.find((r) => r.feature === "Encryption"), { feature: "Encryption", severity: "debug", detected: "encrypted", expected: "none" });
 });
 
-test("buildChecklistRows joins multiple findings in the same category with '; ', and 'err' wins over 'warn'", () => {
-  const parsed = { pageSizeMm: null, imagePx: { w: 900, h: 900 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", encrypted: true, hasOutputIntent: false, hasTrimBox: false };
-  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
-  const rows = buildChecklistRows(parsed, result, TARGET);
-  const printReady = rows.find((r) => r.category === "Print-ready");
-  assert.equal(printReady.severity, "err");
-  assert.ok(printReady.text.includes("encrypted") && printReady.text.includes("OutputIntent") && printReady.text.includes("TrimBox"));
+test("buildChecklistRows omits every PDF-only row for JPEG/TIFF (no PDF/X concept applies) — not shown as 'n/a'", () => {
+  const parsed = { pageSizeMm: null, imagePx: { w: 1158, h: 1158 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", spotColors: [], iccProfileName: null, pdfVersion: null, trimBoxMm: null, encrypted: null, hasUnembeddedFonts: null };
+  const rows = buildChecklistRows(parsed, "jpeg", TARGET, TRIM, PRINT_CHECK, false);
+  assert.deepEqual(rows.map((r) => r.feature), ["Size", "Resolution", "Colour mode"]);
+});
+
+test("buildChecklistRows hides genuinely-ambiguous 'not detected' rows in production, shows them with debugMode", () => {
+  const parsed = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: null, colorMode: "unknown", spotColors: [], iccProfileName: null, pdfVersion: null, trimBoxMm: null, encrypted: true, hasUnembeddedFonts: false };
+
+  const prodRows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, false);
+  assert.ok(!prodRows.some((r) => r.feature === "Size"), prodRows.map((r) => r.feature).join(","));
+  assert.ok(!prodRows.some((r) => r.feature === "Colour mode"), prodRows.map((r) => r.feature).join(","));
+  assert.ok(!prodRows.some((r) => r.feature === "Colour profile"), prodRows.map((r) => r.feature).join(","));
+
+  const debugRows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, true);
+  assert.equal(debugRows.find((r) => r.feature === "Size").severity, "debug");
+  assert.equal(debugRows.find((r) => r.feature === "Colour mode").severity, "debug");
+  assert.equal(debugRows.find((r) => r.feature === "Colour profile").severity, "debug");
+});
+
+test("buildChecklistRows hides a confidently-absent optional TrimBox in production, shows it as 'debug' with debugMode", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, trimBoxMm: null };
+  const prodRows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, false);
+  assert.ok(!prodRows.some((r) => r.feature === "TrimBox"), prodRows.map((r) => r.feature).join(","));
+
+  const debugRows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, true);
+  const trimBox = debugRows.find((r) => r.feature === "TrimBox");
+  assert.equal(trimBox.severity, "debug");
+  assert.equal(trimBox.detected, "not present");
+});
+
+test("buildChecklistRows always flags a missing TrimBox when the config marks it required", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, trimBoxMm: null };
+  const printCheck = { ...PRINT_CHECK, checks: { ...PRINT_CHECK.checks, trimBox: { required: true, severity: "warn" } } };
+  const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, printCheck, false);
+  assert.deepEqual(rows.find((r) => r.feature === "TrimBox"), { feature: "TrimBox", severity: "warn", detected: "missing", expected: "present" });
+});
+
+test("buildChecklistRows flags a missing colour profile only when the config marks it required", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, iccProfileName: null };
+  const printCheck = { ...PRINT_CHECK, checks: { ...PRINT_CHECK.checks, colorProfile: { required: true, severity: "warn" } } };
+  const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, printCheck, false);
+  assert.deepEqual(rows.find((r) => r.feature === "Colour profile"), { feature: "Colour profile", severity: "warn", detected: "none", expected: "required" });
+});
+
+test("buildChecklistRows shows resolution as 'n/a (vector)' unconditionally — a known fact, not an uncertainty", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, imagePx: null, pageSizeMm: { w: 98, h: 98 } };
+  for (const debugMode of [false, true]) {
+    const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, debugMode);
+    const resolution = rows.find((r) => r.feature === "Resolution");
+    assert.equal(resolution.severity, "info");
+    assert.equal(resolution.detected, "n/a (vector)");
+    assert.equal(resolution.expected, null);
+  }
 });
 
 // ---- computePrintSimGeometry ----

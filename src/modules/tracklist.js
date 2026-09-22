@@ -371,10 +371,12 @@ function updateChecklist(){
     items.push([false, `${missingArtwork} artwork file(s) not yet attached`, true]);
   }
 
-  // Errors from label/cover/inner-sleeve/inlay's own validateArtwork
-  // results (see each module's render*Warnings) — an unreadable or
-  // unrecognized file, not merely a size/DPI warning.
-  const erroredArtwork = Array.from(document.querySelectorAll(".labelwarnings li.err"))
+  // Errors from label/cover/inner-sleeve/inlay's own checklist rows (see
+  // each module's render*Checklist, buildChecklistRows in
+  // print-artwork.js) — e.g. an unreadable file, or any check a plant
+  // configured with severity:"error" (CONFIG.printCheck.checks) — not
+  // merely a dismissible "warn" row.
+  const erroredArtwork = Array.from(document.querySelectorAll(".labelwarnings .error"))
     .filter(el => !el.closest(".hidden")).length;
   if(erroredArtwork > 0){
     items.push([false, `${erroredArtwork} artwork file(s) have errors — check labels/cover/inner sleeve/inlay`, true]);

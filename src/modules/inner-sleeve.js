@@ -10,7 +10,8 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
+import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
 const INNER_SLEEVE_PREVIEW_MAX_W = 640;
@@ -23,11 +24,11 @@ function innerSleeveSpec(){
   return getFormat(CONFIG, innerSleeveCurrentFormat()).printableParts.innerSleeve;
 }
 
-function renderInnerSleeveChecklist(listEl, parsed, result, targetMm){
-  const rows = buildChecklistRows(parsed, result, targetMm);
-  const items = rows.map(row =>
-    `<li class="${row.severity}">${CHECKLIST_ICON[row.severity]} ${row.category}: ${row.text}</li>`);
-  listEl.innerHTML = items.join("");
+function renderInnerSleeveChecklist(tableEl, parsed, kind, targetMm, trimMm, printCheck){
+  const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode());
+  const body = rows.map(row =>
+    `<tr class="${row.severity}"><td>${CHECKLIST_ICON[row.severity]}</td><td>${row.feature}</td><td>${row.detected}</td><td>${row.expected || ""}</td></tr>`).join("");
+  tableEl.innerHTML = `<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead><tbody>${body}</tbody>`;
 }
 
 function createInnerSleeveArtworkSlot(){
@@ -102,11 +103,9 @@ function createInnerSleeveArtworkSlot(){
     else if(kind === "jpeg") parsed = parseJpegArtwork(buf);
     else if(kind === "tiff") parsed = parseTiffArtwork(buf);
 
-    const { dataMm } = innerSleeveSpec();
+    const { dataMm, trimMm } = innerSleeveSpec();
     const printCheck = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck;
-    const result = validateArtwork(parsed, dataMm, printCheck.sizeToleranceMm, printCheck.dpi.min, printCheck.dpi.max);
-    if(kind === "unknown") result.errors.unshift("unrecognized file — expected PDF, JPG, or TIFF");
-    renderInnerSleeveChecklist(warningsList, parsed, result, dataMm);
+    renderInnerSleeveChecklist(warningsList, parsed, kind, dataMm, trimMm, printCheck);
 
     url = URL.createObjectURL(f);
     if(kind === "pdf"){

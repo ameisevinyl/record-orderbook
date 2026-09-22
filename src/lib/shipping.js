@@ -2,8 +2,8 @@
 // checks, and best-effort format checks for VAT / EORI / email / phone.
 //
 // Format checks here are front-end sanity only, same spirit as
-// print-artwork.js's validateArtwork comment: catch obvious typos, don't
-// pretend to be the authority. In particular this deliberately does not
+// print-artwork.js's checklist: catch obvious typos, don't pretend to be
+// the authority. In particular this deliberately does not
 // ship a per-country VAT regex table (27+ formats, easy to get wrong and
 // reject a real customer's VAT ID) — it checks the generic EU shape
 // (2-letter country prefix + alphanumeric body) and nothing more. Actual

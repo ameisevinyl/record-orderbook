@@ -46,7 +46,39 @@ export const CONFIG = {
       },
       // Front-end checks here are best-effort — the studio's backend
       // preprocessor does the real, authoritative validation on upload.
-      printCheck: { sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 } },
+      // `checks` is the artwork checklist's spec table (see
+      // buildChecklistRows in lib/print-artwork.js): one entry per row,
+      // each an accepted value/list plus a severity: "debug" (never
+      // shown to the customer, win or lose — plant/?debug eyes only),
+      // "info" (shown, neutral, never blocks), "warn" (shown,
+      // dismissible on failure), or "error" (shown, hard-blocks Send to
+      // Plant on failure — see CONFIG.blockIncompleteArtworkOnSend). A
+      // passing check always displays as "info" unless its severity is
+      // "debug", in which case it's invisible either way — see
+      // resolveSeverity in print-artwork.js. `required: false` means
+      // "checked when present, not flagged when absent" (colorProfile/
+      // trimBox); `accepted` is the list/flag of values that pass (e.g.
+      // spotColors.accepted: true silently allows spot inks — flip to
+      // false to warn on any, since spot colours usually mean an extra
+      // plate/cost). PDF version and font-embedding are plant-technical
+      // detail a customer doesn't need to see, hence "debug"; encryption
+      // is "error" since the plant's system genuinely can't process an
+      // encrypted file — the customer needs to see why sending is
+      // blocked, not just have it silently refused.
+      printCheck: {
+        sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
+        checks: {
+          size:         { severity: "warn" },
+          resolution:   { severity: "warn" },
+          colorMode:    { accepted: ["CMYK"], severity: "warn" },
+          spotColors:   { accepted: true,     severity: "warn" },
+          colorProfile: { required: false,    severity: "warn" },
+          pdfVersion:   { accepted: ["1.4"],  severity: "debug" },
+          trimBox:      { required: false,    severity: "warn" },
+          encryption:   { severity: "error" },
+          fonts:        { requireEmbedded: true, severity: "debug" }
+        }
+      },
       printableParts: {
         // diameterMm is the trim size (the physical label after
         // cutting); dataSizeMm is the full print file size including
@@ -81,7 +113,20 @@ export const CONFIG = {
         normal:      { ideal:{45:8,   33:12}, max:{45:8,   33:14} },
         soundsystem: { ideal:{45:4.5, 33:7},  max:{45:6,   33:9} }
       },
-      printCheck: { sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 } },
+      printCheck: {
+        sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
+        checks: {
+          size:         { severity: "warn" },
+          resolution:   { severity: "warn" },
+          colorMode:    { accepted: ["CMYK"], severity: "warn" },
+          spotColors:   { accepted: true,     severity: "warn" },
+          colorProfile: { required: false,    severity: "warn" },
+          pdfVersion:   { accepted: ["1.4"],  severity: "debug" },
+          trimBox:      { required: false,    severity: "warn" },
+          encryption:   { severity: "error" },
+          fonts:        { requireEmbedded: true, severity: "debug" }
+        }
+      },
       printableParts: {
         label: { diameterMm: 100, dataSizeMm: 106 },
         outerCover: {
@@ -111,7 +156,20 @@ export const CONFIG = {
         normal:      { ideal:{45:4.5, 33:6.5}, max:{45:6.0, 33:8.0} },
         soundsystem: { ideal:{45:3.5, 33:5.0}, max:{45:4.5, 33:6.0} }
       },
-      printCheck: { sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 } },
+      printCheck: {
+        sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
+        checks: {
+          size:         { severity: "warn" },
+          resolution:   { severity: "warn" },
+          colorMode:    { accepted: ["CMYK"], severity: "warn" },
+          spotColors:   { accepted: true,     severity: "warn" },
+          colorProfile: { required: false,    severity: "warn" },
+          pdfVersion:   { accepted: ["1.4"],  severity: "debug" },
+          trimBox:      { required: false,    severity: "warn" },
+          encryption:   { severity: "error" },
+          fonts:        { requireEmbedded: true, severity: "debug" }
+        }
+      },
       printableParts: {
         label: { diameterMm: 92, dataSizeMm: 98 },
         // "box" style, 3mm spine — trim and data don't reduce to a
