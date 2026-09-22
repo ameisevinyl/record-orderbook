@@ -30,7 +30,7 @@ import { collectShippingBilling, applyShippingBilling, buildShippingBillingSumma
 // untrusted strings (the customer's own upload).
 function renderFileMeta(el, currentName, originalName, statusText){
   el.textContent = "";
-  el.append(`file: ${currentName} — ${statusText}`);
+  el.append(statusText ? `file: ${currentName} — ${statusText}` : `file: ${currentName}`);
   if(originalName && originalName !== currentName){
     el.append(document.createElement("br"));
     const orig = document.createElement("span");
@@ -203,10 +203,18 @@ function attachContinuousFile(side, f, originalFileName = f.name){
   contMeta.classList.remove("warn");
   const warning = compressionWarning(f);
   readAudioDuration(f).then(dur=>{
-    const durText = (isFinite(dur) && dur > 0)
-      ? (()=>{ contOverride.value = formatTime(dur); return formatTime(dur) + " (auto)"; })()
-      : "could not read duration, enter length manually";
-    renderFileMeta(contMeta, f.name, originalFileName, durText + (warning ? "  " + warning : ""));
+    // The read length lands in the field itself (contoverride), not
+    // restated here next to the filename — unlike attachTrackFile,
+    // which has no separate always-visible length field of its own to
+    // put it in.
+    let statusText = "";
+    if(isFinite(dur) && dur > 0){
+      contOverride.value = formatTime(dur);
+    } else {
+      statusText = "could not read duration, enter length manually";
+    }
+    if(warning) statusText += (statusText ? "  " : "") + warning;
+    renderFileMeta(contMeta, f.name, originalFileName, statusText);
     contMeta.classList.toggle("warn", !!warning);
     recompute();
   });
@@ -414,7 +422,7 @@ function sideTemplate(side){
           <button type="button" class="pickbtn no-print" id="contpick-${side}" title="Choose side file">↑</button>
           <div class="filemeta" id="contfilemeta-${side}" style="margin:0; flex:1;"></div>
           <div class="len-wrap" style="flex:0 0 84px;">
-            <input type="text" id="contoverride-${side}" placeholder="m:ss" title="Side length (auto from file, or enter manually)">
+            <input type="text" id="contoverride-${side}" placeholder="m:ss" title="Side length (auto from file, or enter manually)" style="text-align:left;">
           </div>
         </div>
         <input type="file" id="contfileinput-${side}" accept="audio/*" class="hidden">
