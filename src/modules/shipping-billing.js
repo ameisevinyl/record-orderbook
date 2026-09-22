@@ -199,9 +199,20 @@ function recomputeColorQtys(){
    Checklist (required fields + best-effort format checks) — shared by
    billing and shipping cards, since both use the same address shape.
    ============================================================ */
+// Matches the on-screen <label> text in addressCoreFieldsHtml — keep
+// the two in sync if a required field's label ever changes.
+const FIELD_LABELS = {
+  recipientName: "Recipient Name",
+  addressLine1: "Address Line 1",
+  city: "City",
+  postalCode: "Postal Code",
+  countryCode: "Country",
+  email: "Email"
+};
+
 function addressFormatWarnings(addr){
   const items = [];
-  const missing = missingAddressFields(addr);
+  const missing = missingAddressFields(addr).map(key => FIELD_LABELS[key] || key);
   items.push([missing.length===0, missing.length===0 ? "Address complete" : `Missing: ${missing.join(", ")}`]);
   if(addr.email) items.push([emailFormatValid(addr.email), "Email looks valid"]);
   if(addr.phone) items.push([phoneFormatValid(addr.phone), "Phone looks valid (use + country code)"]);
