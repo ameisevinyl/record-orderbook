@@ -14,16 +14,12 @@
 -->
 <style>
   /* ============================================================
-     DESIGN SYSTEM — "patch sheet": the order form reads as a printed
-     wiring/normalling schedule from a mastering studio's reference
-     binder — hairline rules on white paper, colourless except for one
-     deliberate exception: red marks anything needing attention
-     (warnings, errors, missing parts). A satisfied/complete state
-     stays neutral grey — red is spent only on "look here," never on
-     decoration. Fieldsets are lane panels divided by rule, not by
-     fill; the checklist's marks are tie-lines (solid = patched/
-     complete, gapped = open/missing) instead of generic checkmarks.
-     See DESIGN.md.
+     DESIGN SYSTEM — plain, text-first: the order form reads as a
+     written reference sheet, not a themed product. No icon
+     vocabulary, no nested boxes — a heading and a hairline rule per
+     section, plain ASCII/text for every small affordance ((+)/(x)/(?)),
+     plain text for status and checklist marks. Red is the one alarm
+     color, reserved for warnings/errors/missing parts. See DESIGN.md.
      ============================================================ */
   :root{
     --bg:      #ffffff;
@@ -173,7 +169,7 @@
   #shipAddrs .ship-addr + .ship-addr{ margin-top:14px; }
   .colourQtyShip.warn-qty{ border-color:var(--danger); color:var(--danger); }
   .side-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
-  .side-head h3{ margin:0; }
+  .side-head :is(h2,h3){ margin:0; border-bottom:none; padding-bottom:0; }
   .side-opts{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11px; }
   .chk{ display:flex; align-items:center; gap:6px; cursor:pointer; color:var(--ink-dim); text-transform:none; letter-spacing:0; }
   .chk input{ width:auto; }
@@ -330,9 +326,8 @@
        reference document (with artwork previews and billing/shipping
        info) rather than a stack of loosely-padded panels. */
     h1{ font-size:15px; }
-    fieldset{ padding:6px 8px 7px; }
-    legend{ font-size:10px; padding:0 4px; }
-    .side-box{ padding:8px 10px; }
+    section{ break-inside:avoid; }
+    h2{ font-size:11px; padding-bottom:2px; margin-bottom:6px; }
     .side-head{ margin-bottom:5px; }
     .field{ margin-bottom:4px; }
     .row{ gap:6px; }
