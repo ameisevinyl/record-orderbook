@@ -147,7 +147,7 @@ Flat by design, deliberately more so than the system this replaced. No shadows a
 
 ## Shapes
 
-Small, consistent corner radius throughout (3–4px) — enough to soften a printed form's stamped boxes, not enough to read as a soft consumer app. Badges and the completeness pill are the one fully-rounded (99px) exception, deliberately marking them as status chips rather than containers. The info-toggle button is the only true circle (50%), consistent with its single-glyph content.
+Small, consistent corner radius throughout (3–4px) — enough to soften a printed form's stamped boxes, not enough to read as a soft consumer app. Badges are the one fully-rounded (99px) exception, deliberately marking them as status chips rather than containers. The info-toggle button is the only true circle (50%), consistent with its single-glyph content.
 
 ## Components
 

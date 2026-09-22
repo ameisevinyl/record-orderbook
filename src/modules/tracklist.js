@@ -294,8 +294,6 @@ function recompute(){
     const {level, maxMin, idealMin} = statusFor(seconds, side);
     const totalFig = document.getElementById("total-"+side);
     const badge = document.getElementById("badge-"+side);
-    const meter = document.getElementById("meter-"+side);
-    const meterFill = document.getElementById("meterfill-"+side);
     const note = document.getElementById("limitsnote-"+side);
     const {format, rpm, mode} = sideMeta(side);
 
@@ -304,9 +302,6 @@ function recompute(){
     badge.textContent = level === "ok" ? "within recommendation"
                        : level === "warn" ? "approaching limit"
                        : "exceeds recommendation";
-    meter.className = "meter " + (level==="ok"?"":level);
-    const pct = Math.min(100, (seconds/60) / maxMin * 100);
-    meterFill.style.width = pct + "%";
     note.textContent = `${format}", ${rpm} RPM${mode==="soundsystem"?" · soundsystem cut":""} — ideal up to ${idealMin} min, max ${maxMin} min`;
   });
   document.getElementById("recordTotal").textContent = formatTime(recordTotal);
@@ -448,7 +443,6 @@ function sideTemplate(side){
         <div>
           <div class="total-fig" id="total-${side}">0:00</div>
           <div class="limits-note" id="limitsnote-${side}"></div>
-          <div class="meter" id="meter-${side}"><span id="meterfill-${side}" style="width:0%"></span></div>
         </div>
         <span class="badge ok" id="badge-${side}">within recommendation</span>
       </div>
