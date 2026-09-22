@@ -410,17 +410,13 @@ function sideTemplate(side){
       </div>
 
       <div class="hidden" id="contfile-${side}">
-        <div class="row" style="align-items:end;">
-          <div class="field" style="flex:0 0 auto;">
-            <label>&nbsp;</label>
-            <button type="button" class="pickbtn no-print" id="contpick-${side}" title="Choose side file">↑</button>
-          </div>
-          <div class="field">
-            <label>Side length (auto from file, or enter manually)</label>
-            <input type="text" id="contoverride-${side}" placeholder="m:ss">
+        <div class="row" style="align-items:center;">
+          <button type="button" class="pickbtn no-print" id="contpick-${side}" title="Choose side file">↑</button>
+          <div class="filemeta" id="contfilemeta-${side}" style="margin:0; flex:1;"></div>
+          <div class="len-wrap" style="flex:0 0 84px;">
+            <input type="text" id="contoverride-${side}" placeholder="m:ss" title="Side length (auto from file, or enter manually)">
           </div>
         </div>
-        <div class="filemeta" id="contfilemeta-${side}"></div>
         <input type="file" id="contfileinput-${side}" accept="audio/*" class="hidden">
       </div>
 
