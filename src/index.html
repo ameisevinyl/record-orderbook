@@ -268,8 +268,16 @@
   }
   .label-preview iframe, .label-preview img{ width:100%; height:100%; border:0; object-fit:contain; display:block; }
   .label-placeholder{ color:var(--ink-dim); font-size:11px; text-align:center; padding:10px; line-height:1.5; }
+  /* One row per category (Colour/Size/Ratio/Print-ready) — see
+     buildChecklistRows in print-artwork.js. Every <li> carries an
+     explicit .ok/.warn/.err class; the ok rows aren't just a lighter
+     warning, they're a genuinely different fact (a detected value, not
+     a complaint), so they get the checklist's own neutral "passed" tone
+     rather than looking like a muted warning. */
   .labelwarnings{ list-style:none; margin:8px 0 0; padding:0; font-size:11px; }
-  .labelwarnings li{ padding:2px 0; color:var(--warn); }
+  .labelwarnings li{ padding:2px 0; }
+  .labelwarnings li.ok{ color:var(--ok); }
+  .labelwarnings li.warn{ color:var(--warn); }
   .labelwarnings li.err{ color:var(--danger); font-weight:700; }
 
   /* ---------------- expert info toggles ---------------- */

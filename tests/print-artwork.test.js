@@ -7,6 +7,7 @@ import {
   parseTiffArtwork,
   parsePdfArtwork,
   validateArtwork,
+  buildChecklistRows,
   computePrintSimGeometry,
   computeSpreadInsetPx,
 } from "../src/lib/print-artwork.js";
@@ -755,6 +756,64 @@ test("validateArtwork's ratio check never fires for a non-square target (covers/
   const parsed = { pageSizeMm: { w: 383, h: 201 }, imagePx: null, declaredDpi: null, colorMode: "CMYK" };
   const result = validateArtwork(parsed, targetMm, TOL, DPI_MIN, DPI_MAX);
   assert.ok(!result.warnings.some((w) => w.includes("not square")), result.warnings.join("; "));
+});
+
+test("validateArtwork tags each finding with its category", () => {
+  const parsed = { pageSizeMm: null, imagePx: { w: 900, h: 900 }, declaredDpi: { x: 300, y: 300 }, colorMode: "RGB", encrypted: true };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  assert.ok(result.findings.some((f) => f.category === "printReady" && f.severity === "err" && f.message.includes("encrypted")));
+  assert.ok(result.findings.some((f) => f.category === "colour" && f.severity === "warn" && f.message.includes("RGB")));
+  assert.ok(result.findings.some((f) => f.category === "size" && f.severity === "warn" && f.message.includes("wrong size")));
+});
+
+// ---- buildChecklistRows ----
+
+test("buildChecklistRows shows a single 'File' row for an unreadable file, skipping every category", () => {
+  const result = validateArtwork(null, TARGET, TOL, DPI_MIN, DPI_MAX);
+  const rows = buildChecklistRows(null, result, TARGET);
+  assert.deepEqual(rows.map((r) => r.category), ["File"]);
+  assert.equal(rows[0].severity, "err");
+  assert.ok(rows[0].text.includes("could not read"));
+});
+
+test("buildChecklistRows shows all four rows as 'ok' with positive summaries for a clean square (label) file", () => {
+  const parsed = {
+    pageSizeMm: null, imagePx: { w: 1158, h: 1158 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK",
+    spotColors: [], iccProfileName: "ISO Coated v2 (ECI)",
+    hasOutputIntent: true, hasTrimBox: true, encrypted: false, hasUnembeddedFonts: false,
+  };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  const rows = buildChecklistRows(parsed, result, TARGET);
+  assert.deepEqual(rows.map((r) => r.category), ["Colour", "Size", "Ratio", "Print-ready"]);
+  assert.ok(rows.every((r) => r.severity === "ok"), JSON.stringify(rows));
+  const colour = rows.find((r) => r.category === "Colour");
+  assert.equal(colour.text, "CMYK (ISO Coated v2 (ECI))");
+  const size = rows.find((r) => r.category === "Size");
+  assert.ok(size.text.includes("mm"));
+});
+
+test("buildChecklistRows omits the Ratio row for a non-square target (cover/sleeve/inlay)", () => {
+  const targetMm = { w: 383, h: 201 };
+  const parsed = { pageSizeMm: { w: 383, h: 201 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasOutputIntent: true, hasTrimBox: true, encrypted: false };
+  const result = validateArtwork(parsed, targetMm, TOL, DPI_MIN, DPI_MAX);
+  const rows = buildChecklistRows(parsed, result, targetMm);
+  assert.ok(!rows.some((r) => r.category === "Ratio"), rows.map((r) => r.category).join(","));
+});
+
+test("buildChecklistRows omits the Print-ready row for JPEG/TIFF (no PDF/X concept applies)", () => {
+  const parsed = { pageSizeMm: null, imagePx: { w: 1158, h: 1158 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", encrypted: null };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  const rows = buildChecklistRows(parsed, result, TARGET);
+  assert.ok(!rows.some((r) => r.category === "Print-ready"), rows.map((r) => r.category).join(","));
+});
+
+test("buildChecklistRows joins multiple findings in the same category with '; ', and 'err' wins over 'warn'", () => {
+  const parsed = { pageSizeMm: null, imagePx: { w: 900, h: 900 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", encrypted: true, hasOutputIntent: false, hasTrimBox: false };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  const rows = buildChecklistRows(parsed, result, TARGET);
+  const printReady = rows.find((r) => r.category === "Print-ready");
+  assert.equal(printReady.severity, "err");
+  assert.ok(printReady.text.includes("encrypted") && printReady.text.includes("OutputIntent") && printReady.text.includes("TrimBox"));
 });
 
 // ---- computePrintSimGeometry ----

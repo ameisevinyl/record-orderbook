@@ -10,7 +10,7 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
@@ -105,10 +105,10 @@ function updateLabelInfo(){
   SIDES.forEach(side=> document.getElementById("labelinfo-"+side).innerHTML = html);
 }
 
-function renderWarnings(side, result){
-  const items = [];
-  result.errors.forEach(e=> items.push(`<li class="err">⚠ ${e}</li>`));
-  result.warnings.forEach(w=> items.push(`<li>⚠ ${w}</li>`));
+function renderChecklist(side, parsed, result, targetMm){
+  const rows = buildChecklistRows(parsed, result, targetMm);
+  const items = rows.map(row =>
+    `<li class="${row.severity}">${CHECKLIST_ICON[row.severity]} ${row.category}: ${row.text}</li>`);
   document.getElementById("labelwarnings-"+side).innerHTML = items.join("");
 }
 
@@ -134,10 +134,10 @@ async function handleFile(side, file){
 
   const spec = formatSpec();
   const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
-  const result = validateArtwork(
-    parsed, {w:spec.dataSizeMm, h:spec.dataSizeMm}, printCheck.sizeToleranceMm, printCheck.dpi.min, printCheck.dpi.max);
+  const targetMm = {w:spec.dataSizeMm, h:spec.dataSizeMm};
+  const result = validateArtwork(parsed, targetMm, printCheck.sizeToleranceMm, printCheck.dpi.min, printCheck.dpi.max);
   if(kind === "unknown") result.errors.unshift("unrecognized file — expected PDF, JPG, or TIFF");
-  renderWarnings(side, result);
+  renderChecklist(side, parsed, result, targetMm);
 
   const url = URL.createObjectURL(file);
   box._url = url;

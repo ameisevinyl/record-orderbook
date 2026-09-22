@@ -582,19 +582,32 @@ export async function parsePdfArtwork(arrayBuffer){
 // sleeves and inlays generally aren't, so this always takes both.
 
 export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
-  const errors = [];
-  const warnings = [];
+  // findings is the single source of truth — errors/warnings (flat,
+  // unchanged in content and order from before this was refactored) are
+  // derived from it below, so every existing consumer (the checklist's
+  // erroredArtwork count, each module's flat warning list) keeps working
+  // unmodified. category tags each finding for the categorized-checklist
+  // UI (see buildChecklistRows) — decided here, at the point each
+  // message is created, rather than re-derived later by matching on
+  // message text, which would be one more thing to keep in sync.
+  const findings = [];
+  const err = (category, message) => findings.push({category, severity:"err", message});
+  const warn = (category, message) => findings.push({category, severity:"warn", message});
+  const deriveErrorsWarnings = () => ({
+    errors: findings.filter(f=>f.severity==="err").map(f=>f.message),
+    warnings: findings.filter(f=>f.severity==="warn").map(f=>f.message)
+  });
 
   if(!parsed){
-    errors.push("could not read this file — please check it is a valid PDF, JPG, or TIFF");
-    return { errors, warnings, impliedDpi:null, checkedSizeMm:null };
+    err("file", "could not read this file — please check it is a valid PDF, JPG, or TIFF");
+    return { ...deriveErrorsWarnings(), impliedDpi:null, checkedSizeMm:null, findings };
   }
 
   // An error, not a warning: an encrypted PDF can't be processed by the
   // plant's system at all (and most of what else this function checks
   // can't be trusted either, since the actual content stream is
   // encrypted garbage to this parser too).
-  if(parsed.encrypted) errors.push("file appears to be encrypted — please export without a password/permissions lock");
+  if(parsed.encrypted) err("printReady", "file appears to be encrypted — please export without a password/permissions lock");
 
   let impliedDpi = null;
   let checkedSizeMm = null;
@@ -625,11 +638,11 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
     const dw = Math.abs(checkedSizeMm.w - targetMm.w);
     const dh = Math.abs(checkedSizeMm.h - targetMm.h);
     if(dw > toleranceMm || dh > toleranceMm){
-      warnings.push(
+      warn("size",
         `wrong size: ${checkedSizeMm.w.toFixed(1)}×${checkedSizeMm.h.toFixed(1)}mm, expected ${targetMm.w}×${targetMm.h}mm`);
     }
   } else{
-    warnings.push("could not independently verify physical size (no resolution metadata found) — checked by implied resolution only");
+    warn("size", "could not independently verify physical size (no resolution metadata found) — checked by implied resolution only");
   }
 
   if(impliedDpi != null){
@@ -638,30 +651,30 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
     // (98/25.4*300 = 1157.48), which computes back to 299.84dpi — a
     // rounding artifact of integer pixels, not an actually low-res file.
     const rounded = Math.round(impliedDpi);
-    if(rounded < dpiMin) warnings.push(`resolution too low for a ${targetMm.w}×${targetMm.h}mm print: ~${rounded} dpi, need at least ${dpiMin}`);
-    else if(rounded > dpiMax) warnings.push(`resolution far exceeds requirement: ~${rounded} dpi (max recommended ${dpiMax})`);
+    if(rounded < dpiMin) warn("size", `resolution too low for a ${targetMm.w}×${targetMm.h}mm print: ~${rounded} dpi, need at least ${dpiMin}`);
+    else if(rounded > dpiMax) warn("size", `resolution far exceeds requirement: ~${rounded} dpi (max recommended ${dpiMax})`);
   } else{
-    warnings.push("vector content — resolution check not applicable");
+    warn("size", "vector content — resolution check not applicable");
   }
 
-  if(parsed.colorMode === "unknown") warnings.push("could not determine color mode automatically — please verify CMYK manually");
-  else if(parsed.colorMode !== "CMYK") warnings.push(`file appears to be ${parsed.colorMode}, not CMYK`);
+  if(parsed.colorMode === "unknown") warn("colour", "could not determine color mode automatically — please verify CMYK manually");
+  else if(parsed.colorMode !== "CMYK") warn("colour", `file appears to be ${parsed.colorMode}, not CMYK`);
 
   // Independent of the CMYK check above — a file can be perfectly valid
   // CMYK and still carry a spot ink, which the plant typically charges
   // extra for (an additional printing plate/pass per spot colour).
   if(parsed.spotColors && parsed.spotColors.length){
-    warnings.push(`uses spot colour(s): ${parsed.spotColors.join(", ")} — may incur additional cost, please confirm with the plant`);
+    warn("colour", `uses spot colour(s): ${parsed.spotColors.join(", ")} — may incur additional cost, please confirm with the plant`);
   }
 
   // PDF/X-3 proxy checks (see parsePdfArtwork) — hasOutputIntent/
   // hasTrimBox are only ever true/false for a PDF, null (skipped here)
   // for JPEG/TIFF, which have no PDF/X concept to check against.
   if(parsed.hasOutputIntent === false){
-    warnings.push("no OutputIntent found — a print-ready PDF/X export should declare its target printing condition (e.g. ISO Coated v2)");
+    warn("printReady", "no OutputIntent found — a print-ready PDF/X export should declare its target printing condition (e.g. ISO Coated v2)");
   }
   if(parsed.hasTrimBox === false){
-    warnings.push("no TrimBox found — a print-ready PDF/X export should declare the exact trim size on every page");
+    warn("printReady", "no TrimBox found — a print-ready PDF/X export should declare the exact trim size on every page");
   }
 
   // A warning, not an error: this is a coarse heuristic (see
@@ -669,7 +682,7 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
   // and there's no zero-ambiguity way to hard-block on it the way a
   // missing/unreadable file can be.
   if(parsed.hasUnembeddedFonts){
-    warnings.push("uses text with no embedded fonts — the plant's system may substitute a different font, please embed all fonts or convert text to outlines");
+    warn("printReady", "uses text with no embedded fonts — the plant's system may substitute a different font, please embed all fonts or convert text to outlines");
   }
 
   // A label's target is always square (w===h; covers/sleeves/inlays aren't,
@@ -685,12 +698,67 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
     if(dims && dims.h > 0){
       const ratio = dims.w / dims.h;
       if(Math.abs(ratio - 1) > 0.01){
-        warnings.push(`not square: ${dims.w.toFixed(1)}×${dims.h.toFixed(1)} (ratio ${ratio.toFixed(2)}:1) — this print needs a 1:1 width:height ratio`);
+        warn("ratio", `not square: ${dims.w.toFixed(1)}×${dims.h.toFixed(1)} (ratio ${ratio.toFixed(2)}:1) — this print needs a 1:1 width:height ratio`);
       }
     }
   }
 
-  return { errors, warnings, impliedDpi, checkedSizeMm };
+  return { ...deriveErrorsWarnings(), impliedDpi, checkedSizeMm, findings };
+}
+
+// ---- categorized checklist rows (for each module's artwork slot UI) -----
+// Groups validateArtwork's findings into the four fixed rows the UI
+// shows — exactly one per category, worst severity wins ("err" beats
+// "warn"), joined by "; " when a category has more than one finding.
+// When a category has none, the row is "ok" and shows a positive
+// summary built from the detected facts (parsed/result) rather than an
+// absence of complaints — "nothing wrong" isn't itself informative.
+// Ratio is omitted for a non-square target (covers/sleeves/inlays, which
+// the underlying check never runs for anyway) and Print-ready is
+// omitted for JPEG/TIFF (hasOutputIntent/hasTrimBox/hasUnembeddedFonts/
+// encrypted are null for those formats — no PDF/X concept applies).
+const CHECKLIST_CATEGORY_LABEL = { colour: "Colour", size: "Size", ratio: "Ratio", printReady: "Print-ready" };
+
+// Exported so every module renders rows with the same icons instead of
+// each declaring its own identically-named constant — build.js flattens
+// every module into one shared top-level scope (see its header
+// comment), so four modules each declaring their own top-level
+// CHECKLIST_ICON would collide.
+export const CHECKLIST_ICON = { ok: "✓", warn: "⚠", err: "✗" };
+
+export function buildChecklistRows(parsed, result, targetMm){
+  if(!parsed){
+    return [{ category: "File", severity: "err", text: result.errors[0] || "could not read this file" }];
+  }
+
+  const categories = ["colour", "size"];
+  if(targetMm.w === targetMm.h) categories.push("ratio");
+  if(parsed.encrypted !== null) categories.push("printReady"); // null only for JPEG/TIFF
+
+  return categories.map(category => {
+    const items = result.findings.filter(f => f.category === category);
+    if(items.length === 0){
+      return { category: CHECKLIST_CATEGORY_LABEL[category], severity: "ok", text: positiveSummary(category, parsed, result) };
+    }
+    const severity = items.some(f => f.severity === "err") ? "err" : "warn";
+    return { category: CHECKLIST_CATEGORY_LABEL[category], severity, text: items.map(f => f.message).join("; ") };
+  });
+}
+
+function positiveSummary(category, parsed, result){
+  if(category === "colour"){
+    return parsed.iccProfileName ? `${parsed.colorMode} (${parsed.iccProfileName})` : parsed.colorMode;
+  }
+  if(category === "size"){
+    // checkedSizeMm null always produces a "size" finding above (the
+    // "could not independently verify" warning fires unconditionally in
+    // that case), so this branch is only ever reached with it set.
+    const rounded = result.impliedDpi != null ? ` @ ~${Math.round(result.impliedDpi)}dpi` : "";
+    return `${result.checkedSizeMm.w.toFixed(1)}×${result.checkedSizeMm.h.toFixed(1)}mm${rounded}`;
+  }
+  if(category === "ratio") return "matches target";
+  if(category === "printReady") return "PDF/X print-ready checks passed";
+  return "";
 }
 
 // ---- print-simulation geometry -------------------------------------------

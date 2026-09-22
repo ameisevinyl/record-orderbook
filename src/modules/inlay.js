@@ -11,7 +11,7 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
 const INLAY_PREVIEW_MAX_W = 640;
@@ -24,10 +24,10 @@ function inlaySpec(){
   return getFormat(CONFIG, inlayCurrentFormat()).printableParts.inlay;
 }
 
-function renderInlayWarnings(listEl, result){
-  const items = [];
-  result.errors.forEach(e=> items.push(`<li class="err">⚠ ${e}</li>`));
-  result.warnings.forEach(w=> items.push(`<li>⚠ ${w}</li>`));
+function renderInlayChecklist(listEl, parsed, result, targetMm){
+  const rows = buildChecklistRows(parsed, result, targetMm);
+  const items = rows.map(row =>
+    `<li class="${row.severity}">${CHECKLIST_ICON[row.severity]} ${row.category}: ${row.text}</li>`);
   listEl.innerHTML = items.join("");
 }
 
@@ -107,7 +107,7 @@ function createInlayArtworkSlot(prefix){
     const printCheck = getFormat(CONFIG, inlayCurrentFormat()).printCheck;
     const result = validateArtwork(parsed, dataMm, printCheck.sizeToleranceMm, printCheck.dpi.min, printCheck.dpi.max);
     if(kind === "unknown") result.errors.unshift("unrecognized file — expected PDF, JPG, or TIFF");
-    renderInlayWarnings(warningsList, result);
+    renderInlayChecklist(warningsList, parsed, result, dataMm);
 
     url = URL.createObjectURL(f);
     if(kind === "pdf"){

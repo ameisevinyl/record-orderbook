@@ -14,7 +14,7 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, validateArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 
 // On-screen preview cap, in px. A flat cover spread can be 600+mm wide —
@@ -35,10 +35,10 @@ function coverHasArtwork(){
       || document.getElementById("cover-printed-inside-out").checked;
 }
 
-function renderCoverWarnings(listEl, result){
-  const items = [];
-  result.errors.forEach(e=> items.push(`<li class="err">⚠ ${e}</li>`));
-  result.warnings.forEach(w=> items.push(`<li>⚠ ${w}</li>`));
+function renderCoverChecklist(listEl, parsed, result, targetMm){
+  const rows = buildChecklistRows(parsed, result, targetMm);
+  const items = rows.map(row =>
+    `<li class="${row.severity}">${CHECKLIST_ICON[row.severity]} ${row.category}: ${row.text}</li>`);
   listEl.innerHTML = items.join("");
 }
 
@@ -116,7 +116,7 @@ function createCoverArtworkSlot(){
     const printCheck = getFormat(CONFIG, coverCurrentFormat()).printCheck;
     const result = validateArtwork(parsed, dataMm, printCheck.sizeToleranceMm, printCheck.dpi.min, printCheck.dpi.max);
     if(kind === "unknown") result.errors.unshift("unrecognized file — expected PDF, JPG, or TIFF");
-    renderCoverWarnings(warningsList, result);
+    renderCoverChecklist(warningsList, parsed, result, dataMm);
 
     url = URL.createObjectURL(f);
     if(kind === "pdf"){
