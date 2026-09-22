@@ -28,31 +28,14 @@
   :root{
     --bg:      #ffffff;
     --panel:   #ffffff;
-    --panel-2: #f5f5f4;
-    --inset:   #f6f6f5;
+    --field:   #f6f6f5;
     --edge:    #d6d6d3;
-    --edge-lo: #e9e9e7;
     --ink:     #161616;
     --ink-dim: #5c5c59;
-    --ink-dim2:#737370;
-    --accent:  #161616;
-    --accent-2:#000000;
-    --ok:      #6b6b68;
-    --warn:    #b3261e;
     --danger:  #b3261e;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, "JetBrains Mono", "IBM Plex Mono", "Cascadia Code",
             "Fira Code", "SF Mono", Consolas, "Roboto Mono", monospace;
-
-    /* Authored icons — drawn as masks so they inherit currentColor
-       (never a Unicode glyph standing in for an icon). Geometry lives
-       once here; every consumer below just masks+colors a box. */
-    --icon-upload: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><polygon points='12,3 18,10 14,10 14,16 10,16 10,10 6,10' fill='black'/><rect x='5' y='19' width='14' height='2' rx='1' fill='black'/></svg>");
-    --icon-remove: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='11' y='2' width='2' height='20' rx='1' fill='black' transform='rotate(45 12 12)'/><rect x='11' y='2' width='2' height='20' rx='1' fill='black' transform='rotate(-45 12 12)'/></svg>");
-    --icon-info: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='7.5' r='1.5' fill='black'/><rect x='10.75' y='10.5' width='2.5' height='7.5' rx='1.25' fill='black'/></svg>");
-    --icon-tie-ok: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='4' cy='12' r='3' fill='black'/><rect x='4' y='10' width='16' height='4' fill='black'/><circle cx='20' cy='12' r='3' fill='black'/></svg>");
-    --icon-tie-bad: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='4' cy='12' r='3' fill='black'/><rect x='4' y='10' width='6' height='4' fill='black'/><rect x='14' y='10' width='6' height='4' fill='black'/><circle cx='20' cy='12' r='3' fill='black'/></svg>");
-    --icon-chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><polygon points='6,4 18,12 6,20' fill='black'/></svg>");
   }
 
   *{ box-sizing:border-box; }
@@ -76,19 +59,16 @@
   ::-webkit-scrollbar{ width:12px; height:12px; }
   ::-webkit-scrollbar-track{ background:var(--bg); }
   ::-webkit-scrollbar-thumb{ background:var(--edge); border-radius:99px; border:3px solid var(--bg); }
-  ::-webkit-scrollbar-thumb:hover{ background:var(--ink-dim2); }
+  ::-webkit-scrollbar-thumb:hover{ background:var(--ink-dim); }
   input, select, textarea{ accent-color: var(--ink); }
-
-  /* ---------- seam rule — a panel-to-panel divider ---------- */
-  .groove{
-    height:1px; margin:22px 0;
-    background:var(--edge-lo);
-  }
-  .groove.tight{ margin:14px 0; }
 
   h1,h2,h3{ font-family:var(--sans); font-weight:700; margin:0; }
   h1{ font-size:18px; letter-spacing:-.005em; color:var(--ink); }
-  h2{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); font-weight:700; }
+  h2{
+    font-size:15px; color:var(--ink); padding-bottom:8px;
+    border-bottom:1px solid var(--edge); margin-bottom:14px;
+  }
+  h3{ font-size:13.5px; color:var(--ink); margin-bottom:8px; }
   .eyebrow{
     font-size:11px; letter-spacing:.06em; text-transform:uppercase;
     color:var(--ink-dim); font-weight:600; margin-bottom:4px;
@@ -97,35 +77,29 @@
   header.top{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
   header.top .idline{
     font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11px;
-    color:var(--ink-dim); text-align:right; background:var(--inset);
+    color:var(--ink-dim); text-align:right; background:var(--field);
     border:1px solid var(--edge); border-radius:3px; padding:5px 10px;
   }
 
-  fieldset{
-    border:1px solid var(--edge); border-radius:4px; padding:14px 16px 16px; margin:0;
-    background:var(--panel);
-  }
-  legend{ padding:0 7px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim); font-weight:700; }
-
-  label{ display:block; font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:3px; }
-  label .req{ color:var(--accent-2); }
+  label{ display:block; font-size:13.5px; color:var(--ink-dim); margin-bottom:3px; }
+  label .req{ color:var(--ink); }
   /* A field description read as a sentence, not a short field name —
      shouting a whole clause in tracked caps hurts reading, not helps
      it, so this drops the transform/tracking those need. */
-  label.hint{ text-transform:none; letter-spacing:0; font-weight:500; color:var(--ink-dim); }
+  label.hint{ font-weight:500; color:var(--ink-dim); }
 
   input[type=text], input[type=number], textarea, select{
     width:100%; font-family:var(--sans); font-size:13.5px; color:var(--ink);
-    background:var(--inset); border:1px solid var(--edge); border-radius:3px;
+    background:var(--field); border:1px solid var(--edge); border-radius:3px;
     padding:7px 8px; outline:none;
   }
-  input:hover, select:hover, textarea:hover{ border-color:var(--ink-dim2); }
+  input:hover, select:hover, textarea:hover{ border-color:var(--ink-dim); }
   input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible,
-  details.info > summary:focus-visible, details.panel > summary:focus-visible{
-    outline:2px solid var(--accent-2); outline-offset:1px;
+  details.info > summary:focus-visible{
+    outline:2px solid var(--ink); outline-offset:1px;
   }
   input:disabled, select:disabled, textarea:disabled, button:disabled{ opacity:.4; cursor:not-allowed; }
-  input[type=text]::placeholder, input[type=number]::placeholder{ color:var(--ink-dim2); }
+  input[type=text]::placeholder, input[type=number]::placeholder{ color:var(--ink-dim); }
   textarea{ resize:vertical; min-height:64px; }
   .field{ margin-bottom:10px; }
   .row{ display:flex; gap:10px; flex-wrap:wrap; }
@@ -144,43 +118,26 @@
     display:grid;
     grid-template-columns: 42px 26px 1fr 1fr 84px 150px 24px;
     gap:6px; align-items:end;
-    font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim2);
+    font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim);
     padding:0 4px 4px; border-bottom:1px solid var(--edge);
   }
   .track-row{
     display:grid;
     grid-template-columns: 42px 26px 1fr 1fr 84px 150px 24px;
     gap:6px; align-items:center;
-    padding:6px 4px; border-bottom:1px solid var(--edge-lo);
+    padding:6px 4px; border-bottom:1px solid var(--edge);
   }
   .track-row:last-child{ border-bottom:none; }
-  .pos{
-    font-weight:700; font-size:12px; color:var(--ink); text-align:center;
-    background:var(--inset); border:1px solid var(--edge); border-radius:3px; padding:2px 0;
-  }
+  .pos{ font-weight:700; font-size:13px; color:var(--ink); text-align:center; }
 
-  /* Icon buttons — geometry drawn once via mask-image so every button
-     of this shape (across every module's generated markup) shares one
-     glyph, colored from currentColor rather than baked into a raster. */
   .pickbtn, .rmbtn{
-    position:relative; cursor:pointer; display:flex; align-items:center; justify-content:center;
-    font-size:0; /* the "⏏"/"✕" text node collapses; screen readers still get it via the title/DOM text */
+    cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
+    font-family:var(--sans); font-size:12px; font-weight:600;
+    border-radius:3px; padding:5px 8px;
   }
-  .pickbtn::before, .rmbtn::before{
-    content:""; display:block; width:14px; height:14px; background-color:currentColor;
-    -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
-    -webkit-mask-position:center; mask-position:center;
-    -webkit-mask-size:contain; mask-size:contain;
-  }
-  .pickbtn::before{ -webkit-mask-image:var(--icon-upload); mask-image:var(--icon-upload); }
-  .rmbtn::before{ width:11px; height:11px; -webkit-mask-image:var(--icon-remove); mask-image:var(--icon-remove); }
-
-  .pickbtn{
-    width:26px; height:26px; border:1px solid var(--edge); background:var(--panel-2);
-    border-radius:3px; color:var(--ink-dim);
-  }
-  .pickbtn:hover{ border-color:var(--accent); color:var(--accent-2); }
-  .pickbtn.has-file{ border-color:var(--ok); color:var(--ok); }
+  .pickbtn{ border:1px solid var(--edge); background:var(--field); color:var(--ink-dim); }
+  .pickbtn:hover{ border-color:var(--ink); color:var(--ink); }
+  .pickbtn.has-file{ border-color:var(--ink-dim); color:var(--ink-dim); }
   .filemeta{ grid-column:1 / -1; font-size:11px; color:var(--ink-dim); margin:-3px 0 2px 32px; line-height:1.5; }
   .filemeta.empty{ display:none; }
   .filemeta.warn{ color:var(--danger); font-weight:700; }
@@ -193,36 +150,30 @@
   .artist-field{ position:relative; }
   .artist-field input.artist{ padding-right:46px; }
   .artist-field input.artist[readonly]{
-    background:var(--panel-2); color:var(--ink-dim); cursor:default;
+    background:var(--field); color:var(--ink-dim); cursor:default;
   }
   .artist-change, .artist-revert{
     position:absolute; top:50%; right:7px; transform:translateY(-50%);
     background:none; border:none; padding:0; cursor:pointer;
-    font-family:var(--sans); font-size:10px; color:var(--ink-dim2);
+    font-family:var(--sans); font-size:10px; color:var(--ink-dim);
     text-decoration:underline; text-underline-offset:2px;
   }
   .artist-change:hover, .artist-revert:hover{ color:var(--ink); }
 
   .len-wrap{ display:flex; align-items:center; gap:4px; }
   .len-wrap input{ text-align:center; }
-  .autoflag{ font-size:11px; color:var(--ok); white-space:nowrap; }
+  .autoflag{ font-size:11px; color:var(--ink-dim); white-space:nowrap; }
   .gap-wrap{ display:flex; gap:4px; align-items:center; }
   .gap-wrap select{ flex:1; }
   .gap-wrap input{ width:44px; display:none; text-align:center; }
   .gap-wrap.custom input{ display:block; }
-  .rmbtn{
-    width:22px; height:22px; border:1px solid var(--edge-lo); background:transparent;
-    color:var(--ink-dim2); border-radius:3px;
-  }
-  .rmbtn:hover{ border-color:var(--danger); color:var(--danger); background:var(--panel-2); }
+  .rmbtn{ border:1px solid var(--edge); background:transparent; color:var(--ink-dim); }
+  .rmbtn:hover{ border-color:var(--danger); color:var(--danger); background:var(--field); }
 
-  .side-box{
-    border:1px solid var(--edge); border-radius:4px; padding:16px; background:var(--panel);
-  }
   #shipAddrs .ship-addr + .ship-addr{ margin-top:14px; }
   .colourQtyShip.warn-qty{ border-color:var(--danger); color:var(--danger); }
   .side-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
-  .side-head h2{ margin:0; }
+  .side-head h3{ margin:0; }
   .side-opts{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11px; }
   .chk{ display:flex; align-items:center; gap:6px; cursor:pointer; color:var(--ink-dim); text-transform:none; letter-spacing:0; }
   .chk input{ width:auto; }
@@ -234,21 +185,18 @@
     background:transparent; border:1px dashed var(--edge); color:var(--ink-dim);
     padding:6px 10px; border-radius:3px; cursor:pointer;
   }
-  .addbtn:hover{ border-color:var(--accent); border-style:solid; color:var(--accent-2); }
+  .addbtn:hover{ border-color:var(--ink); border-style:solid; color:var(--ink); }
 
   .side-total{
     margin-top:12px; padding-top:10px; border-top:1px solid var(--edge);
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
   }
   .total-fig{ font-size:18px; font-weight:700; color:var(--ink); }
-  .badge{
-    font-size:11px; letter-spacing:.04em; text-transform:uppercase; font-weight:700;
-    padding:3px 9px; border-radius:99px; border:1px solid currentColor;
-  }
-  .badge.ok{ color:var(--ok); }
-  .badge.warn{ color:var(--warn); }
+  .badge{ font-size:13px; font-weight:600; }
+  .badge.ok{ color:var(--ink-dim); }
+  .badge.warn{ color:var(--danger); }
   .badge.danger{ color:var(--danger); }
-  .limits-note{ font-size:11px; color:var(--ink-dim2); margin-top:4px; }
+  .limits-note{ font-size:11px; color:var(--ink-dim); margin-top:4px; }
 
   .blank-note{ color:var(--ink-dim); font-style:italic; font-size:12px; }
 
@@ -260,7 +208,7 @@
   .label-preview-wrap{ position:relative; margin:10px 0; }
   .label-preview{
     position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center;
-    background:var(--inset); border-radius:3px;
+    background:var(--field); border-radius:3px;
   }
   .label-preview iframe, .label-preview img{ width:100%; height:100%; border:0; object-fit:contain; display:block; }
   .label-placeholder{ color:var(--ink-dim); font-size:11px; text-align:center; padding:10px; line-height:1.5; }
@@ -280,10 +228,10 @@
      at all — see buildChecklistRows' pushRow — only real rows reach
      this markup, so no CSS visibility rule is needed for them. */
   .labelwarnings{ width:100%; border-collapse:collapse; margin:8px 0 0; font-size:11px; }
-  .labelwarnings th{ text-align:left; font-weight:600; color:var(--ink-dim); padding:2px 8px 2px 0; border-bottom:1px solid var(--edge-lo); }
+  .labelwarnings th{ text-align:left; font-weight:600; color:var(--ink-dim); padding:2px 8px 2px 0; border-bottom:1px solid var(--edge); }
   .labelwarnings td{ padding:2px 8px 2px 0; white-space:nowrap; }
-  .labelwarnings tr.info{ color:var(--ok); }
-  .labelwarnings tr.warn{ color:var(--warn); }
+  .labelwarnings tr.info{ color:var(--ink-dim); }
+  .labelwarnings tr.warn{ color:var(--danger); }
   .labelwarnings tr.error{ color:var(--danger); font-weight:700; }
   .labelwarnings tr.debug{ color:var(--ink-dim); }
 
@@ -295,21 +243,16 @@
   details.info{ display:inline-block; vertical-align:middle; }
   details.info > summary{
     display:inline-flex; align-items:center; justify-content:center;
-    width:15px; height:15px; border:1px solid var(--edge); border-radius:50%;
+    font-size:11px; font-weight:600; padding:1px 5px;
+    border:1px solid var(--edge); border-radius:3px;
     cursor:pointer; list-style:none;
     color:var(--ink-dim); user-select:none;
   }
-  details.info > summary::before{
-    content:""; display:block; width:9px; height:9px; background-color:currentColor;
-    -webkit-mask-image:var(--icon-info); mask-image:var(--icon-info);
-    -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
-    -webkit-mask-size:contain; mask-size:contain;
-  }
   details.info > summary::-webkit-details-marker{ display:none; }
-  details.info:hover > summary, details.info[open] > summary{ border-color:var(--accent); color:var(--accent-2); }
+  details.info:hover > summary, details.info[open] > summary{ border-color:var(--ink); color:var(--ink); }
   details.info .info-body{
     margin-top:6px; padding:8px 10px; max-width:320px;
-    background:var(--panel-2); border:1px solid var(--edge); border-radius:3px;
+    background:var(--field); border:1px solid var(--edge); border-radius:3px;
     font-size:11px; line-height:1.5; color:var(--ink-dim);
     font-style:normal; text-transform:none; letter-spacing:0;
   }
@@ -320,7 +263,7 @@
   .spread-caption{
     display:flex; justify-content:space-between; max-width:100%;
     font-size:11px; letter-spacing:.08em; text-transform:uppercase;
-    color:var(--ink-dim2); margin-top:4px;
+    color:var(--ink-dim); margin-top:4px;
   }
 
   .cols2{ display:grid; grid-template-columns:1fr; gap:18px; }
@@ -328,60 +271,27 @@
 
   .summary{ display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
   .summary .big{ font-size:25px; font-weight:700; color:var(--ink); }
-  .checklist{ list-style:none; margin:0; padding:0; font-size:11.5px; }
+  .checklist{ list-style:none; margin:0; padding:0; font-size:13px; }
   .checklist li{ display:flex; gap:7px; align-items:center; padding:2px 0; }
-  .checklist .mark{
-    width:16px; height:12px; flex:0 0 auto; font-size:0;
-  }
-  .checklist .mark::before{
-    content:""; display:block; width:100%; height:100%; background-color:currentColor;
-    -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
-    -webkit-mask-position:center; mask-position:center;
-    -webkit-mask-size:contain; mask-size:contain;
-  }
-  .checklist .ok .mark{ color:var(--ok); }
-  .checklist .ok .mark::before{ -webkit-mask-image:var(--icon-tie-ok); mask-image:var(--icon-tie-ok); }
+  .checklist .mark{ width:1em; flex:0 0 auto; font-weight:700; }
+  .checklist .ok .mark{ color:var(--ink-dim); }
   .checklist .bad .mark{ color:var(--danger); }
-  .checklist .bad .mark::before{ -webkit-mask-image:var(--icon-tie-bad); mask-image:var(--icon-tie-bad); }
 
-  .actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .actions{ display:flex; align-items:center; gap:24px; flex-wrap:wrap; }
+  .action-group{ display:flex; gap:10px; flex-wrap:wrap; }
   button.btn{
-    font-family:var(--sans); font-size:12px; font-weight:600; letter-spacing:.01em;
-    background:var(--accent); color:#fff; border:1px solid var(--accent);
-    padding:9px 15px; border-radius:3px; cursor:pointer;
+    font-family:var(--sans); font-size:13px; font-weight:600;
+    background:var(--panel); color:var(--ink); border:1px solid var(--edge);
+    padding:8px 14px; border-radius:3px; cursor:pointer;
   }
-  button.btn:hover{ background:var(--accent-2); border-color:var(--accent-2); }
-  button.btn.ghost{ background:var(--panel); color:var(--ink); border-color:var(--edge); }
-  button.btn.ghost:hover{ background:var(--panel-2); border-color:var(--ink); }
+  button.btn:hover{ background:var(--field); border-color:var(--ink); }
   button.btn:disabled{ opacity:.4; cursor:not-allowed; }
-
-  details.panel{ border:1px solid var(--edge); border-radius:4px; background:var(--panel); }
-  details.panel > summary{
-    cursor:pointer; padding:10px 14px; font-size:11px; letter-spacing:.08em; font-weight:700;
-    text-transform:uppercase; color:var(--ink-dim); list-style:none;
-    display:flex; align-items:center; gap:8px;
-  }
-  details.panel > summary::-webkit-details-marker{ display:none; }
-  details.panel > summary::before{
-    content:""; display:block; width:9px; height:9px; background-color:var(--accent-2);
-    -webkit-mask-image:var(--icon-chevron); mask-image:var(--icon-chevron);
-    -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
-    -webkit-mask-size:contain; mask-size:contain;
-    transition:transform .15s ease-out;
-  }
-  details.panel[open] > summary::before{ transform:rotate(90deg); }
-  .panel-body{ padding:0 16px 16px; font-size:12px; }
-  .panel-body p{ color:var(--ink-dim); margin:6px 0 12px; }
-  .log{
-    background:var(--inset); border:1px solid var(--edge); border-radius:3px; padding:8px;
-    font-size:11px; max-height:140px; overflow:auto; white-space:pre-wrap; margin-top:8px;
-  }
 
   .hidden{ display:none !important; }
 
   .foot{
-    margin-top:24px; padding-top:12px; border-top:1px solid var(--edge-lo);
-    font-size:10px; color:var(--ink-dim2); letter-spacing:.03em;
+    margin-top:24px; padding-top:12px; border-top:1px solid var(--edge);
+    font-size:10px; color:var(--ink-dim); letter-spacing:.03em;
   }
 
   /* Only inserted when ?debug is in the URL (see app.js) — lets whoever
@@ -419,8 +329,6 @@
        for on-screen editing, so the printed sheet reads as one dense
        reference document (with artwork previews and billing/shipping
        info) rather than a stack of loosely-padded panels. */
-    .groove{ margin:6px 0; }
-    .groove.tight{ margin:4px 0; }
     h1{ font-size:15px; }
     fieldset{ padding:6px 8px 7px; }
     legend{ font-size:10px; padding:0 4px; }
@@ -430,7 +338,6 @@
     .row{ gap:6px; }
     label{ font-size:9px; margin-bottom:1px; }
     .cols2, .label-cols2{ gap:8px; }
-    fieldset, .side-box, details.panel{ border-color:var(--edge); break-inside:avoid; }
     input[type=text], input[type=number], select, textarea{
       background:transparent; border:none; border-bottom:1px solid var(--edge); border-radius:0;
       padding:1px; font-size:10px;
@@ -441,7 +348,6 @@
     .artist-field input.artist{ padding-right:1px; }
     .filemeta{ margin-left:4px; }
     a{ text-decoration:none; }
-    details.panel{ display:none; }
     .checklist{ font-size:9.5px; }
     .checklist li{ padding:1px 0; }
 
