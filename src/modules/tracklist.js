@@ -829,11 +829,14 @@ function documentHeader(project, label){
 
 // Printed-part filenames only — tracks/continuous-side files are already
 // listed in the per-side tables below, so repeating them here would be
-// redundant. A null fileName means "not actually included" (whitelabel,
-// unprinted, inlay not included, etc.) — see collectLabels/collectCover/
-// collectInnerSleeve/collectInlay. order_summary.txt only — the mastering
-// engineer and graphics department (tracklist.txt) don't need a manifest
-// of the artwork files, they already have the files themselves.
+// redundant. A null fileName means "not actually included" (unprinted,
+// inlay not included, no file attached, etc.) — see collectLabels/
+// collectCover/collectInnerSleeve/collectInlay. A whitelabel side's file,
+// if one was attached, still shows up here — whitelabel only tells the
+// plant they don't need to print it, it doesn't drop the file from the
+// package. order_summary.txt only — the mastering engineer and graphics
+// department (tracklist.txt) don't need a manifest of the artwork files,
+// they already have the files themselves.
 function filesManifestSection(project){
   const l = project.labels, c = project.coverSleeve;
   const packageFiles = [
