@@ -376,11 +376,10 @@
     <div class="idline" id="stamp">— unsaved —</div>
   </header>
 
-  <div class="groove"></div>
 
   <!-- ============ RELEASE INFO ============ -->
-  <fieldset>
-    <legend>Release</legend>
+  <section>
+    <h2>Release</h2>
     <div class="row">
       <div class="field">
         <label>Catalogue Number <span class="req">*</span></label>
@@ -406,29 +405,26 @@
         <input type="text" id="albumArtist" placeholder="optional">
       </div>
     </div>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ SIDES ============ -->
   <div class="cols2" id="sides"></div>
 
-  <div class="groove tight"></div>
 
   <!-- ============ NOTES ============ -->
-  <fieldset>
-    <legend>Notes to the Cutting Engineer</legend>
+  <section>
+    <h2>Notes to the Cutting Engineer</h2>
     <label class="chk">
       <input type="checkbox" id="soundsystem"> Soundsystem cut (shorter recommended times)
     </label>
     <textarea id="notes"></textarea>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ RECORD SUMMARY ============ -->
-  <fieldset>
-    <legend>Record Summary</legend>
+  <section>
+    <h2>Record Summary</h2>
     <div class="summary">
       <div>
         <div class="eyebrow">Total playing time</div>
@@ -436,21 +432,19 @@
       </div>
       <ul class="checklist" id="checklist"></ul>
     </div>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ LABELS ============ -->
-  <fieldset>
-    <legend>Labels</legend>
+  <section>
+    <h2>Labels</h2>
     <div class="label-cols2" id="labelSides"></div>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ INNER SLEEVE ============ -->
-  <fieldset>
-    <legend>Inner Sleeve</legend>
+  <section>
+    <h2>Inner Sleeve</h2>
     <div class="row">
       <div class="field" style="flex:0 0 auto;">
         <label class="chk" style="margin-top:20px;">
@@ -481,7 +475,7 @@
       <div class="row" style="align-items:end;">
         <div class="field" style="flex:0 0 auto;">
           <label>&nbsp;</label>
-          <button type="button" class="pickbtn no-print" id="innersleevepick" title="Choose inner sleeve artwork">⏏</button>
+          <button type="button" class="pickbtn no-print" id="innersleevepick" title="Choose inner sleeve artwork">(+)</button>
         </div>
         <div class="field">
           <label class="hint">Artwork file — flat, opened, front on the right, back on the left (PDF, JPG, or TIFF)</label>
@@ -495,13 +489,12 @@
       <div class="spread-caption" id="innersleevecaption"><span>back</span><span>front</span></div>
       <table class="labelwarnings" id="innersleevewarnings"></table>
     </div>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ OUTER COVER ============ -->
-  <fieldset>
-    <legend>Outer Cover</legend>
+  <section>
+    <h2>Outer Cover</h2>
     <div class="row">
       <div class="field" style="flex:0 0 auto;">
         <label class="chk" style="margin-top:20px;">
@@ -537,7 +530,7 @@
       <div class="row" style="align-items:end;">
         <div class="field" style="flex:0 0 auto;">
           <label>&nbsp;</label>
-          <button type="button" class="pickbtn no-print" id="coverpick" title="Choose cover artwork">⏏</button>
+          <button type="button" class="pickbtn no-print" id="coverpick" title="Choose cover artwork">(+)</button>
         </div>
         <div class="field">
           <label class="hint">Artwork file — flat, opened, front on the right, back on the left (PDF, JPG, or TIFF)</label>
@@ -551,13 +544,12 @@
       <div class="spread-caption" id="covercaption"><span>back</span><span>front</span></div>
       <table class="labelwarnings" id="coverwarnings"></table>
     </div>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ INLAY ============ -->
-  <fieldset>
-    <legend>Inlay <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional, printed both sides, 170gsm)</span></legend>
+  <section>
+    <h2>Inlay <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional, printed both sides, 170gsm)</span></h2>
     <div class="row">
       <div class="field" style="flex:0 0 auto;">
         <label class="chk" style="margin-top:20px;"><input type="checkbox" id="inlayInclude"> include inlay</label>
@@ -565,14 +557,14 @@
     </div>
     <div id="inlayBody" class="hidden">
       <div class="label-cols2">
-        <div class="side-box">
+        <div>
           <div class="side-head">
-            <h2>Inlay Front</h2>
+            <h3>Inlay Front</h3>
           </div>
           <div class="row" style="align-items:end;">
             <div class="field" style="flex:0 0 auto;">
               <label>&nbsp;</label>
-              <button type="button" class="pickbtn no-print" id="inlayfrontpick" title="Choose inlay front artwork">⏏</button>
+              <button type="button" class="pickbtn no-print" id="inlayfrontpick" title="Choose inlay front artwork">(+)</button>
             </div>
             <div class="field">
               <label class="hint">Artwork file (PDF, JPG, or TIFF)</label>
@@ -585,14 +577,14 @@
           </div>
           <table class="labelwarnings" id="inlayfrontwarnings"></table>
         </div>
-        <div class="side-box">
+        <div>
           <div class="side-head">
-            <h2>Inlay Back</h2>
+            <h3>Inlay Back</h3>
           </div>
           <div class="row" style="align-items:end;">
             <div class="field" style="flex:0 0 auto;">
               <label>&nbsp;</label>
-              <button type="button" class="pickbtn no-print" id="inlaybackpick" title="Choose inlay back artwork">⏏</button>
+              <button type="button" class="pickbtn no-print" id="inlaybackpick" title="Choose inlay back artwork">(+)</button>
             </div>
             <div class="field">
               <label class="hint">Artwork file (PDF, JPG, or TIFF)</label>
@@ -607,44 +599,42 @@
         </div>
       </div>
     </div>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ VINYL COLOUR & QUANTITY ============ -->
-  <fieldset>
-    <legend>Vinyl Colour & Quantity</legend>
+  <section>
+    <h2>Vinyl Colour & Quantity</h2>
     <div id="colourRows"></div>
     <button type="button" class="addbtn no-print" id="addColourBtn">+ add colour</button>
     <ul class="checklist" id="colourChecklist"></ul>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ BILLING ADDRESS ============ -->
-  <fieldset>
-    <legend>Billing Address</legend>
+  <section>
+    <h2>Billing Address</h2>
     <div id="billingAddress"></div>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ SHIPPING ADDRESS(ES) ============ -->
-  <fieldset>
-    <legend>Shipping Address(es)</legend>
+  <section>
+    <h2>Shipping Address(es)</h2>
     <div id="shipAddrs"></div>
     <button type="button" class="addbtn no-print" id="addShipAddrBtn">+ add shipping address</button>
-  </fieldset>
+  </section>
 
-  <div class="groove tight"></div>
 
   <!-- ============ ACTIONS ============ -->
   <div class="actions no-print">
-    <button class="btn" id="btnPrint">Print / Save as PDF</button>
-    <button class="btn ghost" id="btnSaveProject">Save Project (.zip)</button>
-    <button class="btn ghost" id="btnOpenProject">Open Project (.zip)</button>
-    <input type="file" id="openProjectInput" accept=".zip,application/zip" class="hidden">
-    <button class="btn ghost" id="btnSwissTransfer">Send to Plant (via SwissTransfer)</button>
+    <div class="action-group">
+      <button class="btn" id="btnSaveProject">Save</button>
+      <button class="btn" id="btnOpenProject">Load</button>
+      <input type="file" id="openProjectInput" accept=".zip,application/zip" class="hidden">
+    </div>
+    <button class="btn" id="btnSwissTransfer">Send</button>
+    <button class="btn" id="btnPrint">Print</button>
   </div>
 
   <footer class="foot">© <span id="copyYear"></span> amei.se</footer>
