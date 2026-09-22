@@ -187,6 +187,11 @@ function wireLabelSide(side){
 
   document.getElementById("whitelabel-"+side).addEventListener("change", (e)=>{
     document.getElementById("labelblankdisc-"+side).classList.toggle("hidden", !e.target.checked);
+    // The disc only covers a circle inset from the box's edges (the
+    // real label's trim margin) — hide whatever's rendered underneath
+    // (iframe/img/placeholder) entirely, or the real preview would
+    // still show through around the disc.
+    document.getElementById("labelpreview-"+side).classList.toggle("blanked", e.target.checked);
     document.getElementById("labelwarnings-"+side).classList.toggle("hidden", e.target.checked);
     document.getElementById("labelblanknote-"+side).classList.toggle("hidden", !e.target.checked);
   });

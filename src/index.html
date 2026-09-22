@@ -206,13 +206,17 @@
   /* Whitelabel preview — a plain disc standing in for "this side gets
      no printed artwork," inset from the data square by the same
      margin a real label's trim circle would sit at (set inline, in
-     mm, by updatePreviewSizing in labels.js). Sits over whatever
-     preview is already in .label-preview (if any) rather than
-     replacing it, so unchecking whitelabel needs no state to restore. */
+     mm, by updatePreviewSizing in labels.js). Layers over .label-preview
+     rather than replacing its content, so unchecking whitelabel needs
+     no state to restore — but .label-preview itself is hidden
+     (.blanked, toggled alongside this) while it's showing, since the
+     disc only covers a circle and would otherwise leave a real
+     iframe/img/placeholder visible around its edges. */
   .label-blank-disc{
     position:absolute; border-radius:50%;
     background:#fff; border:1px solid var(--edge);
   }
+  .label-preview.blanked{ visibility:hidden; }
   /* A 4-column check table — status/Check/Detected/Expected, one row per
      check (Size/Resolution/Colour mode/…) — see buildChecklistRows in
      print-artwork.js. Every <tr> carries an explicit .info/.warn/.error/
