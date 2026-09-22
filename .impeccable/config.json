@@ -29,6 +29,15 @@
         ],
         "createdAt": "2026-09-20T07:53:49.018Z",
         "reason": "Print-only (@media print h1/legend/label/checklist/input sizes, 9-15px): a deliberate dense single-page reference sheet, inherited unchanged from before this design system existed. The documented type ramp in DESIGN.md covers the screen system only, matching this file's own '11px Floor Rule' note that print is exempt."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "src/index.html"
+        ],
+        "createdAt": "2026-09-22T13:04:03.205Z",
+        "reason": "h2's border-bottom rule uses padding-bottom:8px between text and rule, meeting the tool's own stated floor (at least 8px); deliberate minimal choice from this branch's CSS redesign, not a regression"
       }
     ]
   }
