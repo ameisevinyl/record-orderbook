@@ -23,7 +23,7 @@ function colorRowTemplate(){
     </div>
     <div class="field" style="flex:0 0 auto;">
       <label>&nbsp;</label>
-      <button type="button" class="rmbtn no-print colourRemove" title="Remove colour">✕</button>
+      <button type="button" class="rmbtn no-print colourRemove" title="Remove colour">(x)</button>
     </div>
   </div>`;
 }
