@@ -395,7 +395,7 @@ function updateChecklist(){
 function sideTemplate(side){
   const isB = side === "B";
   return `
-  <div class="side-box" id="sidebox-${side}">
+  <div id="sidebox-${side}">
     <div class="side-head">
       <h2>Side ${side}</h2>
       <div class="side-opts">

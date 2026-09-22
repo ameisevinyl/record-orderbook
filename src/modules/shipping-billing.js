@@ -96,11 +96,11 @@ function billingTemplate(){
 
 function shipAddrTemplate(isPrimary){
   return `
-  <div class="side-box ship-addr">
+  <div class="ship-addr">
     <div class="side-head">
-      <h2 class="ship-addr-title"></h2>
+      <h3 class="ship-addr-title"></h3>
       <div class="side-opts">
-        ${isPrimary ? `<label class="chk"><input type="checkbox" class="sameAsBilling"> same as billing address</label>` : `<button type="button" class="rmbtn no-print shipRemove" title="Remove address">✕</button>`}
+        ${isPrimary ? `<label class="chk"><input type="checkbox" class="sameAsBilling"> same as billing address</label>` : `<button type="button" class="rmbtn no-print shipRemove" title="Remove address">(x)</button>`}
       </div>
     </div>
     ${addressCoreFieldsHtml()}
