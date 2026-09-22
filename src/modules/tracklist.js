@@ -72,7 +72,7 @@ function createTrackRow(side){
   row.className = "track-row";
   row.innerHTML = `
     <div class="pos">--</div>
-    <button type="button" class="pickbtn no-print" title="Choose audio file">(+)</button>
+    <button type="button" class="pickbtn no-print" title="Choose audio file">↑</button>
     <div class="field" style="margin:0;"><input type="text" class="title" placeholder="track title (optional)"></div>
     <div class="field artist-field" style="margin:0;">
       <input type="text" class="artist" placeholder="artist (optional)" readonly>
@@ -90,7 +90,7 @@ function createTrackRow(side){
       </select>
       <input type="number" class="gapcustom" min="0" step="0.5" value="2">
     </div>
-    <button type="button" class="rmbtn no-print" title="Remove track">(x)</button>
+    <button type="button" class="rmbtn no-print" title="Remove track">x</button>
     <div class="filemeta empty"></div>
   `;
   const fileInput = document.createElement("input");
@@ -415,7 +415,7 @@ function sideTemplate(side){
         <div class="row" style="align-items:end;">
           <div class="field" style="flex:0 0 auto;">
             <label>&nbsp;</label>
-            <button type="button" class="pickbtn no-print" id="contpick-${side}" title="Choose side file">(+)</button>
+            <button type="button" class="pickbtn no-print" id="contpick-${side}" title="Choose side file">↑</button>
           </div>
           <div class="field">
             <label>Side length (auto from file, or enter manually)</label>

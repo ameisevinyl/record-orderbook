@@ -39,7 +39,7 @@ function labelSideTemplate(side){
       <div class="row" style="align-items:end;">
         <div class="field" style="flex:0 0 auto;">
           <label>&nbsp;</label>
-          <button type="button" class="pickbtn no-print" id="labelpick-${side}" title="Choose label artwork">(+)</button>
+          <button type="button" class="pickbtn no-print" id="labelpick-${side}" title="Choose label artwork">↑</button>
         </div>
         <div class="field">
           <label style="display:flex;align-items:center;gap:6px;">Artwork file <span id="labelinfo-${side}"></span></label>

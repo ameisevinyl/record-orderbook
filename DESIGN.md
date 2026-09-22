@@ -57,7 +57,7 @@ Audience: label owners/artists filling the form, and plant staff
 (customer service, mastering engineer, graphics department) rereading
 or editing it. Both are desktop users at a desk — this is not designed
 for mobile. Both already know how to read a form; the page doesn't
-explain itself beyond a per-field `(?)` info toggle for whoever wants
+explain itself beyond a per-field `?` info toggle for whoever wants
 more detail.
 
 ## Colors
@@ -128,9 +128,9 @@ Action order: **Save · Load | Send | Print** — grouped by workflow
 (project actions, then the plant-facing action, then the rarely-used
 print/export), with room for future buttons in the same order logic.
 
-Small inline actions are plain bracketed text, not icons:
-`(+)` choose/attach a file, `(x)` remove a file, `(?)` open a field's
-info text. No authored SVG icon anywhere in the system.
+Small inline actions are plain single characters, not icons:
+`↑` choose/attach a file, `x` remove a file, `?` open a field's info
+text. No authored SVG icon anywhere in the system.
 
 ### Sections
 
@@ -161,8 +161,8 @@ The playing-time recommendation ("within recommendation" /
 
 ### Do:
 - Use `--danger` exclusively for warning/error/missing states.
-- Use plain ASCII/text for every small affordance (`(+)`, `(x)`,
-  `(?)`, `✓`, `!`) instead of an authored icon.
+- Use plain ASCII/text for every small affordance (`↑`, `x`,
+  `?`, `✓`, `!`) instead of an authored icon.
 - Reserve monospace for genuinely measured/identifying values.
 - Let native browser chrome (details marker, checkbox/radio/select)
   do the work instead of a custom-drawn replacement.

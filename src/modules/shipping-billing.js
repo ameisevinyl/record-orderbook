@@ -100,7 +100,7 @@ function shipAddrTemplate(isPrimary){
     <div class="side-head">
       <h3 class="ship-addr-title"></h3>
       <div class="side-opts">
-        ${isPrimary ? `<label class="chk"><input type="checkbox" class="sameAsBilling"> same as billing address</label>` : `<button type="button" class="rmbtn no-print shipRemove" title="Remove address">(x)</button>`}
+        ${isPrimary ? `<label class="chk"><input type="checkbox" class="sameAsBilling"> same as billing address</label>` : `<button type="button" class="rmbtn no-print shipRemove" title="Remove address">x</button>`}
       </div>
     </div>
     ${addressCoreFieldsHtml()}

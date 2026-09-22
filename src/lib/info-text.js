@@ -15,5 +15,5 @@ export function infoText(infoConfig, locale, key){
 // as the file-picker buttons.
 export function renderInfoIcon(text){
   if(!text) return "";
-  return `<details class="info no-print"><summary title="More info">(?)</summary><div class="info-body">${text}</div></details>`;
+  return `<details class="info no-print"><summary title="More info">?</summary><div class="info-body">${text}</div></details>`;
 }
