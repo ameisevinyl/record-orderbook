@@ -9,7 +9,8 @@
 // the obvious mistakes.
 //
 // All three parsers return the same shape (or null if unreadable):
-//   { pageSizeMm, imagePx, declaredDpi, colorMode, spotColors, iccProfileName }
+//   { pageSizeMm, imagePx, declaredDpi, colorMode, spotColors, iccProfileName,
+//     hasOutputIntent, hasTrimBox, encrypted }
 // - pageSizeMm  — {w,h} in mm, from a PDF's /BleedBox, /TrimBox, or
 //                 /MediaBox (first one present, in that priority order —
 //                 see parsePdfArtwork). null for JPEG/TIFF, which have no
@@ -32,6 +33,12 @@
 //                 null when there's no profile at all. Always null for
 //                 JPEG/TIFF — this file never reads their (much rarer)
 //                 embedded-profile markers, only a PDF's /ICCBased.
+// - hasOutputIntent, hasTrimBox, encrypted — PDF/X-3 proxy checks (see
+//                 parsePdfArtwork), true/false for a PDF. null for
+//                 JPEG/TIFF, which have no PDF/X concept at all — not
+//                 false, so validateArtwork never wrongly warns a flat
+//                 raster upload about a "missing" TrimBox/OutputIntent
+//                 that was never applicable to begin with.
 
 // ---- format sniffing (magic bytes, not file extension) ----------------
 
@@ -101,7 +108,10 @@ export function parseJpegArtwork(arrayBuffer){
   else if(components === 3) colorMode = "RGB";
   else if(components === 4) colorMode = "CMYK"; // Adobe CMYK/YCCK JPEG — plain baseline JPEG has no 4th channel
 
-  return { pageSizeMm: null, imagePx: {w:widthPx, h:heightPx}, declaredDpi: dpi, colorMode, spotColors: [], iccProfileName: null };
+  return {
+    pageSizeMm: null, imagePx: {w:widthPx, h:heightPx}, declaredDpi: dpi, colorMode, spotColors: [],
+    iccProfileName: null, hasOutputIntent: null, hasTrimBox: null, encrypted: null
+  };
 }
 
 // ---- TIFF: read the IFD tag directory -----------------------------------
@@ -175,7 +185,10 @@ export function parseTiffArtwork(arrayBuffer){
     declaredDpi: (xres && yres) ? {x:xres, y:yres} : null,
     colorMode,
     spotColors: [],
-    iccProfileName: null
+    iccProfileName: null,
+    hasOutputIntent: null,
+    hasTrimBox: null,
+    encrypted: null
   };
 }
 
@@ -525,7 +538,18 @@ export async function parsePdfArtwork(arrayBuffer){
 
   const iccProfileName = await detectIccProfileName(text, bytes);
 
-  return { pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors, iccProfileName };
+  // PDF/X (what a pressing plant requires — ISO 15930-3:2002, based on
+  // PDF 1.4) mandates an OutputIntent (the target printing condition/
+  // ICC profile), a TrimBox on every page, and no encryption. These are
+  // proxy checks, not full conformance validation (see this file's
+  // header comment on scope) — plain presence checks in the same
+  // plaintext structure everything else here already scans, cheap
+  // enough to always run.
+  const hasOutputIntent = /\/OutputIntents\b/.test(text);
+  const hasTrimBox = /\/TrimBox\b/.test(text);
+  const encrypted = /\/Encrypt\b/.test(text);
+
+  return { pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors, iccProfileName, hasOutputIntent, hasTrimBox, encrypted };
 }
 
 // ---- validation ----------------------------------------------------------
@@ -540,6 +564,12 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
     errors.push("could not read this file — please check it is a valid PDF, JPG, or TIFF");
     return { errors, warnings, impliedDpi:null, checkedSizeMm:null };
   }
+
+  // An error, not a warning: an encrypted PDF can't be processed by the
+  // plant's system at all (and most of what else this function checks
+  // can't be trusted either, since the actual content stream is
+  // encrypted garbage to this parser too).
+  if(parsed.encrypted) errors.push("file appears to be encrypted — please export without a password/permissions lock");
 
   let impliedDpi = null;
   let checkedSizeMm = null;
@@ -597,6 +627,16 @@ export function validateArtwork(parsed, targetMm, toleranceMm, dpiMin, dpiMax){
   // extra for (an additional printing plate/pass per spot colour).
   if(parsed.spotColors && parsed.spotColors.length){
     warnings.push(`uses spot colour(s): ${parsed.spotColors.join(", ")} — may incur additional cost, please confirm with the plant`);
+  }
+
+  // PDF/X-3 proxy checks (see parsePdfArtwork) — hasOutputIntent/
+  // hasTrimBox are only ever true/false for a PDF, null (skipped here)
+  // for JPEG/TIFF, which have no PDF/X concept to check against.
+  if(parsed.hasOutputIntent === false){
+    warnings.push("no OutputIntent found — a print-ready PDF/X export should declare its target printing condition (e.g. ISO Coated v2)");
+  }
+  if(parsed.hasTrimBox === false){
+    warnings.push("no TrimBox found — a print-ready PDF/X export should declare the exact trim size on every page");
   }
 
   // A label's target is always square (w===h; covers/sleeves/inlays aren't,

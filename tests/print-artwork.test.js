@@ -218,6 +218,17 @@ test("parseJpegArtwork returns null for non-JPEG bytes", () => {
   assert.equal(parseJpegArtwork(new Uint8Array([1, 2, 3, 4]).buffer), null);
 });
 
+test("parseJpegArtwork reports the PDF/X-3 proxy checks as not applicable (null), not false", () => {
+  // A raster upload has no PDF/X concept at all — false would wrongly
+  // suggest validateArtwork should warn about a missing OutputIntent/
+  // TrimBox on a plain JPEG, which was never applicable to begin with.
+  const buf = buildJpegHeader({ width: 500, height: 500, components: 3, jfifUnits: 1, jfifX: 300, jfifY: 300 });
+  const info = parseJpegArtwork(buf);
+  assert.equal(info.hasOutputIntent, null);
+  assert.equal(info.hasTrimBox, null);
+  assert.equal(info.encrypted, null);
+});
+
 // ---- parseTiffArtwork ----
 
 test("parseTiffArtwork reads dimensions, resolution, and CMYK photometric interpretation", () => {
@@ -243,6 +254,17 @@ test("parseTiffArtwork converts resolution unit cm to inch-equivalent dpi", () =
 
 test("parseTiffArtwork returns null for non-TIFF bytes", () => {
   assert.equal(parseTiffArtwork(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]).buffer), null);
+});
+
+test("parseTiffArtwork reports the PDF/X-3 proxy checks as not applicable (null), not false", () => {
+  const buf = buildTiffHeader({
+    width: 500, height: 500, photometric: 5, samplesPerPixel: 4,
+    xres: [300, 1], yres: [300, 1], resUnit: 2,
+  });
+  const info = parseTiffArtwork(buf);
+  assert.equal(info.hasOutputIntent, null);
+  assert.equal(info.hasTrimBox, null);
+  assert.equal(info.encrypted, null);
 });
 
 // ---- parsePdfArtwork ----
@@ -474,6 +496,40 @@ endobj`
   assert.equal(info.iccProfileName, null);
 });
 
+// ---- parsePdfArtwork: PDF/X-3 proxy checks (OutputIntent, TrimBox, encryption) ----
+
+test("parsePdfArtwork detects an OutputIntent and a TrimBox when both are present", async () => {
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (ISO Coated v2) >>] >>
+endobj
+2 0 obj
+<< /Type /Page /MediaBox [0 0 300 300] /TrimBox [10 10 290 290] >>
+endobj`;
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.hasOutputIntent, true);
+  assert.equal(info.hasTrimBox, true);
+  assert.equal(info.encrypted, false);
+});
+
+test("parsePdfArtwork reports a missing OutputIntent and TrimBox when neither is present", async () => {
+  const pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox [0 0 300 300] >>\nendobj\n";
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.hasOutputIntent, false);
+  assert.equal(info.hasTrimBox, false);
+});
+
+test("parsePdfArtwork detects encryption via /Encrypt in the trailer", async () => {
+  const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Page /MediaBox [0 0 300 300] >>
+endobj
+trailer
+<< /Root 1 0 R /Encrypt 5 0 R >>`;
+  const info = await parsePdfArtwork(pdfBuffer(pdf));
+  assert.equal(info.encrypted, true);
+});
+
 // ---- validateArtwork ----
 
 const TARGET = {w:98, h:98}, TOL = 0.5, DPI_MIN = 300, DPI_MAX = 1200;
@@ -551,6 +607,29 @@ test("validateArtwork doesn't warn about spot colours for a plain process-colour
   for (const parsed of [withoutField, withEmptyArray]) {
     const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
     assert.ok(!result.warnings.some((w) => w.includes("spot colour")), result.warnings.join("; "));
+  }
+});
+
+test("validateArtwork errors (not just warns) on an encrypted file — the plant's system can't process it", () => {
+  const parsed = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", encrypted: true };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  assert.ok(result.errors.some((e) => e.includes("encrypted")), result.errors.join("; "));
+});
+
+test("validateArtwork warns when a PDF is missing an OutputIntent or a TrimBox", () => {
+  const parsed = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasOutputIntent: false, hasTrimBox: false };
+  const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+  assert.ok(result.warnings.some((w) => w.includes("OutputIntent")), result.warnings.join("; "));
+  assert.ok(result.warnings.some((w) => w.includes("TrimBox")), result.warnings.join("; "));
+});
+
+test("validateArtwork doesn't warn about OutputIntent/TrimBox/encryption when all three checks pass or are not applicable", () => {
+  const allGood = { pageSizeMm: { w: 98, h: 98 }, imagePx: null, declaredDpi: null, colorMode: "CMYK", hasOutputIntent: true, hasTrimBox: true, encrypted: false };
+  const notApplicable = { pageSizeMm: null, imagePx: { w: 1157, h: 1157 }, declaredDpi: { x: 300, y: 300 }, colorMode: "CMYK", hasOutputIntent: null, hasTrimBox: null, encrypted: null };
+  for (const parsed of [allGood, notApplicable]) {
+    const result = validateArtwork(parsed, TARGET, TOL, DPI_MIN, DPI_MAX);
+    assert.ok(!result.warnings.some((w) => w.includes("OutputIntent") || w.includes("TrimBox")), result.warnings.join("; "));
+    assert.ok(!result.errors.some((e) => e.includes("encrypted")), result.errors.join("; "));
   }
 });
 
