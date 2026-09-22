@@ -600,7 +600,7 @@ function serializeSide(side){
   return data;
 }
 
-function buildProjectObject(){
+function buildProjectObject(forSend = false){
   return {
     catalogue: document.getElementById("catalogue").value,
     format: document.getElementById("format").value,
@@ -611,7 +611,7 @@ function buildProjectObject(){
     sides: { A: serializeSide("A"), B: serializeSide("B") },
     vinylColor: collectVinylColor(),
     shippingBilling: collectShippingBilling(),
-    labels: collectLabels(),
+    labels: collectLabels(forSend),
     coverSleeve: { cover: collectCover(), innerSleeve: collectInnerSleeve(), inlay: collectInlay() }
   };
 }
@@ -639,9 +639,15 @@ function currentProjectFileName(project){
 
 // A project is always a .zip — see CLAUDE.md's Workflow. Builds it fresh
 // from the current form state every time, so it's never stale.
-async function buildProjectZip(){
-  const project = buildProjectObject();
-  const files = await collectPackageFiles();
+// forSend: true for the package handed to the plant (sendToPlant),
+// false for a customer-facing save (saveProject) — the only
+// difference it makes is whitelabel label sides: their file is kept
+// for a save (so re-opening it later doesn't lose work) but left out
+// of what's actually sent, since the plant doesn't need it. See
+// collectLabels/collectLabelFiles in labels.js.
+async function buildProjectZip(forSend = false){
+  const project = buildProjectObject(forSend);
+  const files = await collectPackageFiles(forSend);
   files.push({name:"order_summary.txt", data: new TextEncoder().encode(buildOrderSummaryText(project)).buffer});
   files.push({name:"tracklist.txt", data: new TextEncoder().encode(buildTracklistText(project)).buffer});
   files.push({name:"project.json", data: new TextEncoder().encode(JSON.stringify(project, null, 2)).buffer});
@@ -774,7 +780,7 @@ async function loadProject(file){
   recompute();
 }
 
-async function collectPackageFiles(){
+async function collectPackageFiles(forSend = false){
   const catalogue = document.getElementById("catalogue").value;
   const files = [];
   for(const side of ["A","B"]){
@@ -797,7 +803,7 @@ async function collectPackageFiles(){
       }
     }
   }
-  files.push(...await collectLabelFiles());
+  files.push(...await collectLabelFiles(forSend));
   files.push(...await collectCoverFiles());
   files.push(...await collectInnerSleeveFiles());
   files.push(...await collectInlayFiles());
@@ -829,14 +835,15 @@ function documentHeader(project, label){
 
 // Printed-part filenames only — tracks/continuous-side files are already
 // listed in the per-side tables below, so repeating them here would be
-// redundant. A null fileName means "not actually included" (unprinted,
-// inlay not included, no file attached, etc.) — see collectLabels/
-// collectCover/collectInnerSleeve/collectInlay. A whitelabel side's file,
-// if one was attached, still shows up here — whitelabel only tells the
-// plant they don't need to print it, it doesn't drop the file from the
-// package. order_summary.txt only — the mastering engineer and graphics
-// department (tracklist.txt) don't need a manifest of the artwork files,
-// they already have the files themselves.
+// redundant. A null fileName means "not actually included in THIS
+// package" (unprinted, inlay not included, no file attached, or — for
+// a whitelabel label side — deliberately left out of what's sent to
+// the plant even though it's still kept in a customer's own saved
+// project; see collectLabels/collectLabelFiles's forSend parameter) —
+// see also collectCover/collectInnerSleeve/collectInlay. order_summary.txt
+// only — the mastering engineer and graphics department (tracklist.txt)
+// don't need a manifest of the artwork files, they already have the
+// files themselves.
 function filesManifestSection(project){
   const l = project.labels, c = project.coverSleeve;
   const packageFiles = [
@@ -991,7 +998,7 @@ function confirmIncompleteSend(){
    ============================================================ */
 async function sendToPlant(){
   if(!confirmIncompleteSend()) return;
-  const {blob, fileName} = await buildProjectZip();
+  const {blob, fileName} = await buildProjectZip(true);
   downloadBlob(blob, fileName);
 
   const cat = document.getElementById("catalogue").value.trim() || "(no catalogue number)";

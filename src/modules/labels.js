@@ -227,22 +227,27 @@ function labelFileName(side, file){
 // contents aren't stored in the JSON, only the canonical package name —
 // tracklist.js's collectLabelFiles below builds the exact same name for
 // the actual file, so a reopened project zip can re-attach it by an
-// exact name match. fileName is null only when no file is attached —
-// whitelabel never discards an already-attached file (checking it just
-// means the plant doesn't need to use it; the customer may still
-// uncheck it later, and Save Project must not lose work either way). A
-// non-null fileName here always means the file is actually in the
-// package, which is what lets the tracklist/order-summary exports build
-// their file manifest straight from this data, no DOM re-check needed.
-export function collectLabels(){
+// exact name match.
+//
+// forSend (true for sendToPlant, false/omitted for saveProject) governs
+// whitelabel sides specifically: the plant doesn't need a file for a
+// side it's not printing, so it's left out of what's actually sent —
+// but Save Project must never lose work, so a saved project keeps the
+// reference regardless of whitelabel. Whichever way, fileName here is
+// null exactly when collectLabelFiles (same forSend) leaves the file
+// out of the package, which is what lets the tracklist/order-summary
+// exports build their file manifest straight from this data, no DOM
+// re-check needed.
+export function collectLabels(forSend = false){
   return {
     bigCenter: document.getElementById("bigCenter").checked,
     sides: Object.fromEntries(SIDES.map(side => {
       const whitelabel = document.getElementById("whitelabel-"+side).checked;
       const file = document.getElementById("labelbox-"+side)._file;
+      const included = file && !(forSend && whitelabel);
       return [side, {
         whitelabel,
-        fileName: file ? labelFileName(side, file) : null
+        fileName: included ? labelFileName(side, file) : null
       }];
     }))
   };
@@ -283,12 +288,16 @@ export async function applyLabels(data, fileMap){
 // Exported for the tracklist module's package export — labels doesn't
 // reach into tracklist's DOM, and tracklist doesn't reach into this
 // module's DOM either; this function is the only interface between them.
-export async function collectLabelFiles(){
+// forSend: see collectLabels above — same condition, kept in sync so a
+// side's fileName in project.json always matches whether its bytes are
+// actually in this same package.
+export async function collectLabelFiles(forSend = false){
   const files = [];
   for(const side of SIDES){
     const box = document.getElementById("labelbox-"+side);
     const file = box._file;
-    if(!file) continue;
+    const whitelabel = document.getElementById("whitelabel-"+side).checked;
+    if(!file || (forSend && whitelabel)) continue;
     files.push({ name: labelFileName(side, file), data: await file.arrayBuffer() });
     if(box._previewFile){
       const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"labels", variant:side});
