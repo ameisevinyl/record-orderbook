@@ -30,21 +30,14 @@ function labelSideTemplate(side){
   <div id="labelbox-${side}">
     <div class="side-head">
       <h3>Label ${side}</h3>
-      <div class="side-opts">
-        <label class="chk"><input type="checkbox" id="whitelabel-${side}"> whitelabel (blank)</label>
-      </div>
     </div>
 
     <div id="labelbody-${side}">
-      <div class="row" style="align-items:end;">
-        <div class="field" style="flex:0 0 auto;">
-          <label>&nbsp;</label>
-          <button type="button" class="pickbtn no-print" id="labelpick-${side}" title="Choose label artwork">↑</button>
-        </div>
-        <div class="field">
-          <label style="display:flex;align-items:center;gap:6px;">Artwork file <span id="labelinfo-${side}"></span></label>
-          <div class="filemeta empty" id="labelmeta-${side}"></div>
-        </div>
+      <div class="row" style="align-items:center;">
+        <button type="button" class="pickbtn no-print" id="labelpick-${side}" title="Choose label artwork">↑</button>
+        <label class="chk"><input type="checkbox" id="whitelabel-${side}"> whitelabel (blank)</label>
+        <div class="filemeta empty" id="labelmeta-${side}" style="margin:0;"></div>
+        <span id="labelinfo-${side}" style="margin-left:auto;"></span>
       </div>
       <input type="file" id="labelinput-${side}" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
 

@@ -287,10 +287,8 @@ function statusFor(seconds, side){
 }
 
 function recompute(){
-  let recordTotal = 0;
   ["A","B"].forEach(side=>{
     const seconds = computeSideSeconds(side);
-    recordTotal += seconds;
     const {level, maxMin, idealMin} = statusFor(seconds, side);
     const totalFig = document.getElementById("total-"+side);
     const badge = document.getElementById("badge-"+side);
@@ -304,7 +302,6 @@ function recompute(){
                        : "exceeds recommendation";
     note.textContent = `${format}", ${rpm} RPM${mode==="soundsystem"?" · soundsystem cut":""} — ideal up to ${idealMin} min, max ${maxMin} min`;
   });
-  document.getElementById("recordTotal").textContent = formatTime(recordTotal);
   updateChecklist();
 }
 

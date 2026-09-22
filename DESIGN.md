@@ -72,7 +72,7 @@ attention." Nothing else.
   distinct from the page — no fill, no border, no card.
 - **Field** (`#f6f6f5`): input backgrounds only — the one place a
   fill distinguishes an element, because it's interactive.
-- **Edge** (`#d6d6d3`): hairline rules under section headings, and
+- **Edge** (`#d6d6d3`): hairline rules closing out each section, and
   input/button borders. The only place a border appears.
 - **Danger** (`#b3261e`): the one alarm color. Warnings, errors,
   missing/incomplete parts — checklist `!` marks, artwork warnings, a
@@ -98,13 +98,17 @@ single-page reference, not a screen-legibility problem).
 ## Layout
 
 Single-column vertical form, desktop-first, `max-width: 1040px`,
-centered. A section is a bold heading followed by one hairline rule;
-fields flow directly beneath it, no border, no background. A repeated
-sub-item (a side, an address) is a plain sub-heading one size down
-from the section heading — no box, no fill, no rule of its own. Rows
-use flex-wrap with `min-width` floors so a narrower window reflows
-rather than clips, but no dedicated mobile layout exists — this tool
-lives at a service desk or a lathe, not a phone.
+centered. A section is a bold heading (optional — a section with no
+ambiguity, like Labels, can skip straight to its content) followed by
+its fields, closed out by one hairline rule after the last field —
+not under the heading. That keeps the tight gap where it belongs
+(heading to its own content) and the looser gap where a new section
+actually begins (rule to next heading). A repeated sub-item (a side,
+an address) is a plain sub-heading one size down from the section
+heading — no box, no fill, no rule of its own. Rows use flex-wrap
+with `min-width` floors so a narrower window reflows rather than
+clips, but no dedicated mobile layout exists — this tool lives at a
+service desk or a lathe, not a phone.
 
 Print collapses the same structure into a dense reference sheet (tight
 padding, hairline rules) — the screen and print layouts were already
@@ -113,8 +117,9 @@ close; this pass makes them closer.
 ## Elevation & Depth
 
 None. No shadows, no cards, no raised surfaces anywhere. A section is
-separated from the page by a rule under its heading, nothing more. An
-input is separated from the page by its `--field` fill, nothing more.
+separated from the next by a rule after its own last field, nothing
+more. An input is separated from the page by its `--field` fill,
+nothing more.
 
 ## Components
 
@@ -134,9 +139,11 @@ text. No authored SVG icon anywhere in the system.
 
 ### Sections
 
-A bold heading, one hairline rule beneath it, fields below. No border,
-no fill, no nesting. A sub-item inside a section (a side, an address)
-is a plain sub-heading, not a box.
+A bold heading (skippable when the content is self-evident, like two
+side-by-side sub-items), fields below it, one hairline rule after the
+last field — closing the section, not underlining the heading. No
+border, no fill, no nesting. A sub-item inside a section (a side, an
+address) is a plain sub-heading, not a box.
 
 ### Inputs / Fields
 

@@ -60,15 +60,9 @@
 
   h1,h2,h3{ font-family:var(--sans); font-weight:700; margin:0; }
   h1{ font-size:18px; letter-spacing:-.005em; color:var(--ink); }
-  h2{
-    font-size:15px; color:var(--ink); padding-bottom:8px;
-    border-bottom:1px solid var(--edge); margin-bottom:14px;
-  }
+  h2{ font-size:15px; color:var(--ink); margin-bottom:10px; }
   h3{ font-size:13.5px; color:var(--ink); margin-bottom:8px; }
-  .eyebrow{
-    font-size:11px; letter-spacing:.06em; text-transform:uppercase;
-    color:var(--ink-dim); font-weight:600; margin-bottom:4px;
-  }
+  section{ border-bottom:1px solid var(--edge); margin-bottom:20px; }
 
   header.top{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
   header.top .idline{
@@ -105,7 +99,7 @@
      quantities — get the monospace/tabular treatment; everything else
      (labels, buttons, prose) stays on the sans. Monospace here marks
      actual measurement, not a "technical" costume. */
-  #catalogue, [id^="matrix-"], .len-wrap input, .pos, .total-fig, .summary .big,
+  #catalogue, [id^="matrix-"], .len-wrap input, .pos, .total-fig,
   input[type=number]{
     font-family:var(--mono); font-variant-numeric:tabular-nums;
   }
@@ -115,7 +109,7 @@
     grid-template-columns: 42px 26px 1fr 1fr 84px 150px 24px;
     gap:6px; align-items:end;
     font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-dim);
-    padding:0 4px 4px; border-bottom:1px solid var(--edge);
+    padding:0 4px 4px;
   }
   .track-row{
     display:grid;
@@ -265,8 +259,6 @@
   .cols2{ display:grid; grid-template-columns:1fr; gap:18px; }
   .label-cols2{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
 
-  .summary{ display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
-  .summary .big{ font-size:25px; font-weight:700; color:var(--ink); }
   .checklist{ list-style:none; margin:0; padding:0; font-size:13px; }
   .checklist li{ display:flex; gap:7px; align-items:center; padding:2px 0; }
   .checklist .mark{ width:1em; flex:0 0 auto; font-weight:700; }
@@ -326,8 +318,8 @@
        reference document (with artwork previews and billing/shipping
        info) rather than a stack of loosely-padded panels. */
     h1{ font-size:15px; }
-    section{ break-inside:avoid; }
-    h2{ font-size:11px; padding-bottom:2px; margin-bottom:6px; }
+    section{ break-inside:avoid; margin-bottom:8px; }
+    h2{ font-size:11px; margin-bottom:4px; }
     .side-head{ margin-bottom:5px; }
     .field{ margin-bottom:4px; }
     .row{ gap:6px; }
@@ -419,20 +411,12 @@
 
   <!-- ============ RECORD SUMMARY ============ -->
   <section>
-    <h2>Record Summary</h2>
-    <div class="summary">
-      <div>
-        <div class="eyebrow">Total playing time</div>
-        <div class="big" id="recordTotal">0:00</div>
-      </div>
-      <ul class="checklist" id="checklist"></ul>
-    </div>
+    <ul class="checklist" id="checklist"></ul>
   </section>
 
 
   <!-- ============ LABELS ============ -->
   <section>
-    <h2>Labels</h2>
     <div class="label-cols2" id="labelSides"></div>
   </section>
 
