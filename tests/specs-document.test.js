@@ -71,8 +71,8 @@ test("buildSpecsHtml includes only enabled formats", () => {
 test("buildSpecsHtml includes the audio spec figures", () => {
   const html = buildSpecsHtml(config);
   assert.match(html, /WAV, AIFF/);
-  assert.match(html, /16-bit min \(24-bit recommended\)/);
-  assert.match(html, /44\.1kHz min/);
+  assert.match(html, /&gt;=16-bit \(24-bit recommended\)/);
+  assert.match(html, /&gt;=44\.1kHz/);
 });
 
 test("buildSpecsHtml includes the print-file specs", () => {

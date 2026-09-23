@@ -603,8 +603,8 @@ function renderImprint(){
 function renderAudioSpecs(){
   const a = CONFIG.audioSpec;
   document.getElementById("audioSpecFiletypes").textContent = a.labels.join(", ");
-  document.getElementById("audioSpecBitDepth").textContent = `${a.minBitDepth}-bit min (${a.recommendedBitDepth}-bit recommended)`;
-  document.getElementById("audioSpecSampleRate").textContent = `${a.minSampleRateHz/1000}kHz min`;
+  document.getElementById("audioSpecBitDepth").textContent = `>=${a.minBitDepth}-bit (${a.recommendedBitDepth}-bit recommended)`;
+  document.getElementById("audioSpecSampleRate").textContent = `>=${a.minSampleRateHz/1000}kHz`;
 }
 
 export function initTracklist(){

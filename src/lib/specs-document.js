@@ -101,8 +101,8 @@ function audioSection(audioSpec){
   return `<h2>Audio Master Files</h2>
     ${kvTable([
       ["Allowed filetypes", audioSpec.labels.join(", ")],
-      ["Bit depth", `${audioSpec.minBitDepth}-bit min (${audioSpec.recommendedBitDepth}-bit recommended)`],
-      ["Sample rate", (audioSpec.minSampleRateHz/1000) + "kHz min"]
+      ["Bit depth", `>=${audioSpec.minBitDepth}-bit (${audioSpec.recommendedBitDepth}-bit recommended)`],
+      ["Sample rate", ">=" + (audioSpec.minSampleRateHz/1000) + "kHz"]
     ])}`;
 }
 

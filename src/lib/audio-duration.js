@@ -201,10 +201,10 @@ export function audioSpecWarning(spec, audioSpec){
   }
   const below = [];
   if(spec.bitsPerSample && spec.bitsPerSample < audioSpec.minBitDepth){
-    below.push(`${spec.bitsPerSample}-bit (min ${audioSpec.minBitDepth}-bit)`);
+    below.push(`${spec.bitsPerSample}-bit (>=${audioSpec.minBitDepth}-bit)`);
   }
   if(spec.sampleRate && spec.sampleRate < audioSpec.minSampleRateHz){
-    below.push(`${khz(spec.sampleRate)} (min ${khz(audioSpec.minSampleRateHz)})`);
+    below.push(`${khz(spec.sampleRate)} (>=${khz(audioSpec.minSampleRateHz)})`);
   }
   if(below.length) problems.push(`below spec: ${below.join(", ")}`);
   return problems.length ? `⚠ ${problems.join("; ")}` : null;
