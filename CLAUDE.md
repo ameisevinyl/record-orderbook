@@ -112,7 +112,15 @@ configured on purpose — keep it that way unless asked.
 
 - `src/index.html` — page shell, loads `src/app.js` as an ES module.
 - `src/app.js` — DOM wiring / UI logic for the current module in view.
-- `src/config.js` — the `CONFIG` object; every plant-specific value.
+- `src/config.js` — the `CONFIG` object; every plant-specific value,
+  except the real plant identity (imprint/transfer) — see
+  `CONFIG.plant` below.
+- `src/plant.config.local.js` (gitignored, not committed) — a real
+  plant's actual identity data, overriding `config.js`'s safe sample
+  `CONFIG.plant`. `build/build.js` splices it into the bundle right
+  after `config.js` when present; without it (e.g. the public GitHub
+  Pages build, which never sees a gitignored file) the sample data
+  ships instead. Copy `src/plant.config.local.example.js` to create it.
 - `src/lib/*.js` — pure, DOM-free functions: time parsing/formatting, the
   ZIP writer, WAV/AIFF duration parsing, playing-time threshold logic.
   Anything here should be unit-testable without a browser.
@@ -150,8 +158,14 @@ configured on purpose — keep it that way unless asked.
   e.g. the catalogue number plus side letter. Defaults to
   `<catalogue> <side>`, editable per side, until the customer types
   their own — see `applyDefaultMatrix` in `tracklist.js`.
-- **Studio email** (`CONFIG.studioEmail`) — where finished packages get
-  sent (e.g. via SwissTransfer) for the cutting engineer to pick up.
+- **Plant identity** (`CONFIG.plant`) — this deployment's own business
+  data: `imprint` (EU/German legal imprint fields, shown small in the
+  footer) and `transfer` (where finished packages get sent — a direct
+  upload link if the plant has one, else a transfer service's homepage
+  + recipient email; see `src/lib/transfer.js`). `config.js` only ever
+  holds safe sample data; a real plant's actual data lives in
+  `src/plant.config.local.js` (gitignored, see its `.example.js`
+  template) and is spliced in at build time — see Architecture below.
 - **Project** — one release's complete form state, saved/loaded as a
   single .zip (`project.json` + `order_summary.txt` + `tracklist.txt` +
   renamed customer files) — see the Workflow section above for why it's
@@ -164,9 +178,11 @@ configured on purpose — keep it that way unless asked.
 
 - Plain, modern JS (ES2020+ features are fine — target is current
   evergreen browsers, not legacy IE-era compatibility).
-- Plant-specific values (playing-time thresholds, default RPM, studio
-  email, printing specs) live in a single `CONFIG` object — never
-  hardcode them elsewhere.
+- Plant-specific values (playing-time thresholds, default RPM, plant
+  identity, printing specs) live in a single `CONFIG` object — never
+  hardcode them elsewhere. Real plant identity (imprint/transfer) is
+  the one exception that doesn't belong in the committed `config.js` —
+  see `CONFIG.plant` above.
 - Comments explain *why*, not *what*, especially around anything
   reverse-engineered from a file format spec (WAV/AIFF chunks, ZIP
   headers) — cite the chunk/field being read.

@@ -1,6 +1,6 @@
 // Tracklist module — catalogue number, format/RPM, side A/B track
 // listing, playing-time warnings, printable order sheet, ZIP package
-// export, SwissTransfer handoff.
+// export, plant handoff (Send panel).
 //
 // DOM-coupled by design (this is UI wiring, not a pure lib) — pure
 // logic (time parsing, ZIP writer, WAV/AIFF duration, threshold rules)
@@ -16,6 +16,7 @@ import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeTy
 import { renderTable } from "../lib/text-table.js";
 import { defaultMatrix } from "../lib/matrix.js";
 import { isDebugMode } from "../lib/debug-mode.js";
+import { transferLink, transferInstructions } from "../lib/transfer.js";
 import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
 import { collectCoverFiles, collectCover, applyCover } from "./cover.js";
 import { collectInnerSleeveFiles, collectInnerSleeve, applyInnerSleeve } from "./inner-sleeve.js";
@@ -530,8 +531,21 @@ function printOrder(){
   window.print();
 }
 
+// EU/German legal imprint requirement (Impressum) — kept small in the
+// page footer, sourced from CONFIG.plant.imprint (sample/placeholder
+// unless overridden by plant.config.local.js at build time — see
+// config.js). A reasonable general field set, not legal advice.
+function renderImprint(){
+  const p = CONFIG.plant.imprint;
+  const addressLine = [p.recipientName, p.addressLine1, p.addressLine2, p.addressLine3].filter(Boolean).join(", ");
+  const cityLine = [[p.postalCode, p.city].filter(Boolean).join(" "), p.countryCode].filter(Boolean).join(", ");
+  const parts = [addressLine, cityLine, p.email, p.phone, p.vat && `VAT ${p.vat}`].filter(Boolean);
+  document.getElementById("imprint").textContent = parts.join(" · ");
+}
+
 export function initTracklist(){
   document.getElementById("copyYear").textContent = new Date().getFullYear();
+  renderImprint();
   populateFormatOptions();
   document.getElementById("sides").innerHTML = sideTemplate("A") + sideTemplate("B");
   ["A","B"].forEach(side=>{
@@ -573,7 +587,16 @@ export function initTracklist(){
     e.target.value = "";
     if(file) loadProject(file);
   });
-  document.getElementById("btnSwissTransfer").addEventListener("click", sendToPlant);
+  document.getElementById("btnSend").addEventListener("click", sendToPlant);
+  document.getElementById("btnResendZip").addEventListener("click", ()=>{
+    if(!lastSentZip) return;
+    downloadBlob(lastSentZip.blob, lastSentZip.fileName);
+  });
+  document.getElementById("btnCopyInstructions").addEventListener("click", ()=>{
+    if(!lastSentZip) return;
+    const steps = transferInstructions(CONFIG.plant.transfer, lastSentZip.fileName);
+    copyToClipboard(steps.join("\n"));
+  });
 }
 
 function serializeSide(side){
@@ -1019,54 +1042,67 @@ function confirmIncompleteSend(){
 }
 
 /* ============================================================
-   SwissTransfer — no public browser-callable upload API exists,
-   so this stays a two-step handoff: download the package, then
-   open a short instruction page telling the person which file to
-   upload and where to send it.
+   Send to Plant — no public browser-callable upload API exists for
+   the transfer services this targets, so this stays a handoff:
+   download the package, then show an inline panel with the steps to
+   finish it manually (see src/lib/transfer.js for the instructions
+   logic). An earlier version opened a generated instruction page via
+   window.open() after the async zip build — popup blockers routinely
+   killed that in Safari/Firefox, since by the time window.open() ran
+   it was no longer considered a direct response to the click. An
+   inline panel has no such risk.
    ============================================================ */
-// cat/fileName below are built from customer-entered text (catalogue
-// number, and fileName folds in the customer's own email/catalogue via
-// currentProjectFileName) — escaped before landing in this hand-built
-// HTML string, the same reasoning as renderChecklist's textContent use
-// elsewhere, just via string escaping since this page isn't live DOM.
-function escapeHtml(str){
-  return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
+
+// {blob, fileName} from the most recent successful Send — lets "Save
+// .zip again"/"Copy instructions" reuse the exact file/name that was
+// actually sent, rather than rebuilding (which could differ if the
+// customer edited the form afterward).
+let lastSentZip = null;
 
 async function sendToPlant(){
   if(!confirmIncompleteSend()) return;
   const {blob, fileName} = await buildProjectZip(true);
   downloadBlob(blob, fileName);
+  lastSentZip = {blob, fileName};
+  showSendPanel(fileName);
+}
 
-  const cat = escapeHtml(document.getElementById("catalogue").value.trim() || "(no catalogue number)");
-  const safeFileName = escapeHtml(fileName);
-  const page = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Send — ${cat}</title>
-<style>
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-       background:#ffffff;color:#161616;max-width:520px;margin:60px auto;padding:0 20px;line-height:1.6;}
-  h1{font-size:15px;padding-bottom:8px;border-bottom:1px solid #d6d6d3;margin-bottom:14px;}
-  .box{border:1px solid #d6d6d3;border-radius:3px;padding:12px 14px;margin:14px 0;background:#f6f6f5;}
-  .label{font-size:12px;color:#5c5c59;}
-  .val{font-size:14px;font-weight:700;margin-top:2px;}
-  a.btn{display:inline-block;margin-top:14px;padding:8px 14px;border:1px solid #d6d6d3;color:#161616;
-        text-decoration:none;border-radius:3px;font-size:13px;}
-  a.btn:hover{background:#f6f6f5;border-color:#161616;}
-</style></head>
-<body>
-  <h1>Send — ${cat}</h1>
-  <div class="box">
-    <div class="label">Upload this file</div>
-    <div class="val">${safeFileName}</div>
-  </div>
-  <div class="box">
-    <div class="label">Send to</div>
-    <div class="val">${CONFIG.studioEmail}</div>
-  </div>
-  <p>Open SwissTransfer, add the file above, enter the address above as the recipient, and send.</p>
-  <a class="btn" href="https://www.swisstransfer.com/" target="_blank" rel="noopener">Open swisstransfer.com</a>
-</body></html>`;
-  const pageBlob = new Blob([page], {type:"text/html"});
-  window.open(URL.createObjectURL(pageBlob), "_blank");
+function showSendPanel(fileName){
+  const steps = transferInstructions(CONFIG.plant.transfer, fileName);
+  const list = document.getElementById("sendPanelSteps");
+  list.innerHTML = "";
+  steps.forEach(text=>{
+    const li = document.createElement("li");
+    li.textContent = text;
+    list.appendChild(li);
+  });
+  document.getElementById("sendPanelOpenLink").href = transferLink(CONFIG.plant.transfer);
+  const panel = document.getElementById("sendPanel");
+  panel.classList.remove("hidden");
+  panel.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+// navigator.clipboard needs a secure context — unavailable when this
+// page is opened via file://, which is how most customers actually run
+// it (see CLAUDE.md's Workflow). Falls back to the legacy
+// execCommand("copy") path, which still works everywhere this tool
+// needs to run.
+function copyToClipboard(text){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).catch(()=> copyViaTextarea(text));
+  } else {
+    copyViaTextarea(text);
+  }
+}
+
+function copyViaTextarea(text){
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try{ document.execCommand("copy"); } catch(e){ /* best effort */ }
+  document.body.removeChild(ta);
 }
 

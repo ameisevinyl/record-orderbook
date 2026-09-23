@@ -17,16 +17,22 @@
 // function in tracklist.js, which was fine under real per-file module
 // scope but would collide once flattened here).
 
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 
-// Dependencies before dependents.
+// Dependencies before dependents. src/plant.config.local.js (gitignored
+// real plant identity — see src/plant.config.local.example.js) is
+// spliced in right after config.js only when present, overwriting its
+// sample CONFIG.plant. A build run without it (e.g. CI building the
+// public GitHub Pages demo, which never sees a gitignored file) just
+// keeps config.js's safe sample data.
 const FILES = [
   "src/config.js",
+  ...(existsSync(join(ROOT, "src/plant.config.local.js")) ? ["src/plant.config.local.js"] : []),
   "src/lib/time.js",
   "src/lib/zip.js",
   "src/lib/audio-duration.js",
@@ -41,6 +47,7 @@ const FILES = [
   "src/lib/text-table.js",
   "src/lib/matrix.js",
   "src/lib/format-catalogue.js",
+  "src/lib/transfer.js",
   "src/modules/labels.js",
   "src/modules/cover.js",
   "src/modules/inner-sleeve.js",

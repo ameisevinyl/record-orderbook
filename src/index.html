@@ -300,13 +300,14 @@
 
   .actions{ display:flex; align-items:center; gap:24px; flex-wrap:wrap; }
   .action-group{ display:flex; gap:10px; flex-wrap:wrap; }
-  button.btn{
+  .btn{
     font-family:var(--sans); font-size:13px; font-weight:600;
     background:var(--panel); color:var(--ink); border:1px solid var(--edge);
     padding:8px 14px; border-radius:3px; cursor:pointer;
+    display:inline-block; text-decoration:none;
   }
-  button.btn:hover{ background:var(--field); border-color:var(--ink); }
-  button.btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn:hover{ background:var(--field); border-color:var(--ink); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
 
   .hidden{ display:none !important; }
 
@@ -637,11 +638,24 @@
       <button class="btn" id="btnOpenProject">Load</button>
       <input type="file" id="openProjectInput" accept=".zip,application/zip" class="hidden">
     </div>
-    <button class="btn" id="btnSwissTransfer">Send</button>
+    <button class="btn" id="btnSend">Send</button>
     <button class="btn" id="btnPrint">Print</button>
   </div>
 
-  <footer class="foot">© <span id="copyYear"></span> amei.se</footer>
+  <section id="sendPanel" class="hidden no-print">
+    <h2>Send</h2>
+    <ol id="sendPanelSteps"></ol>
+    <div class="row">
+      <a class="btn" id="sendPanelOpenLink" href="#" target="_blank" rel="noopener">Open upload page</a>
+      <button type="button" class="btn" id="btnResendZip">Save .zip again</button>
+      <button type="button" class="btn" id="btnCopyInstructions">Copy instructions</button>
+    </div>
+  </section>
+
+  <footer class="foot">
+    © <span id="copyYear"></span> amei.se
+    <div id="imprint"></div>
+  </footer>
 
 </div>
 

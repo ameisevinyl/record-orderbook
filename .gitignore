@@ -5,6 +5,12 @@
 # this line.
 /dist/
 
+# Real plant identity (imprint/transfer config) — never committed, see
+# src/plant.config.local.example.js for the template. Without this
+# file, both dev mode and any build run without it show the safe
+# sample data from config.js instead.
+/src/plant.config.local.js
+
 # OS/editor noise
 .DS_Store
 *.swp
