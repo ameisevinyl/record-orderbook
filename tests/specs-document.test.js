@@ -9,6 +9,7 @@ const config = {
   audioSpec: {
     labels: ["WAV", "AIFF"],
     minBitDepth: 16,
+    recommendedBitDepth: 24,
     minSampleRateHz: 44100
   },
   formats: [
@@ -70,7 +71,7 @@ test("buildSpecsHtml includes only enabled formats", () => {
 test("buildSpecsHtml includes the audio spec figures", () => {
   const html = buildSpecsHtml(config);
   assert.match(html, /WAV, AIFF/);
-  assert.match(html, /16-bit min/);
+  assert.match(html, /16-bit min \(24-bit recommended\)/);
   assert.match(html, /44\.1kHz min/);
 });
 

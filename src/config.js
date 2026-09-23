@@ -34,10 +34,14 @@ export const CONFIG = {
   // track/continuous-side file the same way compressionWarning already
   // flags a non-WAV/AIFF extension (see audioSpecWarning in
   // lib/audio-duration.js). minBitDepth/minSampleRateHz are read
-  // straight from the WAV/AIFF header.
+  // straight from the WAV/AIFF header and enforced (below either one
+  // warns). recommendedBitDepth is display-only, never enforced — a
+  // 16-bit file already meets spec, this just tells the customer what
+  // the plant would prefer if they have it.
   audioSpec: {
     labels: ["WAV", "AIFF"],
     minBitDepth: 16,
+    recommendedBitDepth: 24,
     minSampleRateHz: 44100
   },
 
