@@ -100,14 +100,24 @@ export function initVinylColor(){
    manually-entered total, tracklist.js uses collect/apply for JSON
    save/load.
    ============================================================ */
+// One entry per distinct colour — the same colour picked in two rows
+// (nothing stops that in the UI) merges into a single summed qty here,
+// rather than producing two breakdown entries with the same `color`
+// value. shipping-billing.js's syncColorRows keys its per-address qty
+// fields by `color`, so a duplicate would otherwise silently strand a
+// second, unreachable input for the same colour.
 export function getColorBreakdown(){
-  return colorRowEls()
-    .map(row => ({
-      color: row.querySelector(".colour").value,
-      label: row.querySelector(".colour option:checked").textContent,
-      qty: Number(row.querySelector(".colourQty").value) || 0
-    }))
-    .filter(r => r.qty > 0);
+  const byColor = new Map();
+  for(const row of colorRowEls()){
+    const color = row.querySelector(".colour").value;
+    const qty = Number(row.querySelector(".colourQty").value) || 0;
+    if(qty <= 0) continue;
+    const label = row.querySelector(".colour option:checked").textContent;
+    const existing = byColor.get(color);
+    if(existing) existing.qty += qty;
+    else byColor.set(color, {color, label, qty});
+  }
+  return Array.from(byColor.values());
 }
 
 export function collectVinylColor(){
