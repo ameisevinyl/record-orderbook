@@ -5,6 +5,7 @@
 // — no DOM, testable like every other lib/ file.
 
 import { enabledFormats, labelDataSizeMm, flatDataMm, partWeightG } from "./format-catalogue.js";
+import { labelLayoutSvg, printedPartLayoutSvg } from "./layout-preview.js";
 
 function esc(str){
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -34,7 +35,8 @@ function productTable(title, products){
     ["Spine",       p => p.spineMm != null ? `${p.spineMm}mm` : "—"],
     ["Paper",       p => `${p.paperGsm}gsm`],
     ["Cut-out",     p => p.cutoutDiameterMm ? `⌀${p.cutoutDiameterMm}mm` : "—"],
-    ["Weight",      p => p.trimMm ? `${partWeightG(p)}g` : "—"]
+    ["Weight",      p => p.trimMm ? `${partWeightG(p)}g` : "—"],
+    ["Layout",      p => p.trimMm ? printedPartLayoutSvg(p) : "—"]
   ].filter(([, valueOf]) => printed.some(p => valueOf(p) !== "—"));
 
   const head = columns.map(([h]) => `<th>${esc(h)}</th>`).join("");
@@ -88,8 +90,8 @@ function formatSection(format, artworkFileTypes, printSpec){
     ${printFilesTable(format, artworkFileTypes, printSpec)}
     <h3>Label</h3>
     <table>
-      <thead><tr><th>End format</th><th>Bleed</th><th>Data format</th></tr></thead>
-      <tbody><tr><td>⌀${label.diameterMm}mm</td><td>${label.bleedMm}mm</td><td>${labelDataSizeMm(label)}×${labelDataSizeMm(label)}mm</td></tr></tbody>
+      <thead><tr><th>End format</th><th>Bleed</th><th>Data format</th><th>Layout</th></tr></thead>
+      <tbody><tr><td>⌀${label.diameterMm}mm</td><td>${label.bleedMm}mm</td><td>${labelDataSizeMm(label)}×${labelDataSizeMm(label)}mm</td><td>${labelLayoutSvg(label)}</td></tr></tbody>
     </table>
     ${productTable("Inner Sleeve", parts.innerSleeve.products)}
     ${productTable("Outer Cover", parts.outerCover.products)}
@@ -116,6 +118,11 @@ const SPECS_CSS = `
   table{border-collapse:collapse;width:100%;font-size:12px;margin-top:6px;}
   th,td{border:1px solid #d6d6d3;padding:4px 8px;text-align:left;}
   th{background:#f6f6f5;font-weight:600;}
+  .layout{display:block;}
+  .layout .bleed{fill:none;stroke:#b3b3b0;stroke-dasharray:3 2;}
+  .layout .trim{fill:none;stroke:#161616;}
+  .layout .fold{stroke:#b3b3b0;stroke-dasharray:3 2;}
+  .layout .cutout{fill:none;stroke:#161616;stroke-dasharray:2 2;}
   ul{font-size:12px;padding-left:18px;}
   @page{ margin:12mm; }
   /* Each format starts on its own page — but not the audio section, so

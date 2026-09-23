@@ -60,6 +60,7 @@ const FILES = [
   "src/lib/matrix.js",
   "src/lib/format-catalogue.js",
   "src/lib/transfer.js",
+  "src/lib/layout-preview.js",
   "src/lib/specs-document.js",
   "src/lib/project.js",
   "src/lib/order-documents.js",
