@@ -25,11 +25,25 @@ function inlaySpec(){
   return getFormat(CONFIG, inlayCurrentFormat()).printableParts.inlay;
 }
 
+// row.detected/row.feature can echo untrusted text read out of the
+// uploaded file itself (e.g. an ICC profile's description tag) — built
+// as DOM nodes via textContent, never innerHTML, so a crafted file
+// can't inject markup/script into this page.
 function renderInlayChecklist(tableEl, parsed, kind, targetMm, trimMm, printCheck){
   const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode());
-  const body = rows.map(row =>
-    `<tr class="${row.severity}"><td>${CHECKLIST_ICON[row.severity]}</td><td>${row.feature}</td><td>${row.detected}</td><td>${row.expected || ""}</td></tr>`).join("");
-  tableEl.innerHTML = `<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead><tbody>${body}</tbody>`;
+  tableEl.innerHTML = "<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  for(const row of rows){
+    const tr = document.createElement("tr");
+    tr.className = row.severity;
+    for(const text of [CHECKLIST_ICON[row.severity], row.feature, row.detected, row.expected || ""]){
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  tableEl.appendChild(tbody);
 }
 
 // prefix is "inlayfront" or "inlayback" — the two sides share this

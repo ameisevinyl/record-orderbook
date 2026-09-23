@@ -1,6 +1,6 @@
 // Labels module — per-side artwork upload, best-effort validation
 // (physical size, resolution, CMYK). All the parsing/validation logic
-// is pure and lives in ../lib/label-artwork.js; this file is DOM
+// is pure and lives in ../lib/print-artwork.js; this file is DOM
 // wiring only.
 //
 // This is a front-end sanity check, not the real gate — the studio's
@@ -106,12 +106,26 @@ function updateLabelInfo(){
   SIDES.forEach(side=> document.getElementById("labelinfo-"+side).innerHTML = html);
 }
 
+// row.detected/row.feature can echo untrusted text read out of the
+// uploaded file itself (e.g. an ICC profile's description tag) — built
+// as DOM nodes via textContent, never innerHTML, so a crafted file
+// can't inject markup/script into this page.
 function renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck){
   const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode());
-  const body = rows.map(row =>
-    `<tr class="${row.severity}"><td>${CHECKLIST_ICON[row.severity]}</td><td>${row.feature}</td><td>${row.detected}</td><td>${row.expected || ""}</td></tr>`).join("");
-  document.getElementById("labelwarnings-"+side).innerHTML =
-    `<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead><tbody>${body}</tbody>`;
+  const table = document.getElementById("labelwarnings-"+side);
+  table.innerHTML = "<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  for(const row of rows){
+    const tr = document.createElement("tr");
+    tr.className = row.severity;
+    for(const text of [CHECKLIST_ICON[row.severity], row.feature, row.detected, row.expected || ""]){
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
 }
 
 async function handleFile(side, file){

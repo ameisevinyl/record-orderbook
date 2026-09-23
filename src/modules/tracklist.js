@@ -996,12 +996,22 @@ function confirmIncompleteSend(){
    open a short instruction page telling the person which file to
    upload and where to send it.
    ============================================================ */
+// cat/fileName below are built from customer-entered text (catalogue
+// number, and fileName folds in the customer's own email/catalogue via
+// currentProjectFileName) — escaped before landing in this hand-built
+// HTML string, the same reasoning as renderChecklist's textContent use
+// elsewhere, just via string escaping since this page isn't live DOM.
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
 async function sendToPlant(){
   if(!confirmIncompleteSend()) return;
   const {blob, fileName} = await buildProjectZip(true);
   downloadBlob(blob, fileName);
 
-  const cat = document.getElementById("catalogue").value.trim() || "(no catalogue number)";
+  const cat = escapeHtml(document.getElementById("catalogue").value.trim() || "(no catalogue number)");
+  const safeFileName = escapeHtml(fileName);
   const page = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Send — ${cat}</title>
 <style>
@@ -1019,7 +1029,7 @@ async function sendToPlant(){
   <h1>Send — ${cat}</h1>
   <div class="box">
     <div class="label">Upload this file</div>
-    <div class="val">${fileName}</div>
+    <div class="val">${safeFileName}</div>
   </div>
   <div class="box">
     <div class="label">Send to</div>
