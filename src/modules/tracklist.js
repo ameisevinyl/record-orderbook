@@ -15,6 +15,7 @@ import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-cat
 import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType, humanDate } from "../lib/package-naming.js";
 import { renderTable } from "../lib/text-table.js";
 import { defaultMatrix } from "../lib/matrix.js";
+import { isDebugMode } from "../lib/debug-mode.js";
 import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
 import { collectCoverFiles, collectCover, applyCover } from "./cover.js";
 import { collectInnerSleeveFiles, collectInnerSleeve, applyInnerSleeve } from "./inner-sleeve.js";
@@ -388,7 +389,17 @@ function updateChecklist(){
   // warning. Only missingArtwork/erroredArtwork set it; every earlier
   // items.push(...) in this function omits it, so it's undefined/falsy
   // there — see CONFIG.blockIncompleteArtworkOnSend for the on/off switch.
-  list.innerHTML = items.map(([ok, text, blocking])=>
+  //
+  // Satisfied (ok) items are hidden outside debug mode — this is a
+  // status block a customer checks before sending, not a running log of
+  // everything that's already fine; a still-blank form filling up with
+  // green checkmarks (or red "not yet attached" warnings for parts they
+  // haven't reached yet) is noise, not signal. Nothing queries
+  // ".checklist li.ok" anywhere (confirmIncompleteSend/printOrder only
+  // ever look at li.bad), so omitting ok rows from the DOM entirely is
+  // safe — it doesn't affect Send/Print gating.
+  const visibleItems = isDebugMode() ? items : items.filter(([ok]) => !ok);
+  list.innerHTML = visibleItems.map(([ok, text, blocking])=>
     `<li class="${ok?'ok':'bad'}${blocking?' blocking':''}"><span class="mark">${ok?'✓':'!'}</span>${text}</li>`
   ).join("");
 }
