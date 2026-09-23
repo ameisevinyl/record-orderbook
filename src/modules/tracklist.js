@@ -464,17 +464,17 @@ function sideTemplate(side){
       </div>
       <button type="button" class="addbtn no-print" id="addbtn-${side}">+ add track</button>
 
-      <div class="field" style="max-width:260px; margin-top:12px;">
-        <label>Matrix / Runout Inscription</label>
-        <input type="text" id="matrix-${side}" maxlength="60">
-      </div>
-
       <div class="side-total">
         <div>
           <div>total playing time: <span class="total-fig" id="total-${side}">0:00</span></div>
           <div class="limits-note" id="limitsnote-${side}"></div>
         </div>
         <span class="badge ok" id="badge-${side}">within recommendation</span>
+      </div>
+
+      <div class="field" style="max-width:260px; margin-top:12px;">
+        <label>Matrix / Runout Inscription</label>
+        <input type="text" id="matrix-${side}" maxlength="60">
       </div>
     </div>
   </div>`;
@@ -519,7 +519,7 @@ function applyDefaultMatrix(){
   ["A","B"].forEach(side=>{
     const input = document.getElementById("matrix-"+side);
     if(input._auto === false) return;
-    input.value = defaultMatrix(catalogue, side);
+    input.value = defaultMatrix(catalogue, side).toUpperCase();
   });
 }
 
@@ -578,7 +578,17 @@ export function initTracklist(){
     addTrack(side);
     wireSideOptions(side);
     document.getElementById("rpm-"+side).addEventListener("change", recompute);
-    document.getElementById("matrix-"+side).addEventListener("input", (e)=>{ e.target._auto = false; });
+    document.getElementById("matrix-"+side).addEventListener("input", (e)=>{
+      e.target._auto = false;
+      // Etched into the runout groove exactly as typed — force the
+      // actual value uppercase (not just a CSS display trick), so
+      // project.json/order_summary.txt carry what really gets cut.
+      // Uppercasing never changes string length, so the cursor position
+      // stays put.
+      const pos = e.target.selectionStart;
+      e.target.value = e.target.value.toUpperCase();
+      e.target.setSelectionRange(pos, pos);
+    });
   });
 
   document.getElementById("format").addEventListener("change", applyDefaultRpm);
@@ -845,7 +855,7 @@ async function loadProject(file){
     // keep updating an untouched matrix field after a reload.
     const matrixInput = document.getElementById("matrix-"+side);
     if(s.matrixInscription != null){
-      matrixInput.value = s.matrixInscription;
+      matrixInput.value = s.matrixInscription.toUpperCase();
       matrixInput._auto = s.matrixInscriptionAuto === false ? false : true;
     } else {
       matrixInput._auto = true;

@@ -107,6 +107,10 @@
   input[type=number]{
     font-family:var(--mono); font-variant-numeric:tabular-nums;
   }
+  /* Visual-only — the actual value is forced uppercase in JS (see the
+     matrix-<side> input listener in tracklist.js), since this is
+     etched into the runout groove exactly as typed, not just displayed. */
+  [id^="matrix-"]{ text-transform:uppercase; }
 
   .grid-head{
     display:grid;
