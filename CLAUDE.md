@@ -133,7 +133,9 @@ configured on purpose — keep it that way unless asked.
 - `tests/*.test.js` — mirrors `src/lib/`. New pure logic needs a test.
 - `build/build.js` — concatenates `src/lib` + `src/modules` + `src/app.js`
   into `src/index.html`'s `<script type="module">`, inlines CSS, and
-  writes the result to `dist/index.html`. No external tools.
+  writes the result to `dist/index.html`. No external tools. Aborts when
+  `CI` is set and a real `src/plant.config.local.js` is present, so a
+  plant's identity can never be baked into a public build.
 
 ## Domain glossary (so you don't have to ask)
 

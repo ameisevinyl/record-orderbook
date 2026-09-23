@@ -544,7 +544,6 @@ function renderImprint(){
 }
 
 export function initTracklist(){
-  document.getElementById("copyYear").textContent = new Date().getFullYear();
   renderImprint();
   populateFormatOptions();
   document.getElementById("sides").innerHTML = sideTemplate("A") + sideTemplate("B");

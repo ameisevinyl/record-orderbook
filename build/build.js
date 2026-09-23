@@ -30,9 +30,20 @@ const ROOT = join(__dirname, "..");
 // sample CONFIG.plant. A build run without it (e.g. CI building the
 // public GitHub Pages demo, which never sees a gitignored file) just
 // keeps config.js's safe sample data.
+const LOCAL_PLANT_CONFIG = "src/plant.config.local.js";
+const hasLocalPlantConfig = existsSync(join(ROOT, LOCAL_PLANT_CONFIG));
+
+// A real plant identity must never reach a public artifact. CI (GitHub
+// Actions sets CI=true) builds the Pages preview, which must keep
+// config.js's sample CONFIG.plant — abort if a gitignored local config is
+// present in the checkout anyway.
+if(process.env.CI && hasLocalPlantConfig){
+  throw new Error(`build.js: refusing to build under CI with ${LOCAL_PLANT_CONFIG} present`);
+}
+
 const FILES = [
   "src/config.js",
-  ...(existsSync(join(ROOT, "src/plant.config.local.js")) ? ["src/plant.config.local.js"] : []),
+  ...(hasLocalPlantConfig ? [LOCAL_PLANT_CONFIG] : []),
   "src/lib/time.js",
   "src/lib/zip.js",
   "src/lib/audio-duration.js",

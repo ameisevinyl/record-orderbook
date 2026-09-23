@@ -5,9 +5,8 @@
 // one physical format — array order is display order. `enabled` toggles a
 // format out of the dropdown without removing its configuration; it stays
 // fully usable everywhere else. At least one format must stay enabled.
-// Release-level data that doesn't vary by format (studio email, vinyl
-// colour, locale, info text) stays here as formats' siblings, not nested
-// under it.
+// Release-level data that doesn't vary by format (vinyl colour, locale,
+// info text) stays here as formats' siblings, not nested under it.
 //
 // Currently only 12" and 7" are enabled — 10" is configured but off, for
 // testing.
