@@ -1,10 +1,8 @@
 // Builds the "Specs" button's reference document — every enabled
 // format's label/printed-part/audio specs, baked into one self-
 // contained HTML page. The browser's own Print-to-PDF gives an actual
-// PDF if wanted; no hand-rolled PDF writer needed (see the packaging
-// product catalog design spec for why this beats a bespoke binary
-// format). Pure string-building — no DOM, testable like every other
-// lib/ file.
+// PDF if wanted; no hand-rolled PDF writer needed. Pure string-building
+// — no DOM, testable like every other lib/ file.
 
 import { enabledFormats, labelDataSizeMm, flatDataMm, partWeightG } from "./format-catalogue.js";
 
@@ -16,31 +14,35 @@ function kvTable(rows){
   return `<table><tbody>${rows.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>`;
 }
 
-// One row per product, columns that don't apply to a given category
-// (e.g. Spine for inner sleeve, Final size for inlay) just show "—" —
-// same convention the live per-category Specifications box already
-// uses for a field a selected product doesn't have.
+// One row per PRINTED product — unprinted stock has no artwork file, so
+// its print spec is nothing but noise in this document. Columns that
+// don't apply to any of a category's printed products (e.g. Spine on
+// inner sleeve, Final size on inlay) are dropped rather than shown as a
+// full column of "—", same "only what applies" rule the live
+// Specifications box follows for a selected product.
 function productTable(title, products){
-  if(!products.length) return "";
-  const rows = products.map(p=>{
-    const dataMm = p.trimMm ? flatDataMm(p) : null;
-    const cells = [
-      esc(p.name), esc(p.kind),
-      p.finalMm ? `${p.finalMm.w}×${p.finalMm.h}mm` : "—",
-      p.trimMm ? `${p.trimMm.w}×${p.trimMm.h}mm` : "—",
-      dataMm ? `${dataMm.w}×${dataMm.h}mm` : "—",
-      p.trimMm ? `${p.bleedMm}mm` : "—",
-      p.spineMm != null ? `${p.spineMm}mm` : "—",
-      `${p.paperGsm}gsm`,
-      p.cutoutDiameterMm ? `⌀${p.cutoutDiameterMm}mm` : "none",
-      p.trimMm ? `${partWeightG(p)}g` : "—"
-    ];
-    return `<tr>${cells.map(c=>`<td>${c}</td>`).join("")}</tr>`;
-  }).join("");
+  const printed = products.filter(p => p.kind === "printed");
+  if(!printed.length) return "";
+
+  const dataSize = p => { const d = flatDataMm(p); return `${d.w}×${d.h}mm`; };
+  const columns = [
+    ["Product",     p => esc(p.name)],
+    ["Final size",  p => p.finalMm ? `${p.finalMm.w}×${p.finalMm.h}mm` : "—"],
+    ["End format",  p => p.trimMm ? `${p.trimMm.w}×${p.trimMm.h}mm` : "—"],
+    ["Data format", p => p.trimMm ? dataSize(p) : "—"],
+    ["Bleed",       p => p.trimMm ? `${p.bleedMm}mm` : "—"],
+    ["Spine",       p => p.spineMm != null ? `${p.spineMm}mm` : "—"],
+    ["Paper",       p => `${p.paperGsm}gsm`],
+    ["Cut-out",     p => p.cutoutDiameterMm ? `⌀${p.cutoutDiameterMm}mm` : "—"],
+    ["Weight",      p => p.trimMm ? `${partWeightG(p)}g` : "—"]
+  ].filter(([, valueOf]) => printed.some(p => valueOf(p) !== "—"));
+
+  const head = columns.map(([h]) => `<th>${esc(h)}</th>`).join("");
+  const body = printed.map(p => `<tr>${columns.map(([, valueOf]) => `<td>${valueOf(p)}</td>`).join("")}</tr>`).join("");
   return `<h3>${esc(title)}</h3>
     <table>
-      <thead><tr><th>Product</th><th>Kind</th><th>Final size</th><th>End format</th><th>Data format</th><th>Bleed</th><th>Spine</th><th>Paper</th><th>Cut-out</th><th>Weight</th></tr></thead>
-      <tbody>${rows}</tbody>
+      <thead><tr>${head}</tr></thead>
+      <tbody>${body}</tbody>
     </table>`;
 }
 
@@ -56,20 +58,43 @@ function timeLimitsTable(format){
     </table>`;
 }
 
-function formatSection(format){
+function printFilesTable(format, artworkFileTypes, printSpec){
+  const { checks, dpi } = format.printCheck;
+  return `<h3>Print files</h3>
+    ${kvTable([
+      ["Allowed filetypes", artworkFileTypes.labels.join(", ")],
+      ["Colour mode", checks.colorMode.accepted.join("/")],
+      ["Colour profile", printSpec.colourProfile],
+      ["Spot colours", checks.spotColors.accepted ? "allowed" : "not allowed"],
+      ["Resolution", `${dpi.min}–${dpi.max} dpi`]
+    ])}`;
+}
+
+function centerHoleLabel(centerHole){
+  return Object.entries(centerHole).map(([kind, mm]) => `${kind} ${mm}mm`).join(" · ");
+}
+
+function formatSection(format, artworkFileTypes, printSpec){
   const label = format.printableParts.label;
   const parts = format.printableParts;
-  return `<h2>${esc(format.label)}</h2>
-    ${kvTable([["RPM (default)", format.rpm], ["Record weight", format.recordWeightG + "g"]])}
+  return `<section class="format">
+    <h2>${esc(format.label)}</h2>
+    ${kvTable([
+      ["RPM (default)", format.rpm],
+      ["Center hole", centerHoleLabel(format.centerHole)],
+      ["Record weight", format.recordWeightG + "g"]
+    ])}
+    ${timeLimitsTable(format)}
+    ${printFilesTable(format, artworkFileTypes, printSpec)}
     <h3>Label</h3>
     <table>
-      <thead><tr><th>Diameter</th><th>Bleed</th><th>Data size</th></tr></thead>
-      <tbody><tr><td>⌀${label.diameterMm}mm</td><td>${label.bleedMm}mm</td><td>⌀${labelDataSizeMm(label)}mm</td></tr></tbody>
+      <thead><tr><th>End format</th><th>Bleed</th><th>Data format</th></tr></thead>
+      <tbody><tr><td>⌀${label.diameterMm}mm</td><td>${label.bleedMm}mm</td><td>${labelDataSizeMm(label)}×${labelDataSizeMm(label)}mm</td></tr></tbody>
     </table>
-    ${timeLimitsTable(format)}
     ${productTable("Inner Sleeve", parts.innerSleeve.products)}
     ${productTable("Outer Cover", parts.outerCover.products)}
-    ${productTable("Inlay", parts.inlay.products)}`;
+    ${productTable("Inlay", parts.inlay.products)}
+  </section>`;
 }
 
 function audioSection(audioSpec){
@@ -78,11 +103,7 @@ function audioSection(audioSpec){
       ["Allowed filetypes", audioSpec.labels.join(", ")],
       ["Bit depth", audioSpec.minBitDepth + "-bit min"],
       ["Sample rate", (audioSpec.minSampleRateHz/1000) + "kHz min"]
-    ])}
-    <h3>Mastering notes</h3>
-    <ul>${audioSpec.advisory.map(a=>`<li>${esc(a)}</li>`).join("")}</ul>
-    <p class="note">Normal cut — standard level, wider margins, longer max time, home/DJ playback.<br>
-    Soundsystem cut — hotter/louder, club/PA playback, shorter max time, tighter grooves.</p>`;
+    ])}`;
 }
 
 const SPECS_CSS = `
@@ -96,9 +117,11 @@ const SPECS_CSS = `
   th,td{border:1px solid #d6d6d3;padding:4px 8px;text-align:left;}
   th{background:#f6f6f5;font-weight:600;}
   ul{font-size:12px;padding-left:18px;}
-  .note{font-size:11px;color:#5c5c59;}
-  hr{border:none;border-top:1px solid #d6d6d3;margin:24px 0;}
-  @media print{ body{margin:0;padding:0 10mm;} h2{break-before:page;} }
+  @page{ margin:12mm; }
+  /* Each format starts on its own page — but not the audio section, so
+     page 1 isn't just the title (an h2-wide break-before did exactly
+     that). */
+  @media print{ body{margin:0;max-width:none;padding:0;} .format{break-before:page;} }
 `;
 
 export function buildSpecsHtml(CONFIG){
@@ -112,6 +135,6 @@ export function buildSpecsHtml(CONFIG){
   <h1>${esc(plantName)} — Specifications</h1>
   <p class="meta">Generated ${esc(generated)}</p>
   ${audioSection(CONFIG.audioSpec)}
-  ${formats.map(formatSection).join("<hr>")}
+  ${formats.map(f => formatSection(f, CONFIG.artworkFileTypes, CONFIG.printSpec)).join("")}
 </body></html>`;
 }

@@ -40,27 +40,25 @@ export const CONFIG = {
     labels: ["PDF", "JPG", "TIFF"]
   },
 
+  // Print-file reference specs shown in the Specs document. Not
+  // auto-checked — the studio's backend preprocessor does the real
+  // validation; see each format's printCheck for the checks that run
+  // in-browser.
+  printSpec: {
+    colourProfile: "ISO ECI v2 300"
+  },
+
   // Audio master file requirements — format-agnostic (same regardless
-  // of 7"/10"/12"), shown in the Audio Master Files Specifications box
-  // and checked inline per track/continuous-side file the same way
-  // compressionWarning already flags a non-WAV/AIFF extension (see
-  // audioSpecWarning in lib/audio-duration.js). minBitDepth/
-  // minSampleRateHz are the only two auto-checkable fields — they're
-  // read straight from the WAV/AIFF header. `advisory` is shown as
-  // reference text only, never auto-checked: verifying peak level,
-  // mono-bass compatibility, or limiting needs real waveform/DSP
-  // analysis (true-peak detection, phase correlation), not just header
-  // metadata, which is out of scope for a hand-rolled header parser.
+  // of 7"/10"/12"), shown in the Specifications box under Notes to the
+  // Cutting Engineer and in the Specs document, and checked inline per
+  // track/continuous-side file the same way compressionWarning already
+  // flags a non-WAV/AIFF extension (see audioSpecWarning in
+  // lib/audio-duration.js). minBitDepth/minSampleRateHz are read
+  // straight from the WAV/AIFF header.
   audioSpec: {
     labels: ["WAV", "AIFF"],
     minBitDepth: 16,
-    minSampleRateHz: 44100,
-    advisory: [
-      "no sub-bass junk (<15-20Hz)",
-      "mono-compatible bass (<150-250Hz)",
-      "avoid heavy limiting/brickwalling",
-      "use a de-esser on sharp transients (e.g. vocals)"
-    ]
+    minSampleRateHz: 44100
   },
 
   formats: [

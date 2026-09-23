@@ -57,16 +57,19 @@ function attachTrackFile(row, f, originalFileName = f.name){
   pickbtn.classList.add("has-file");
   renderFileMeta(meta, f.name, originalFileName, "reading duration…");
   meta.classList.remove("empty");
-  meta.classList.remove("warn");
+  meta.classList.remove("warn", "compressed", "underspec");
   const compressionWarn = compressionWarning(f);
   Promise.all([readAudioDuration(f), readAudioSpec(f)]).then(([dur, spec])=>{
     const durText = (isFinite(dur) && dur > 0)
       ? (()=>{ lengthInput.value = formatTime(dur); recompute();
                return formatTime(dur) + " (auto)"; })()
       : "could not read duration, enter length manually";
-    const warning = [compressionWarn, audioSpecWarning(spec, CONFIG.audioSpec)].filter(Boolean).join("  ");
+    const specWarn = audioSpecWarning(spec, CONFIG.audioSpec);
+    const warning = [compressionWarn, specWarn].filter(Boolean).join("  ");
     renderFileMeta(meta, f.name, originalFileName, durText + (warning ? "  " + warning : ""));
     meta.classList.toggle("warn", !!warning);
+    meta.classList.toggle("compressed", !!compressionWarn);
+    meta.classList.toggle("underspec", !!specWarn);
     recompute();
   });
 }
@@ -204,7 +207,7 @@ function attachContinuousFile(side, f, originalFileName = f.name){
   contWrap._file = f;
   contWrap._originalFileName = originalFileName;
   renderFileMeta(contMeta, f.name, originalFileName, "reading duration…");
-  contMeta.classList.remove("warn");
+  contMeta.classList.remove("warn", "compressed", "underspec");
   const compressionWarn = compressionWarning(f);
   Promise.all([readAudioDuration(f), readAudioSpec(f)]).then(([dur, spec])=>{
     // The read length lands in the field itself (contoverride), not
@@ -217,10 +220,13 @@ function attachContinuousFile(side, f, originalFileName = f.name){
     } else {
       statusText = "could not read duration, enter length manually";
     }
-    const warning = [compressionWarn, audioSpecWarning(spec, CONFIG.audioSpec)].filter(Boolean).join("  ");
+    const specWarn = audioSpecWarning(spec, CONFIG.audioSpec);
+    const warning = [compressionWarn, specWarn].filter(Boolean).join("  ");
     if(warning) statusText += (statusText ? "  " : "") + warning;
     renderFileMeta(contMeta, f.name, originalFileName, statusText);
     contMeta.classList.toggle("warn", !!warning);
+    contMeta.classList.toggle("compressed", !!compressionWarn);
+    contMeta.classList.toggle("underspec", !!specWarn);
     recompute();
   });
 }
@@ -354,9 +360,16 @@ function updateChecklist(){
       : `Side ${side} within playing-time recommendation`]);
   });
 
-  const compressedCount = document.querySelectorAll(".filemeta.warn").length;
+  // Separate classes, not the shared .filemeta.warn: a compressed-format
+  // warning and a below-spec (bit depth/sample rate) warning are
+  // different problems with different fixes — see attachTrackFile.
+  const compressedCount = document.querySelectorAll(".filemeta.compressed").length;
   if(compressedCount > 0){
     items.push([false, `${compressedCount} compressed file(s) attached — replace with WAV/AIFF`]);
+  }
+  const underspecCount = document.querySelectorAll(".filemeta.underspec").length;
+  if(underspecCount > 0){
+    items.push([false, `${underspecCount} file(s) below audio spec — check bit depth / sample rate`]);
   }
 
   // Every printed-part module (labels/cover/inner-sleeve/inlay) hides its
@@ -554,7 +567,6 @@ function renderAudioSpecs(){
   document.getElementById("audioSpecFiletypes").textContent = a.labels.join(", ");
   document.getElementById("audioSpecBitDepth").textContent = `${a.minBitDepth}-bit min`;
   document.getElementById("audioSpecSampleRate").textContent = `${a.minSampleRateHz/1000}kHz min`;
-  document.getElementById("audioSpecAdvisory").textContent = a.advisory.join(" · ");
 }
 
 export function initTracklist(){
@@ -594,7 +606,7 @@ export function initTracklist(){
   recompute();
 
   document.getElementById("btnPrint").addEventListener("click", printOrder);
-  document.getElementById("btnDownloadSpecs").addEventListener("click", downloadSpecs);
+  document.getElementById("btnDownloadSpecs").addEventListener("click", openSpecs);
   document.getElementById("btnSaveProject").addEventListener("click", saveProject);
   document.getElementById("btnOpenProject").addEventListener("click", ()=> document.getElementById("openProjectInput").click());
   document.getElementById("openProjectInput").addEventListener("change", (e)=>{
@@ -679,13 +691,23 @@ function downloadBlob(blob, fileName){
 
 // "Specs" button — a standalone reference document (every enabled
 // format's label/printed-part/audio specs), independent of the current
-// order (works with no catalogue number entered at all). See
-// lib/specs-document.js — the browser's own Print-to-PDF gives an
-// actual PDF from this if wanted, no hand-rolled PDF writer needed.
-function downloadSpecs(){
+// order (works with no catalogue number entered at all). Opens in a new
+// tab: buildSpecsHtml is synchronous, so window.open() still runs inside
+// the click's user gesture and isn't popup-blocked (unlike sendToPlant's
+// async zip build). A browser that blocks it anyway falls back to a
+// download.
+function openSpecs(){
   const html = buildSpecsHtml(CONFIG);
-  const blob = new Blob([html], {type:"text/html"});
-  downloadBlob(blob, `${slug(CONFIG.plant.imprint.recipientName)}_specifications.html`);
+  const w = window.open("", "_blank");
+  if(!w){
+    const name = slug(CONFIG.plant.imprint.recipientName) || "specifications";
+    downloadBlob(new Blob([html], {type:"text/html"}), `${name}_specifications.html`);
+    return;
+  }
+  w.opener = null;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
 // The project's canonical file name, used both as the zip's own file

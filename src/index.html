@@ -29,6 +29,7 @@
     --ink:     #161616;
     --ink-dim: #5c5c59;
     --danger:  #b3261e;
+    --control-h: 30px;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, "JetBrains Mono", "IBM Plex Mono", "Cascadia Code",
             "Fira Code", "SF Mono", Consolas, "Roboto Mono", monospace;
@@ -81,8 +82,11 @@
   input[type=text], input[type=number], textarea, select{
     width:100%; font-family:var(--sans); font-size:13.5px; color:var(--ink);
     background:var(--field); border:1px solid var(--edge); border-radius:3px;
-    padding:7px 8px; outline:none;
+    padding:5px 8px; outline:none;
   }
+  /* Every single-line control shares one height, so buttons/links line up
+     with the fields beside them (a textarea grows, so it's excluded). */
+  input[type=text], input[type=number], select{ height:var(--control-h); }
   input:hover, select:hover, textarea:hover{ border-color:var(--ink-dim); }
   input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible,
   details.info > summary:focus-visible{
@@ -168,6 +172,13 @@
   .chk{ display:flex; align-items:center; gap:6px; cursor:pointer; color:var(--ink-dim); text-transform:none; letter-spacing:0; }
   .chk input{ width:auto; }
   .rpm-select{ width:auto; }
+  /* The RPM pulldown sits inline with its own label text, not in a field
+     row — a full-height control next to it reads oversized, so it gets
+     its own compact size (screen only; print keeps the generic select
+     "blank line" styling). */
+  @media screen{
+    .rpm-select{ font-size:12px; height:24px; padding:0 6px; }
+  }
 
   .addbtn{
     margin-top:8px; font-family:var(--sans); font-size:11px; letter-spacing:.02em; font-weight:600;
@@ -303,8 +314,10 @@
   .btn{
     font-family:var(--sans); font-size:13px; font-weight:600;
     background:var(--panel); color:var(--ink); border:1px solid var(--edge);
-    padding:8px 14px; border-radius:3px; cursor:pointer;
-    display:inline-block; text-decoration:none;
+    padding:0 14px; border-radius:3px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center;
+    height:var(--control-h);
+    text-decoration:none;
   }
   .btn:hover{ background:var(--field); border-color:var(--ink); }
   .btn:disabled{ opacity:.4; cursor:not-allowed; }
@@ -361,7 +374,7 @@
     .cols2, .label-cols2{ gap:8px; }
     input[type=text], input[type=number], select, textarea{
       background:transparent; border:none; border-bottom:1px solid var(--edge); border-radius:0;
-      padding:1px; font-size:10px;
+      padding:1px; font-size:10px; height:auto;
       -webkit-appearance:none; appearance:none; outline:none;
     }
     textarea{ min-height:30px; }
@@ -428,21 +441,6 @@
   </section>
 
 
-  <!-- ============ AUDIO MASTER FILES ============ -->
-  <section>
-    <h2>Audio Master Files</h2>
-    <details class="specs no-print">
-      <summary>Specifications</summary>
-      <div class="specs-body">
-        <div><span>Allowed filetypes</span><span id="audioSpecFiletypes"></span></div>
-        <div><span>Bit depth</span><span id="audioSpecBitDepth"></span></div>
-        <div><span>Sample rate</span><span id="audioSpecSampleRate"></span></div>
-        <div><span>Notes</span><span id="audioSpecAdvisory"></span></div>
-      </div>
-    </details>
-  </section>
-
-
   <!-- ============ SIDES ============ -->
   <div class="cols2" id="sides"></div>
 
@@ -453,6 +451,14 @@
     <label class="chk">
       <input type="checkbox" id="soundsystem"> Soundsystem cut (louder but shorter playing-time)
     </label>
+    <details class="specs no-print">
+      <summary>Specifications</summary>
+      <div class="specs-body">
+        <div><span>Allowed filetypes</span><span id="audioSpecFiletypes"></span></div>
+        <div><span>Bit depth</span><span id="audioSpecBitDepth"></span></div>
+        <div><span>Sample rate</span><span id="audioSpecSampleRate"></span></div>
+      </div>
+    </details>
     <textarea id="notes"></textarea>
   </section>
 

@@ -134,14 +134,14 @@ test("audioSpecWarning flags a bit depth below the configured minimum", () => {
 
 test("audioSpecWarning flags a sample rate below the configured minimum", () => {
   const spec = { sampleRate: 22050, channels: 2, bitsPerSample: 16 };
-  assert.match(audioSpecWarning(spec, { minBitDepth: 16, minSampleRateHz: 44100 }), /22050Hz.*44100Hz/);
+  assert.match(audioSpecWarning(spec, { minBitDepth: 16, minSampleRateHz: 44100 }), /22\.05kHz.*44\.1kHz/);
 });
 
 test("audioSpecWarning flags both when both are below minimum", () => {
   const spec = { sampleRate: 22050, channels: 2, bitsPerSample: 8 };
   const msg = audioSpecWarning(spec, { minBitDepth: 16, minSampleRateHz: 44100 });
   assert.match(msg, /8-bit/);
-  assert.match(msg, /22050Hz/);
+  assert.match(msg, /22\.05kHz/);
 });
 
 test("audioSpecWarning returns null when spec couldn't be read at all", () => {

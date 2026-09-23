@@ -133,6 +133,12 @@ export function compressionWarningForName(name){
 // everything passes, or spec couldn't be read at all (nothing to warn
 // about beyond what compressionWarning already flags) — else a short
 // message for the same inline ⚠ slot compressionWarning uses.
+// 44100 -> "44.1kHz", 48000 -> "48kHz", 22050 -> "22.05kHz" — up to two
+// decimals, no trailing zeros.
+function khz(hz){
+  return (hz / 1000).toFixed(2).replace(/\.?0+$/, "") + "kHz";
+}
+
 export function audioSpecWarning(spec, audioSpec){
   if(!spec) return null;
   const below = [];
@@ -140,7 +146,7 @@ export function audioSpecWarning(spec, audioSpec){
     below.push(`${spec.bitsPerSample}-bit (min ${audioSpec.minBitDepth}-bit)`);
   }
   if(spec.sampleRate && spec.sampleRate < audioSpec.minSampleRateHz){
-    below.push(`${spec.sampleRate}Hz (min ${audioSpec.minSampleRateHz}Hz)`);
+    below.push(`${khz(spec.sampleRate)} (min ${khz(audioSpec.minSampleRateHz)})`);
   }
   if(!below.length) return null;
   return `⚠ below spec: ${below.join(", ")}`;
