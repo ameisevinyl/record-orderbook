@@ -9,7 +9,7 @@
 // ../lib/print-artwork.js.
 
 import { CONFIG } from "../config.js";
-import { getFormat, foldedDataMm, bleedFor } from "../lib/format-catalogue.js";
+import { getFormat, flatDataMm, partWeightG } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -24,12 +24,12 @@ function innerSleevePrintableParts(){
   return getFormat(CONFIG, innerSleeveCurrentFormat()).printableParts;
 }
 
-// dataMm is derived (trimMm is ONE folded pocket's size — foldedDataMm
-// doubles the width for the flat-opened print file), not a stored
-// field.
+// dataMm is derived (trim + bleed — trimMm is already the flat-opened,
+// unfolded spread; finalMm, separately, is the folded pocket size the
+// customer actually receives), not a stored field.
 function innerSleeveSpec(){
-  const parts = innerSleevePrintableParts();
-  return { ...parts.innerSleeve, dataMm: foldedDataMm(parts.innerSleeve, parts) };
+  const part = innerSleevePrintableParts().innerSleeve;
+  return { ...part, dataMm: flatDataMm(part) };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -194,16 +194,19 @@ function updateInnerSleeveMode(){
 // Populates the Specifications disclosure from CONFIG — never
 // hand-typed, so it can't drift from the format's actual values.
 function renderInnerSleeveSpecs(){
-  const parts = innerSleevePrintableParts();
-  const { trimMm, paperGsm, dataMm } = innerSleeveSpec();
-  const bleedMm = bleedFor(parts.innerSleeve, parts);
+  const part = innerSleeveSpec();
+  const { trimMm, finalMm, bleedMm, paperGsm, dataMm } = part;
   const colorMode = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
   document.getElementById("innersleeveSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
   document.getElementById("innersleeveSpecColorMode").textContent = colorMode;
+  document.getElementById("innersleeveSpecFinalSize").textContent = `${finalMm.w}×${finalMm.h}mm`;
   document.getElementById("innersleeveSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
   document.getElementById("innersleeveSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
   document.getElementById("innersleeveSpecBleed").textContent = `${bleedMm}mm`;
   document.getElementById("innersleeveSpecPaperGsm").textContent = `${paperGsm}gsm`;
+  // Shipping weight — plant/?debug eyes only, not customer-facing yet.
+  document.getElementById("innersleeveSpecWeightRow").classList.toggle("hidden", !isDebugMode());
+  document.getElementById("innersleeveSpecWeight").textContent = `${partWeightG(part)}g`;
 }
 
 export function initInnerSleeve(){

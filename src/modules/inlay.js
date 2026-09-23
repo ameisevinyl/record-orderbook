@@ -10,7 +10,7 @@
 // ../lib/print-artwork.js.
 
 import { CONFIG } from "../config.js";
-import { getFormat, flatDataMm, bleedFor } from "../lib/format-catalogue.js";
+import { getFormat, flatDataMm, partWeightG } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -28,8 +28,8 @@ function inlayPrintableParts(){
 // dataMm is derived (trim + bleed — a single flat sheet, no spine/
 // folding), not a stored field.
 function inlaySpec(){
-  const parts = inlayPrintableParts();
-  return { ...parts.inlay, dataMm: flatDataMm(parts.inlay, parts) };
+  const part = inlayPrintableParts().inlay;
+  return { ...part, dataMm: flatDataMm(part) };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -194,9 +194,8 @@ function updateInlayVisibility(){
 // slots) — that also keeps it visible even before "include inlay" is
 // checked, matching every other printed part's specs link.
 function renderInlaySpecs(){
-  const parts = inlayPrintableParts();
-  const { trimMm, paperGsm, dataMm } = inlaySpec();
-  const bleedMm = bleedFor(parts.inlay, parts);
+  const part = inlaySpec();
+  const { trimMm, bleedMm, paperGsm, dataMm } = part;
   const colorMode = getFormat(CONFIG, inlayCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
   document.getElementById("inlaySpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
   document.getElementById("inlaySpecColorMode").textContent = colorMode;
@@ -204,6 +203,9 @@ function renderInlaySpecs(){
   document.getElementById("inlaySpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
   document.getElementById("inlaySpecBleed").textContent = `${bleedMm}mm`;
   document.getElementById("inlaySpecPaperGsm").textContent = `${paperGsm}gsm`;
+  // Shipping weight — plant/?debug eyes only, not customer-facing yet.
+  document.getElementById("inlaySpecWeightRow").classList.toggle("hidden", !isDebugMode());
+  document.getElementById("inlaySpecWeight").textContent = `${partWeightG(part)}g`;
 }
 
 export function initInlay(){

@@ -55,6 +55,14 @@ export const CONFIG = {
         normal:      { ideal:{45:12,  33:20}, max:{45:15,  33:27} },
         soundsystem: { ideal:{45:10,  33:15}, max:{45:10,  33:16} }
       },
+      // Bare vinyl disc only, no packaging — a reasonable default for
+      // standard-weight pressing (industry figures for 180g "heavyweight"
+      // editions run higher; adjust to whatever this plant actually
+      // presses). Printed parts' weight is derived from their own
+      // trimMm + paperGsm instead (see partWeightG in
+      // lib/format-catalogue.js) — this is the one weight that can't be
+      // computed from anything else already here.
+      recordWeightG: 140,
       // Front-end checks here are best-effort — the studio's backend
       // preprocessor does the real, authoritative validation on upload.
       // `checks` is the artwork checklist's spec table (see
@@ -90,38 +98,41 @@ export const CONFIG = {
           fonts:        { requireEmbedded: true, severity: "debug" }
         }
       },
+      // Every part below is fully self-contained — its own bleedMm,
+      // its own trim/final size, its own paper weight. Nothing here
+      // falls back to a shared default; treat each part like an
+      // independent product with its own spec sheet. Data sizes are
+      // never hand-entered — see labelDataSizeMm/flatDataMm in
+      // lib/format-catalogue.js, which derive them from trim/diameter
+      // + bleed (+ spine for the cover), so they can't drift out of
+      // sync. Printed-part weight (partWeightG, same file) is likewise
+      // derived from trimMm + paperGsm, not stored here.
       printableParts: {
-        // Bleed added on every outward-facing edge of a part's print
-        // file, beyond its trim/end size — default for every part
-        // below; a part can override it (outerCover does, below). Data
-        // sizes are never hand-entered — see labelDataSizeMm/
-        // flatDataMm/foldedDataMm in lib/format-catalogue.js, which
-        // derive them from trim/diameter + bleed (+ spine for the
-        // cover), so they can't drift out of sync with each other.
-        bleedMm: 3,
         // diameterMm is the trim size (the physical label after
         // cutting) — data size (with bleed) is derived, see above.
-        label: { diameterMm: 100 },
-        // trimMm — the finished, flat-opened size, front on the right
-        // and back on the left. For the cover this already includes
-        // the spine (panel + spineMm + panel width-wise, spineMm added
-        // top and bottom of panel height-wise — a "box"-style spine
-        // wraps slightly around all three of those edges). Data size
-        // (trim + bleed) is derived — see above.
+        label: { diameterMm: 100, bleedMm: 3 },
+        // trimMm — the finished, flat-opened, UNFOLDED spread size,
+        // front on the right and back on the left; this already
+        // includes the spine (panel + spineMm + panel width-wise,
+        // spineMm added top and bottom of panel height-wise — a
+        // "box"-style spine wraps slightly around all three of those
+        // edges). Data size (trim + bleed) is derived, see above.
         outerCover: {
           trimMm: {w:633, h:318}, spineMm: 3, bleedMm: 5, paperGsm: 300,
           unprintedColors: ["black", "brown", "white"]
         },
-        // trimMm here is ONE folded pocket's finished size, not the
-        // flat spread — foldedDataMm doubles the width (front+back
-        // opened flat side by side) before adding bleed.
+        // trimMm is the finished, flat-opened, UNFOLDED spread size —
+        // same meaning as outerCover's, front+back side by side, no
+        // special doubling needed anywhere else. finalMm is the
+        // folded, closed pocket size the customer actually receives
+        // (what trimMm used to mean before this field existed).
         innerSleeve: {
-          trimMm: {w:304, h:309}, paperGsm: 135,
+          trimMm: {w:608, h:309}, finalMm: {w:304, h:309}, bleedMm: 3, paperGsm: 135,
           unprintedColors: ["black", "brown", "white"],
           centerCutoutDefault: true
         },
         inlay: {
-          trimMm: {w:297, h:297},
+          trimMm: {w:297, h:297}, bleedMm: 3,
           paperGsm: 170
         }
       }
@@ -136,6 +147,7 @@ export const CONFIG = {
         normal:      { ideal:{45:8,   33:12}, max:{45:8,   33:14} },
         soundsystem: { ideal:{45:4.5, 33:7},  max:{45:6,   33:9} }
       },
+      recordWeightG: 100,
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
         checks: {
@@ -151,21 +163,20 @@ export const CONFIG = {
         }
       },
       printableParts: {
-        bleedMm: 3,
-        label: { diameterMm: 100 },
+        label: { diameterMm: 100, bleedMm: 3 },
         outerCover: {
           trimMm: {w:523, h:266}, spineMm: 3, bleedMm: 5, paperGsm: 300,
           unprintedColors: ["black", "brown", "white"]
         },
         innerSleeve: {
-          trimMm: {w:255, h:255}, paperGsm: 135,
+          trimMm: {w:510, h:255}, finalMm: {w:255, h:255}, bleedMm: 3, paperGsm: 135,
           unprintedColors: ["black", "brown", "white"],
           centerCutoutDefault: true
         },
         // Not supplied yet — guessed by interpolation, replace with the
         // real spec.
         inlay: {
-          trimMm: {w:250, h:250},
+          trimMm: {w:250, h:250}, bleedMm: 3,
           paperGsm: 170
         }
       }
@@ -180,6 +191,7 @@ export const CONFIG = {
         normal:      { ideal:{45:4.5, 33:6.5}, max:{45:6.0, 33:8.0} },
         soundsystem: { ideal:{45:3.5, 33:5.0}, max:{45:4.5, 33:6.0} }
       },
+      recordWeightG: 40,
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
         checks: {
@@ -195,20 +207,19 @@ export const CONFIG = {
         }
       },
       printableParts: {
-        bleedMm: 3,
-        label: { diameterMm: 92 },
+        label: { diameterMm: 92, bleedMm: 3 },
         // "box" style, 3mm spine.
         outerCover: {
           trimMm: {w:373, h:191}, spineMm: 3, bleedMm: 5, paperGsm: 300,
           unprintedColors: ["black", "brown", "white"]
         },
         innerSleeve: {
-          trimMm: {w:180, h:180}, paperGsm: 135,
+          trimMm: {w:360, h:180}, finalMm: {w:180, h:180}, bleedMm: 3, paperGsm: 135,
           unprintedColors: ["black", "brown", "white"],
           centerCutoutDefault: true
         },
         inlay: {
-          trimMm: {w:181, h:181},
+          trimMm: {w:181, h:181}, bleedMm: 3,
           paperGsm: 170
         }
       }

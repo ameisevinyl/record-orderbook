@@ -13,7 +13,7 @@
 // ../lib/print-artwork.js.
 
 import { CONFIG } from "../config.js";
-import { getFormat, flatDataMm, bleedFor } from "../lib/format-catalogue.js";
+import { getFormat, flatDataMm, partWeightG } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -35,8 +35,8 @@ function coverPrintableParts(){
 // trimMm, see config.js), not a stored field, so it can't drift out
 // of sync with trimMm/spineMm/bleedMm.
 function coverSpec(){
-  const parts = coverPrintableParts();
-  return { ...parts.outerCover, dataMm: flatDataMm(parts.outerCover, parts) };
+  const part = coverPrintableParts().outerCover;
+  return { ...part, dataMm: flatDataMm(part) };
 }
 
 function coverHasArtwork(){
@@ -207,9 +207,8 @@ function updateCoverMode(){
 // Populates the Specifications disclosure from CONFIG — never
 // hand-typed, so it can't drift from the format's actual values.
 function renderCoverSpecs(){
-  const parts = coverPrintableParts();
-  const { trimMm, spineMm, paperGsm, dataMm } = coverSpec();
-  const bleedMm = bleedFor(parts.outerCover, parts);
+  const part = coverSpec();
+  const { trimMm, spineMm, bleedMm, paperGsm, dataMm } = part;
   const colorMode = getFormat(CONFIG, coverCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
   document.getElementById("coverSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
   document.getElementById("coverSpecColorMode").textContent = colorMode;
@@ -218,6 +217,9 @@ function renderCoverSpecs(){
   document.getElementById("coverSpecBleed").textContent = `${bleedMm}mm`;
   document.getElementById("coverSpecSpine").textContent = `${spineMm}mm`;
   document.getElementById("coverSpecPaperGsm").textContent = `${paperGsm}gsm`;
+  // Shipping weight — plant/?debug eyes only, not customer-facing yet.
+  document.getElementById("coverSpecWeightRow").classList.toggle("hidden", !isDebugMode());
+  document.getElementById("coverSpecWeight").textContent = `${partWeightG(part)}g`;
 }
 
 export function initCover(){

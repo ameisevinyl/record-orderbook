@@ -9,7 +9,7 @@
 // customer service a round trip.
 
 import { CONFIG } from "../config.js";
-import { getFormat, labelDataSizeMm, bleedFor } from "../lib/format-catalogue.js";
+import { getFormat, labelDataSizeMm } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
@@ -94,8 +94,9 @@ function showPreviewImage(side, previewImgFile){
 // only as accurate as the browser's mapping to the real display, which
 // isn't perfectly calibrated on every device.
 function updatePreviewSizing(){
-  const { diameterMm } = formatSpec();
-  const dataSizeMm = labelDataSizeMm(printableParts());
+  const spec = formatSpec();
+  const { diameterMm } = spec;
+  const dataSizeMm = labelDataSizeMm(spec);
   const mmStr = dataSizeMm + "mm";
   // Inset the blank-whitelabel disc from the full data square by the
   // same margin a real label file's trim circle would sit at, so it
@@ -122,10 +123,8 @@ function updateLabelInfo(){
 // Populates the Specifications disclosure from CONFIG — never
 // hand-typed, so it can't drift from the format's actual values.
 function renderLabelSpecs(){
-  const parts = printableParts();
-  const { diameterMm } = parts.label;
-  const dataSizeMm = labelDataSizeMm(parts);
-  const bleedMm = bleedFor(parts.label, parts);
+  const { diameterMm, bleedMm } = formatSpec();
+  const dataSizeMm = labelDataSizeMm(formatSpec());
   const colorMode = getFormat(CONFIG, currentFormat()).printCheck.checks.colorMode.accepted.join("/");
   SIDES.forEach(side=>{
     document.getElementById("labelSpecFiletypes-"+side).textContent = CONFIG.artworkFileTypes.labels.join(", ");
@@ -180,7 +179,7 @@ async function handleFile(side, file){
 
   const spec = formatSpec();
   const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
-  const dataSizeMm = labelDataSizeMm(printableParts());
+  const dataSizeMm = labelDataSizeMm(spec);
   const targetMm = {w:dataSizeMm, h:dataSizeMm};
   const trimMm = {w:spec.diameterMm, h:spec.diameterMm};
   renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck);

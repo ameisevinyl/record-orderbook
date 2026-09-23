@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   getFormat, enabledFormats, firstEnabledFormat,
-  labelDataSizeMm, flatDataMm, foldedDataMm
+  labelDataSizeMm, flatDataMm, partWeightG
 } from "../src/lib/format-catalogue.js";
 
 const config = {
@@ -36,27 +36,39 @@ test("firstEnabledFormat throws when no format is enabled", () => {
 });
 
 // Real 12" printableParts (see config.js) — pins the actual production
-// numbers, not just the arithmetic in isolation.
+// numbers, not just the arithmetic in isolation. Every part is fully
+// self-contained (its own bleedMm), matching config.js's actual shape.
 const printableParts12 = {
-  bleedMm: 3,
-  label: { diameterMm: 100 },
-  outerCover: { trimMm: {w:633, h:318}, spineMm: 3, bleedMm: 5 },
-  innerSleeve: { trimMm: {w:304, h:309} },
-  inlay: { trimMm: {w:297, h:297} }
+  label: { diameterMm: 100, bleedMm: 3 },
+  outerCover: { trimMm: {w:633, h:318}, spineMm: 3, bleedMm: 5, paperGsm: 300 },
+  innerSleeve: { trimMm: {w:608, h:309}, finalMm: {w:304, h:309}, bleedMm: 3, paperGsm: 135 },
+  inlay: { trimMm: {w:297, h:297}, bleedMm: 3, paperGsm: 170 }
 };
 
-test("labelDataSizeMm adds symmetric default bleed to the diameter", () => {
-  assert.equal(labelDataSizeMm(printableParts12), 106);
+test("labelDataSizeMm adds the label's own bleed to the diameter", () => {
+  assert.equal(labelDataSizeMm(printableParts12.label), 106);
 });
 
-test("flatDataMm uses a part's own bleedMm override (outerCover)", () => {
-  assert.deepEqual(flatDataMm(printableParts12.outerCover, printableParts12), {w:643, h:328});
+test("flatDataMm uses a part's own bleedMm (outerCover, thicker than the others)", () => {
+  assert.deepEqual(flatDataMm(printableParts12.outerCover), {w:643, h:328});
 });
 
-test("flatDataMm falls back to printableParts.bleedMm when a part has no override (inlay)", () => {
-  assert.deepEqual(flatDataMm(printableParts12.inlay, printableParts12), {w:303, h:303});
+test("flatDataMm works the same way for inlay (a single flat sheet)", () => {
+  assert.deepEqual(flatDataMm(printableParts12.inlay), {w:303, h:303});
 });
 
-test("foldedDataMm doubles trim width (front+back opened flat) before adding bleed", () => {
-  assert.deepEqual(foldedDataMm(printableParts12.innerSleeve, printableParts12), {w:614, h:315});
+test("flatDataMm works for inner sleeve too, now that its trimMm is the unfolded spread", () => {
+  assert.deepEqual(flatDataMm(printableParts12.innerSleeve), {w:614, h:315});
+});
+
+test("partWeightG derives grams from trim area x paperGsm (outer cover)", () => {
+  assert.equal(partWeightG(printableParts12.outerCover), 60.4);
+});
+
+test("partWeightG derives grams from trim area x paperGsm (inner sleeve, unfolded area)", () => {
+  assert.equal(partWeightG(printableParts12.innerSleeve), 25.4);
+});
+
+test("partWeightG derives grams from trim area x paperGsm (inlay)", () => {
+  assert.equal(partWeightG(printableParts12.inlay), 15);
 });

@@ -18,33 +18,30 @@ export function firstEnabledFormat(config){
   return first.id;
 }
 
-// Bleed for one printable part: its own override if set, else the
-// format's printableParts.bleedMm default (outerCover overrides this —
-// its bleed runs thicker than label/innerSleeve/inlay). Exported since
-// every module's Specifications panel needs to show this same value.
-export function bleedFor(part, printableParts){
-  return part.bleedMm ?? printableParts.bleedMm;
-}
-
 // Label data size: the print file's diameter, bleed included —
-// symmetric, so one number (like diameterMm itself), not {w,h}.
-export function labelDataSizeMm(printableParts){
-  return printableParts.label.diameterMm + 2 * bleedFor(printableParts.label, printableParts);
+// symmetric, so one number (like diameterMm itself), not {w,h}. Takes
+// the label part directly (it carries its own bleedMm — every part is
+// fully self-contained, see config.js).
+export function labelDataSizeMm(label){
+  return label.diameterMm + 2 * label.bleedMm;
 }
 
-// A part whose trimMm is already the full flat print-file footprint —
-// outerCover (spine already folded into trimMm, see config.js) and
-// inlay (a single flat sheet). Data size is trim plus symmetric bleed
+// Every non-label printable part's trimMm is already the full flat,
+// unfolded print-file footprint (outerCover's already has its spine
+// folded in; innerSleeve's is front+back opened flat side by side, not
+// the folded pocket size — see its separate finalMm; inlay is a single
+// flat sheet). Data size is trim plus the part's own symmetric bleed
 // on every edge.
-export function flatDataMm(part, printableParts){
-  const bleed = bleedFor(part, printableParts);
-  return { w: part.trimMm.w + 2*bleed, h: part.trimMm.h + 2*bleed };
+export function flatDataMm(part){
+  return { w: part.trimMm.w + 2*part.bleedMm, h: part.trimMm.h + 2*part.bleedMm };
 }
 
-// Inner sleeve's trimMm is ONE folded pocket's finished size — the
-// print file is front+back opened flat side by side (double width),
-// plus symmetric bleed on every edge.
-export function foldedDataMm(part, printableParts){
-  const bleed = bleedFor(part, printableParts);
-  return { w: part.trimMm.w*2 + 2*bleed, h: part.trimMm.h + 2*bleed };
+// Paper weight in grams: trim area (the finished, shipped size — bleed
+// gets trimmed away, it doesn't ship) times the part's paperGsm
+// (grams/m²), converted mm² -> m². One decimal place — these are
+// small enough (single-digit to double-digit grams) that whole-gram
+// rounding would lose real precision.
+export function partWeightG(part){
+  const areaM2 = (part.trimMm.w * part.trimMm.h) / 1_000_000;
+  return Math.round(areaM2 * part.paperGsm * 10) / 10;
 }
