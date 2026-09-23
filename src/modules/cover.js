@@ -1,19 +1,23 @@
-// Cover module — outer cover artwork (printed / printed inside out /
-// plain colour / none), delivered as a single flat print file with
-// front on the right and back on the left. "Printed inside out" is the
-// same artwork file and dimensions as "printed" — it's an assembly
-// instruction to the plant (print faces inward once folded), not a
-// different layout, so it reuses the exact same artwork slot. Split out
-// of the former cover-sleeve.js along with inner-sleeve.js and inlay.js
-// (see the catalogue schema restructure design spec, Decision 8) — each
-// owns its own copy of the artwork-slot scaffolding on purpose, so each
+// Cover module — one product per selection from the plant's outer-cover
+// catalog (printed, printed inside out, or a specific unprinted
+// colour/paper/cut-out combination) — see CONFIG.formats[i].
+// printableParts.outerCover.products and the packaging product catalog
+// design spec. "Printed (inside out)" is its own catalog product, same
+// artwork file and dimensions as "printed" — the difference is purely
+// an assembly instruction to the plant (print faces inward once
+// folded), carried by the product's name alone. Delivered as a single
+// flat print file with front on the right and back on the left, when
+// the selected product is printed. Split out of the former
+// cover-sleeve.js along with inner-sleeve.js and inlay.js (see the
+// catalogue schema restructure design spec, Decision 8) — each owns
+// its own copy of the artwork-slot scaffolding on purpose, so each
 // part can diverge later without fighting a forced shared abstraction.
 //
 // Parsing/validation is the same pure logic labels.js uses, from
 // ../lib/print-artwork.js.
 
 import { CONFIG } from "../config.js";
-import { getFormat, flatDataMm, partWeightG } from "../lib/format-catalogue.js";
+import { getFormat, flatDataMm, partWeightG, groupProductsByKind, productById } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -27,21 +31,25 @@ function coverCurrentFormat(){
   return document.getElementById("format").value;
 }
 
-function coverPrintableParts(){
-  return getFormat(CONFIG, coverCurrentFormat()).printableParts;
+function coverProducts(){
+  return getFormat(CONFIG, coverCurrentFormat()).printableParts.outerCover.products;
 }
 
-// dataMm is derived (trim + bleed — spine's already folded into
-// trimMm, see config.js), not a stored field, so it can't drift out
-// of sync with trimMm/spineMm/bleedMm.
-function coverSpec(){
-  const part = coverPrintableParts().outerCover;
-  return { ...part, dataMm: flatDataMm(part) };
+function selectedCoverProduct(){
+  return productById(coverProducts(), document.getElementById("coverProduct").value || null);
 }
 
 function coverHasArtwork(){
-  return document.getElementById("cover-printed").checked
-      || document.getElementById("cover-printed-inside-out").checked;
+  const product = selectedCoverProduct();
+  return !!product && product.kind === "printed";
+}
+
+// dataMm is derived (trim + bleed — spine's already folded into
+// trimMm, see config.js), not a stored field, so it can't drift out of
+// sync with trimMm/spineMm/bleedMm. undefined when "None" is selected.
+function coverSpec(){
+  const part = selectedCoverProduct();
+  return part && { ...part, dataMm: flatDataMm(part) };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -75,8 +83,12 @@ function createCoverArtworkSlot(){
   let file = null, url = null, originalFileName = null;
   let previewFile = null, previewUrl = null;
 
+  // No-op when nothing is selected ("None", or no printed product) —
+  // the upload block is hidden in that state regardless.
   function updateSizing(){
-    const { dataMm } = coverSpec();
+    const spec = coverSpec();
+    if(!spec) return;
+    const { dataMm } = spec;
     wrap.style.width = "100%";
     wrap.style.maxWidth = COVER_PREVIEW_MAX_W+"px";
     wrap.style.aspectRatio = dataMm.w+" / "+dataMm.h;
@@ -159,9 +171,10 @@ function createCoverArtworkSlot(){
     renderCoverFileMeta(f.name, origName, null);
   }
 
-  // A file picked for one format is sized for that format's dataMm —
-  // switching format invalidates it outright (see initCover's format
-  // change listener), rather than leaving a now-wrong-size file attached.
+  // A file picked for one product is sized for that product's dataMm —
+  // switching product or format invalidates it outright (see
+  // initCover's listeners), rather than leaving a now-wrong-size file
+  // attached.
   function clear(){
     if(url) URL.revokeObjectURL(url);
     file = null; url = null; originalFileName = null;
@@ -199,46 +212,90 @@ async function collectCoverSlotFile(){
 let coverSlot;
 
 function updateCoverMode(){
-  const unprinted = document.getElementById("cover-unprinted").checked;
   document.getElementById("coverPrintedBody").classList.toggle("hidden", !coverHasArtwork());
-  document.getElementById("coverColorWrap").classList.toggle("hidden", !unprinted);
 }
 
-// Populates the Specifications disclosure from CONFIG — never
-// hand-typed, so it can't drift from the format's actual values.
+// Rebuilds the product dropdown from CONFIG for the current format —
+// a plain "None" option first, then options grouped by kind
+// (Printed/Unprinted). Resets to "None" on every rebuild.
+function populateCoverProducts(){
+  const select = document.getElementById("coverProduct");
+  const products = coverProducts();
+  const { printed, unprinted } = groupProductsByKind(products);
+  select.innerHTML = "";
+  const noneOpt = document.createElement("option");
+  noneOpt.value = "";
+  noneOpt.textContent = "None";
+  select.appendChild(noneOpt);
+  const addGroup = (label, list) => {
+    if(!list.length) return;
+    const group = document.createElement("optgroup");
+    group.label = label;
+    for(const p of list){
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      group.appendChild(opt);
+    }
+    select.appendChild(group);
+  };
+  addGroup("Printed", printed);
+  addGroup("Unprinted", unprinted);
+  select.value = "";
+}
+
+// Populates the Specifications disclosure from the selected product —
+// shows "—" in every field when "None" is selected, since there's no
+// product to read values from.
 function renderCoverSpecs(){
   const part = coverSpec();
-  const { trimMm, spineMm, bleedMm, paperGsm, dataMm } = part;
   const colorMode = getFormat(CONFIG, coverCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
   document.getElementById("coverSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
   document.getElementById("coverSpecColorMode").textContent = colorMode;
+  document.getElementById("coverSpecWeightRow").classList.toggle("hidden", !isDebugMode() || !part);
+  if(!part){
+    document.getElementById("coverSpecEndFormat").textContent = "—";
+    document.getElementById("coverSpecDataFormat").textContent = "—";
+    document.getElementById("coverSpecBleed").textContent = "—";
+    document.getElementById("coverSpecSpine").textContent = "—";
+    document.getElementById("coverSpecPaperGsm").textContent = "—";
+    document.getElementById("coverSpecCutout").textContent = "—";
+    document.getElementById("coverSpecWeight").textContent = "—";
+    return;
+  }
+  const { trimMm, spineMm, bleedMm, paperGsm, cutoutDiameterMm, dataMm } = part;
   document.getElementById("coverSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
   document.getElementById("coverSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
   document.getElementById("coverSpecBleed").textContent = `${bleedMm}mm`;
   document.getElementById("coverSpecSpine").textContent = `${spineMm}mm`;
   document.getElementById("coverSpecPaperGsm").textContent = `${paperGsm}gsm`;
+  document.getElementById("coverSpecCutout").textContent = cutoutDiameterMm ? `⌀${cutoutDiameterMm}mm` : "none";
   // Shipping weight — plant/?debug eyes only, not customer-facing yet.
-  document.getElementById("coverSpecWeightRow").classList.toggle("hidden", !isDebugMode());
   document.getElementById("coverSpecWeight").textContent = `${partWeightG(part)}g`;
 }
 
 export function initCover(){
   coverSlot = createCoverArtworkSlot();
+  populateCoverProducts();
   coverSlot.updateSizing();
   document.getElementById("coverinput").accept = CONFIG.artworkFileTypes.accept;
   renderCoverSpecs();
+  updateCoverMode();
 
   document.getElementById("format").addEventListener("change", ()=>{
     coverSlot.clear();
+    populateCoverProducts();
     coverSlot.updateSizing();
     renderCoverSpecs();
+    updateCoverMode();
   });
 
-  document.getElementById("cover-printed").addEventListener("change", updateCoverMode);
-  document.getElementById("cover-printed-inside-out").addEventListener("change", updateCoverMode);
-  document.getElementById("cover-unprinted").addEventListener("change", updateCoverMode);
-  document.getElementById("cover-none").addEventListener("change", updateCoverMode);
-  updateCoverMode();
+  document.getElementById("coverProduct").addEventListener("change", ()=>{
+    coverSlot.clear();
+    coverSlot.updateSizing();
+    renderCoverSpecs();
+    updateCoverMode();
+  });
 }
 
 function setCoverFileNamePlaceholder(name, originalName){
@@ -284,28 +341,24 @@ async function applyCoverSlotFile(fileName, originalFileName, fileMap){
 // package, which is what lets the tracklist/order-summary exports build
 // their file manifest straight from this data, no DOM re-check needed.
 export function collectCover(){
-  const hasArtwork = coverHasArtwork();
+  const product = selectedCoverProduct();
   const file = coverSlot.getFile();
+  const printed = !!product && product.kind === "printed";
   return {
-    mode: document.getElementById("cover-printed").checked ? "printed"
-        : document.getElementById("cover-printed-inside-out").checked ? "printed-inside-out"
-        : document.getElementById("cover-unprinted").checked ? "unprinted" : "none",
-    color: document.getElementById("coverColor").value,
-    fileName: (hasArtwork && file) ? coverSlotFileName(file) : null,
-    originalFileName: (hasArtwork && file) ? coverSlot.getOriginalFileName() : null
+    productId: product ? product.id : null,
+    fileName: (printed && file) ? coverSlotFileName(file) : null,
+    originalFileName: (printed && file) ? coverSlot.getOriginalFileName() : null
   };
 }
 
 export async function applyCover(data, fileMap){
   const c = data || {};
-  document.getElementById("cover-printed").checked = c.mode === "printed";
-  document.getElementById("cover-printed-inside-out").checked = c.mode === "printed-inside-out";
-  document.getElementById("cover-unprinted").checked = c.mode === "unprinted";
-  document.getElementById("cover-none").checked = c.mode !== "printed" && c.mode !== "printed-inside-out" && c.mode !== "unprinted";
-  document.getElementById("coverColor").value = c.color || "white";
+  const match = productById(coverProducts(), c.productId);
+  document.getElementById("coverProduct").value = match ? match.id : "";
   await applyCoverSlotFile(c.fileName, c.originalFileName, fileMap);
   updateCoverMode();
   coverSlot.updateSizing();
+  renderCoverSpecs();
 }
 
 // Exported for the tracklist module's package export, same pattern as
