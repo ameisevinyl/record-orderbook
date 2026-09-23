@@ -11,45 +11,16 @@
 // Currently only 12" and 7" are enabled — 10" is configured but off, for
 // testing.
 
+// The sample/default plant identity lives in the committed example
+// template; a real plant's data overrides it at build time — see
+// CONFIG.plant below.
+import { PLANT_CONFIG } from "./plant.config.local.example.js";
+
 export const CONFIG = {
-  // Plant identity — SAMPLE/PLACEHOLDER data, safe to publish (this is
-  // what the public GitHub Pages demo shows). A real plant's actual
-  // data lives in src/plant.config.local.js (gitignored, never
-  // committed — see src/plant.config.local.example.js for the
-  // template). build/build.js splices that file in, overwriting this
-  // sample object, only when it exists; the raw src/ tree (dev mode,
-  // not run through the build) always shows this sample.
-  plant: {
-    // EU/German legal imprint requirement (Impressum) — shown small in
-    // the page footer, see renderImprint in tracklist.js. A reasonable
-    // general field set, not legal advice: confirm your own
-    // jurisdiction's exact requirements before relying on it.
-    imprint: {
-      recipientName: "Sample Pressing Plant",
-      addressLine1: "Musterstraße 1",
-      addressLine2: "",
-      addressLine3: "",
-      city: "Hamburg",
-      stateProvince: "",
-      postalCode: "20095",
-      countryCode: "DE",
-      phone: "",
-      email: "info@example.com",
-      vat: ""
-    },
-    // uploadUrl: a specific, already-targeted drop-link (e.g. a
-    // Nextcloud File Request) — when set, this alone is the whole flow:
-    // "open this link, drop your zip in". Leave blank to fall back to
-    // uploadServiceUrl + uploadEmail (a generic transfer service's
-    // homepage, e.g. SwissTransfer, where the customer starts a new
-    // transfer and types the recipient themselves) — see
-    // src/lib/transfer.js.
-    transfer: {
-      uploadUrl: "",
-      uploadServiceUrl: "https://www.swisstransfer.com/",
-      uploadEmail: "cutting@example.com"
-    }
-  },
+  // Plant identity (imprint + transfer) — the sample comes from
+  // plant.config.local.example.js; build/build.js swaps in
+  // plant.config.local.js (gitignored) when present.
+  plant: PLANT_CONFIG,
 
   // Hard-blocks "Send to Plant" (not Save Project, which always stays
   // warning-only) when required artwork is missing or unreadable/

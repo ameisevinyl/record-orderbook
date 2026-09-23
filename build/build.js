@@ -24,26 +24,27 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 
-// Dependencies before dependents. src/plant.config.local.js (gitignored
-// real plant identity — see src/plant.config.local.example.js) is
-// spliced in right after config.js only when present, overwriting its
-// sample CONFIG.plant. A build run without it (e.g. CI building the
-// public GitHub Pages demo, which never sees a gitignored file) just
-// keeps config.js's safe sample data.
+// Dependencies before dependents. Plant identity comes from
+// src/plant.config.local.js (gitignored, a real plant's data) when
+// present, else the committed sample in plant.config.local.example.js —
+// either one is bundled ahead of config.js, which reads PLANT_CONFIG.
+// CI (the public GitHub Pages demo) never sees the gitignored file, so
+// it always ships the sample.
 const LOCAL_PLANT_CONFIG = "src/plant.config.local.js";
 const hasLocalPlantConfig = existsSync(join(ROOT, LOCAL_PLANT_CONFIG));
+const PLANT_CONFIG = hasLocalPlantConfig ? LOCAL_PLANT_CONFIG : "src/plant.config.local.example.js";
 
 // A real plant identity must never reach a public artifact. CI (GitHub
-// Actions sets CI=true) builds the Pages preview, which must keep
-// config.js's sample CONFIG.plant — abort if a gitignored local config is
-// present in the checkout anyway.
+// Actions sets CI=true) builds the Pages preview, which must ship the
+// sample — abort if a gitignored local config is present in the
+// checkout anyway.
 if(process.env.CI && hasLocalPlantConfig){
   throw new Error(`build.js: refusing to build under CI with ${LOCAL_PLANT_CONFIG} present`);
 }
 
 const FILES = [
+  PLANT_CONFIG,
   "src/config.js",
-  ...(hasLocalPlantConfig ? [LOCAL_PLANT_CONFIG] : []),
   "src/lib/time.js",
   "src/lib/zip.js",
   "src/lib/audio-duration.js",

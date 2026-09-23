@@ -1,34 +1,35 @@
 // Template — copy this file to src/plant.config.local.js and fill in
 // this plant's real identity. plant.config.local.js is gitignored and
-// never committed; build/build.js splices it into the bundle right
-// after config.js, when present, overwriting the sample CONFIG.plant
-// object with this one. Without it, both the raw src/ tree (dev mode)
-// and any build run without this file present show the safe sample
-// data from config.js instead — that's what the public GitHub Pages
-// demo (built by CI, which never sees a gitignored file) serves.
+// never committed; build/build.js uses it instead of this example when
+// it exists, so a real plant's data overrides these sample values at
+// build time. Without it (the raw src/ tree in dev mode, and the public
+// GitHub Pages demo built by CI, which never sees a gitignored file)
+// these sample values ship.
 //
-// This file is NOT a real ES module — it's concatenated directly into
-// the bundle after config.js by build/build.js, so it can just assign
-// to the already-declared CONFIG. It only ever runs as part of that
-// concatenated build, never imported directly.
+// Keep the export name and shape identical: config.js imports
+// PLANT_CONFIG from this file in dev, and build.js concatenates
+// whichever of the two files is used ahead of config.js in the bundle.
 
-CONFIG.plant = {
+export const PLANT_CONFIG = {
   // EU/German legal imprint requirement (Impressum) — shown small in
   // the page footer. Same field shape as the billing/shipping
   // addresses elsewhere in this tool. A reasonable general field set,
   // not legal advice: confirm your own jurisdiction's exact
   // requirements before relying on it.
+  //
+  // Sample data is an homage to Tuff Gong's old Kingston pressing plant
+  // (Ken Khouri's Federal Records plant, Rita Marley bought it in 1981).
   imprint: {
-    recipientName: "",
-    addressLine1: "",
+    recipientName: "Tuff Gong International",
+    addressLine1: "220 Marcus Garvey Drive",
     addressLine2: "",
     addressLine3: "",
-    city: "",
+    city: "Kingston 11",
     stateProvince: "",
     postalCode: "",
-    countryCode: "",
+    countryCode: "JM",
     phone: "",
-    email: "",
+    email: "pressing.plant@example.com",
     vat: ""
   },
   // uploadUrl: a specific, already-targeted drop-link (e.g. a
@@ -41,6 +42,6 @@ CONFIG.plant = {
   transfer: {
     uploadUrl: "",
     uploadServiceUrl: "https://www.swisstransfer.com/",
-    uploadEmail: ""
+    uploadEmail: "pressing.plant@example.com"
   }
 };
