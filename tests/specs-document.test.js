@@ -101,11 +101,13 @@ test("buildSpecsHtml includes each printed product's derived data size", () => {
   assert.match(html, /614×315mm/); // inner sleeve: trim 608x309 + 2*3mm bleed
 });
 
-test("buildSpecsHtml includes a line-art layout preview for the label and every printed product", () => {
+test("buildSpecsHtml shows a layout preview figure under each heading, captioned per printed product", () => {
   const html = buildSpecsHtml(config);
   // one label preview plus one per printed product (sleeve, cover, inlay)
   assert.equal((html.match(/class="layout"/g) || []).length, 4);
-  assert.match(html, /class="trim"/);
+  assert.equal((html.match(/class="layouts"/g) || []).length, 4);
+  assert.match(html, /<figcaption>⌀100mm<\/figcaption>/);
+  assert.match(html, /<figcaption>printed<\/figcaption>/);
   assert.match(html, /\.layout \.bleed\{/);
 });
 

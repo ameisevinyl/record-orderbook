@@ -15,6 +15,16 @@ function kvTable(rows){
   return `<table><tbody>${rows.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>`;
 }
 
+// Schematic layout previews sit as figures directly under a category's
+// heading, one per printed product, captioned with the product name —
+// not as a table column, which kept them too small to read.
+function layoutFigures(figures){
+  const shown = figures.filter(([, svg]) => svg);
+  if(!shown.length) return "";
+  return `<div class="layouts">${shown.map(([caption, svg]) =>
+    `<figure class="layout-figure">${svg}<figcaption>${esc(caption)}</figcaption></figure>`).join("")}</div>`;
+}
+
 // One row per PRINTED product — unprinted stock has no artwork file, so
 // its print spec is nothing but noise in this document. Columns that
 // don't apply to any of a category's printed products (e.g. Spine on
@@ -35,13 +45,13 @@ function productTable(title, products){
     ["Spine",       p => p.spineMm != null ? `${p.spineMm}mm` : "—"],
     ["Paper",       p => `${p.paperGsm}gsm`],
     ["Cut-out",     p => p.cutoutDiameterMm ? `⌀${p.cutoutDiameterMm}mm` : "—"],
-    ["Weight",      p => p.trimMm ? `${partWeightG(p)}g` : "—"],
-    ["Layout",      p => p.trimMm ? printedPartLayoutSvg(p) : "—"]
+    ["Weight",      p => p.trimMm ? `${partWeightG(p)}g` : "—"]
   ].filter(([, valueOf]) => printed.some(p => valueOf(p) !== "—"));
 
   const head = columns.map(([h]) => `<th>${esc(h)}</th>`).join("");
   const body = printed.map(p => `<tr>${columns.map(([, valueOf]) => `<td>${valueOf(p)}</td>`).join("")}</tr>`).join("");
   return `<h3>${esc(title)}</h3>
+    ${layoutFigures(printed.map(p => [p.name, p.trimMm ? printedPartLayoutSvg(p) : null]))}
     <table>
       <thead><tr>${head}</tr></thead>
       <tbody>${body}</tbody>
@@ -89,9 +99,10 @@ function formatSection(format, artworkFileTypes, printSpec){
     ${timeLimitsTable(format)}
     ${printFilesTable(format, artworkFileTypes, printSpec)}
     <h3>Label</h3>
+    ${layoutFigures([[`⌀${label.diameterMm}mm`, labelLayoutSvg(label)]])}
     <table>
-      <thead><tr><th>End format</th><th>Bleed</th><th>Data format</th><th>Layout</th></tr></thead>
-      <tbody><tr><td>⌀${label.diameterMm}mm</td><td>${label.bleedMm}mm</td><td>${labelDataSizeMm(label)}×${labelDataSizeMm(label)}mm</td><td>${labelLayoutSvg(label)}</td></tr></tbody>
+      <thead><tr><th>End format</th><th>Bleed</th><th>Data format</th></tr></thead>
+      <tbody><tr><td>⌀${label.diameterMm}mm</td><td>${label.bleedMm}mm</td><td>${labelDataSizeMm(label)}×${labelDataSizeMm(label)}mm</td></tr></tbody>
     </table>
     ${productTable("Inner Sleeve", parts.innerSleeve.products)}
     ${productTable("Outer Cover", parts.outerCover.products)}
@@ -118,6 +129,9 @@ const SPECS_CSS = `
   table{border-collapse:collapse;width:100%;font-size:12px;margin-top:6px;}
   th,td{border:1px solid #d6d6d3;padding:4px 8px;text-align:left;}
   th{background:#f6f6f5;font-weight:600;}
+  .layouts{display:flex;flex-wrap:wrap;gap:18px;margin-top:10px;}
+  .layout-figure{margin:0;display:flex;flex-direction:column;align-items:center;break-inside:avoid;}
+  .layout-figure figcaption{font-size:11px;color:#5c5c59;margin-top:3px;}
   .layout{display:block;}
   .layout .bleed{fill:none;stroke:#b3b3b0;stroke-dasharray:3 2;}
   .layout .trim{fill:none;stroke:#161616;}

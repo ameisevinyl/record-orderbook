@@ -5,9 +5,11 @@
 
 import { flatDataMm } from "./format-catalogue.js";
 
-const MAX_W = 132;
-const MAX_H = 96;
 const PAD = 4; // room for the stroke on the outermost outline
+
+// Visual box the drawings are scaled into — a schematic size, not true
+// print size. Exported so tests can assert the box is respected.
+export const PREVIEW_MAX = { w: 240, h: 200 };
 
 function esc(str){
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -16,7 +18,7 @@ function esc(str){
 // Fits a dataW×dataH mm drawing into the box. Geometry is written in mm,
 // emitted in px: x()/y() place a point, len() sizes a span.
 function frame(dataW, dataH){
-  const scale = Math.min((MAX_W - PAD * 2) / dataW, (MAX_H - PAD * 2) / dataH);
+  const scale = Math.min((PREVIEW_MAX.w - PAD * 2) / dataW, (PREVIEW_MAX.h - PAD * 2) / dataH);
   const width = dataW * scale + PAD * 2;
   const height = dataH * scale + PAD * 2;
   const place = mm => (PAD + mm * scale).toFixed(2);

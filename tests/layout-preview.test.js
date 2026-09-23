@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { labelLayoutSvg, printedPartLayoutSvg } from "../src/lib/layout-preview.js";
+import { labelLayoutSvg, printedPartLayoutSvg, PREVIEW_MAX } from "../src/lib/layout-preview.js";
 
 function sizeOf(svg){
   const m = svg.match(/width="([\d.]+)" height="([\d.]+)"/);
@@ -40,10 +40,11 @@ test("printedPartLayoutSvg draws a cut-out circle when the product has one", () 
 
 test("previews fit the visual box instead of true print size", () => {
   const cover = sizeOf(printedPartLayoutSvg({ trimMm:{w:633,h:318}, spineMm:3, bleedMm:5 }));
-  assert.ok(cover.w <= 132 && cover.h <= 96, `${cover.w}×${cover.h}`);
+  assert.ok(cover.w <= PREVIEW_MAX.w && cover.h <= PREVIEW_MAX.h, `${cover.w}×${cover.h}`);
   assert.ok(cover.w > cover.h, "cover spread keeps its wide aspect ratio");
 
   const label = sizeOf(labelLayoutSvg({ diameterMm:100, bleedMm:3 }));
-  assert.ok(label.w <= 132 && label.h <= 96, `${label.w}×${label.h}`);
+  assert.ok(label.w <= PREVIEW_MAX.w && label.h <= PREVIEW_MAX.h, `${label.w}×${label.h}`);
   assert.ok(Math.abs(label.w - label.h) < 0.01, "label preview stays square");
+  assert.ok(label.w >= 180, "label preview is rendered large, not thumbnail-sized");
 });
