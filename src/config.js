@@ -102,14 +102,19 @@ export const CONFIG = {
       // a *product catalog*, not a single spec — a plant stocks
       // distinct products (different paper, colour, size, cut-out), not
       // one spec per category. Each product is fully self-contained:
-      // its own bleedMm, trim/final size, paper weight, colour when
-      // unprinted, cutoutDiameterMm when it has a center cut-out
-      // (absent = closed). `kind` is "printed" or "unprinted" — printed
-      // products get an artwork-upload slot on the order form,
-      // unprinted ones don't. `default:true` marks the product that's
-      // pre-selected on load — only inner sleeve needs one (it's always
-      // required, never "none"); outer cover and inlay default to
-      // "none" (nothing pre-selected). Data sizes are never
+      // paper weight, colour when unprinted, cutoutDiameterMm when it
+      // has a center cut-out (absent = closed). `kind` is "printed" or
+      // "unprinted" — printed products get an artwork-upload slot on
+      // the order form, unprinted ones don't. trimMm/bleedMm only
+      // belong on a PRINTED product — they describe the artwork file
+      // (trim + bleed = the print file's own size), and an unprinted
+      // product has no artwork file, so it carries no trimMm/bleedMm at
+      // all (the Specifications panel hides End format/Data format/
+      // Bleed/Shipping weight for a product that has none — see
+      // renderXSpecs in the module files). `default:true` marks the
+      // product that's pre-selected on load — only inner sleeve needs
+      // one (it's always required, never "none"); outer cover and inlay
+      // default to "none" (nothing pre-selected). Data sizes are never
       // hand-entered — see labelDataSizeMm/flatDataMm in
       // lib/format-catalogue.js, which derive them from trim/diameter +
       // bleed (+ spine for the cover), so they can't drift out of sync.
@@ -124,18 +129,18 @@ export const CONFIG = {
         innerSleeve: {
           products: [
             { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",
-              trimMm:{w:608,h:309}, finalMm:{w:304,h:309}, bleedMm:3, paperGsm:135,
+              finalMm:{w:304,h:309}, paperGsm:135,
               color:"white", cutoutDiameterMm:85, default:true },
             { id:"sleeve-black-cutout", name:"black, center cut-out", kind:"unprinted",
-              trimMm:{w:608,h:309}, finalMm:{w:304,h:309}, bleedMm:3, paperGsm:135,
+              finalMm:{w:304,h:309}, paperGsm:135,
               color:"black", cutoutDiameterMm:85 },
             { id:"sleeve-brown-cutout", name:"brown, center cut-out", kind:"unprinted",
-              trimMm:{w:608,h:309}, finalMm:{w:304,h:309}, bleedMm:3, paperGsm:135,
+              finalMm:{w:304,h:309}, paperGsm:135,
               color:"brown", cutoutDiameterMm:85 },
             // Heavier stock example, no cut-out — shows a category can
             // mix paper weights and cut-out/closed freely, not just colour.
             { id:"sleeve-black-closed", name:"black, closed", kind:"unprinted",
-              trimMm:{w:608,h:309}, finalMm:{w:304,h:309}, bleedMm:3, paperGsm:170,
+              finalMm:{w:304,h:309}, paperGsm:170,
               color:"black" },
             { id:"sleeve-printed", name:"printed", kind:"printed",
               trimMm:{w:608,h:309}, finalMm:{w:304,h:309}, bleedMm:3, paperGsm:135 }
@@ -157,14 +162,14 @@ export const CONFIG = {
             { id:"cover-printed-inside-out", name:"printed (inside out)", kind:"printed",
               trimMm:{w:633,h:318}, spineMm:3, bleedMm:5, paperGsm:300 },
             { id:"cover-white-closed", name:"white, closed", kind:"unprinted",
-              trimMm:{w:633,h:318}, spineMm:3, bleedMm:5, paperGsm:300, color:"white" },
+              spineMm:3, paperGsm:300, color:"white" },
             { id:"cover-black-closed", name:"black, closed", kind:"unprinted",
-              trimMm:{w:633,h:318}, spineMm:3, bleedMm:5, paperGsm:300, color:"black" },
+              spineMm:3, paperGsm:300, color:"black" },
             { id:"cover-brown-closed", name:"brown, closed", kind:"unprinted",
-              trimMm:{w:633,h:318}, spineMm:3, bleedMm:5, paperGsm:300, color:"brown" },
+              spineMm:3, paperGsm:300, color:"brown" },
             // Open-top bag, not a folded case — spineMm:0 (nothing folds in).
             { id:"cover-red-paperbag-cutout", name:"red paperbag, center cut-out, heavy stock", kind:"unprinted",
-              trimMm:{w:633,h:318}, spineMm:0, bleedMm:5, paperGsm:400, color:"red", cutoutDiameterMm:85 }
+              spineMm:0, paperGsm:400, color:"red", cutoutDiameterMm:85 }
           ]
         },
         inlay: {
@@ -205,16 +210,16 @@ export const CONFIG = {
         innerSleeve: {
           products: [
             { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",
-              trimMm:{w:510,h:255}, finalMm:{w:255,h:255}, bleedMm:3, paperGsm:135,
+              finalMm:{w:255,h:255}, paperGsm:135,
               color:"white", cutoutDiameterMm:85, default:true },
             { id:"sleeve-black-cutout", name:"black, center cut-out", kind:"unprinted",
-              trimMm:{w:510,h:255}, finalMm:{w:255,h:255}, bleedMm:3, paperGsm:135,
+              finalMm:{w:255,h:255}, paperGsm:135,
               color:"black", cutoutDiameterMm:85 },
             { id:"sleeve-brown-cutout", name:"brown, center cut-out", kind:"unprinted",
-              trimMm:{w:510,h:255}, finalMm:{w:255,h:255}, bleedMm:3, paperGsm:135,
+              finalMm:{w:255,h:255}, paperGsm:135,
               color:"brown", cutoutDiameterMm:85 },
             { id:"sleeve-black-closed", name:"black, closed", kind:"unprinted",
-              trimMm:{w:510,h:255}, finalMm:{w:255,h:255}, bleedMm:3, paperGsm:170,
+              finalMm:{w:255,h:255}, paperGsm:170,
               color:"black" },
             { id:"sleeve-printed", name:"printed", kind:"printed",
               trimMm:{w:510,h:255}, finalMm:{w:255,h:255}, bleedMm:3, paperGsm:135 }
@@ -227,13 +232,13 @@ export const CONFIG = {
             { id:"cover-printed-inside-out", name:"printed (inside out)", kind:"printed",
               trimMm:{w:523,h:266}, spineMm:3, bleedMm:5, paperGsm:300 },
             { id:"cover-white-closed", name:"white, closed", kind:"unprinted",
-              trimMm:{w:523,h:266}, spineMm:3, bleedMm:5, paperGsm:300, color:"white" },
+              spineMm:3, paperGsm:300, color:"white" },
             { id:"cover-black-closed", name:"black, closed", kind:"unprinted",
-              trimMm:{w:523,h:266}, spineMm:3, bleedMm:5, paperGsm:300, color:"black" },
+              spineMm:3, paperGsm:300, color:"black" },
             { id:"cover-brown-closed", name:"brown, closed", kind:"unprinted",
-              trimMm:{w:523,h:266}, spineMm:3, bleedMm:5, paperGsm:300, color:"brown" },
+              spineMm:3, paperGsm:300, color:"brown" },
             { id:"cover-red-paperbag-cutout", name:"red paperbag, center cut-out, heavy stock", kind:"unprinted",
-              trimMm:{w:523,h:266}, spineMm:0, bleedMm:5, paperGsm:400, color:"red", cutoutDiameterMm:85 }
+              spineMm:0, paperGsm:400, color:"red", cutoutDiameterMm:85 }
           ]
         },
         // Not supplied yet — guessed by interpolation, replace with the
@@ -276,16 +281,16 @@ export const CONFIG = {
         innerSleeve: {
           products: [
             { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",
-              trimMm:{w:360,h:180}, finalMm:{w:180,h:180}, bleedMm:3, paperGsm:135,
+              finalMm:{w:180,h:180}, paperGsm:135,
               color:"white", cutoutDiameterMm:55, default:true },
             { id:"sleeve-black-cutout", name:"black, center cut-out", kind:"unprinted",
-              trimMm:{w:360,h:180}, finalMm:{w:180,h:180}, bleedMm:3, paperGsm:135,
+              finalMm:{w:180,h:180}, paperGsm:135,
               color:"black", cutoutDiameterMm:55 },
             { id:"sleeve-brown-cutout", name:"brown, center cut-out", kind:"unprinted",
-              trimMm:{w:360,h:180}, finalMm:{w:180,h:180}, bleedMm:3, paperGsm:135,
+              finalMm:{w:180,h:180}, paperGsm:135,
               color:"brown", cutoutDiameterMm:55 },
             { id:"sleeve-black-closed", name:"black, closed", kind:"unprinted",
-              trimMm:{w:360,h:180}, finalMm:{w:180,h:180}, bleedMm:3, paperGsm:170,
+              finalMm:{w:180,h:180}, paperGsm:170,
               color:"black" },
             { id:"sleeve-printed", name:"printed", kind:"printed",
               trimMm:{w:360,h:180}, finalMm:{w:180,h:180}, bleedMm:3, paperGsm:135 }
@@ -299,13 +304,13 @@ export const CONFIG = {
             { id:"cover-printed-inside-out", name:"printed (inside out)", kind:"printed",
               trimMm:{w:373,h:191}, spineMm:3, bleedMm:5, paperGsm:300 },
             { id:"cover-white-closed", name:"white, closed", kind:"unprinted",
-              trimMm:{w:373,h:191}, spineMm:3, bleedMm:5, paperGsm:300, color:"white" },
+              spineMm:3, paperGsm:300, color:"white" },
             { id:"cover-black-closed", name:"black, closed", kind:"unprinted",
-              trimMm:{w:373,h:191}, spineMm:3, bleedMm:5, paperGsm:300, color:"black" },
+              spineMm:3, paperGsm:300, color:"black" },
             { id:"cover-brown-closed", name:"brown, closed", kind:"unprinted",
-              trimMm:{w:373,h:191}, spineMm:3, bleedMm:5, paperGsm:300, color:"brown" },
+              spineMm:3, paperGsm:300, color:"brown" },
             { id:"cover-red-paperbag-cutout", name:"red paperbag, center cut-out, heavy stock", kind:"unprinted",
-              trimMm:{w:373,h:191}, spineMm:0, bleedMm:5, paperGsm:400, color:"red", cutoutDiameterMm:55 }
+              spineMm:0, paperGsm:400, color:"red", cutoutDiameterMm:55 }
           ]
         },
         inlay: {

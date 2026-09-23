@@ -46,10 +46,12 @@ function coverHasArtwork(){
 
 // dataMm is derived (trim + bleed — spine's already folded into
 // trimMm, see config.js), not a stored field, so it can't drift out of
-// sync with trimMm/spineMm/bleedMm. undefined when "None" is selected.
+// sync with trimMm/spineMm/bleedMm. Only a printed product carries
+// trimMm/bleedMm at all (they describe the artwork file) — dataMm is
+// undefined for an unprinted product or when "None" is selected.
 function coverSpec(){
   const part = selectedCoverProduct();
-  return part && { ...part, dataMm: flatDataMm(part) };
+  return part && { ...part, dataMm: part.trimMm ? flatDataMm(part) : undefined };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -83,11 +85,12 @@ function createCoverArtworkSlot(){
   let file = null, url = null, originalFileName = null;
   let previewFile = null, previewUrl = null;
 
-  // No-op when nothing is selected ("None", or no printed product) —
-  // the upload block is hidden in that state regardless.
+  // No-op when there's no dataMm to size against — "None" selected, or
+  // an unprinted product (no artwork file, so no data size) — the
+  // upload block is hidden in either state regardless.
   function updateSizing(){
     const spec = coverSpec();
-    if(!spec) return;
+    if(!spec || !spec.dataMm) return;
     const { dataMm } = spec;
     wrap.style.width = "100%";
     wrap.style.maxWidth = COVER_PREVIEW_MAX_W+"px";
@@ -245,19 +248,25 @@ function populateCoverProducts(){
 }
 
 // Populates the Specifications disclosure from the selected product —
-// shows "—" in every field when "None" is selected, since there's no
-// product to read values from. Allowed filetypes/Colour mode/Data
-// format/Bleed only mean anything for a printed product (they describe
-// the artwork FILE, and an unprinted product has none) — hidden
-// entirely, not just left blank, for an unprinted or "None" selection.
+// shows "—" in Spine/Paper weight/Center cut-out when "None" is
+// selected (they're not applicable to any product then). Allowed
+// filetypes/Colour mode/Data format/Bleed only mean anything for a
+// printed product (they describe the artwork FILE, and an unprinted
+// product has none) — hidden entirely for an unprinted or "None"
+// selection. End format/Shipping weight need trimMm too (End format IS
+// trimMm; weight is derived from its area) — hidden the same way for
+// any product (or non-selection) that doesn't have one, rather than
+// showing a dash for those two specifically.
 function renderCoverSpecs(){
   const part = coverSpec();
   const printed = !!part && part.kind === "printed";
+  const hasSize = !!part && !!part.trimMm;
   document.getElementById("coverSpecFiletypesRow").classList.toggle("hidden", !printed);
   document.getElementById("coverSpecColorModeRow").classList.toggle("hidden", !printed);
   document.getElementById("coverSpecDataFormatRow").classList.toggle("hidden", !printed);
   document.getElementById("coverSpecBleedRow").classList.toggle("hidden", !printed);
-  document.getElementById("coverSpecWeightRow").classList.toggle("hidden", !isDebugMode() || !part);
+  document.getElementById("coverSpecEndFormatRow").classList.toggle("hidden", !hasSize);
+  document.getElementById("coverSpecWeightRow").classList.toggle("hidden", !isDebugMode() || !hasSize);
   if(printed){
     const colorMode = getFormat(CONFIG, coverCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
     document.getElementById("coverSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
@@ -265,21 +274,13 @@ function renderCoverSpecs(){
     document.getElementById("coverSpecDataFormat").textContent = `${part.dataMm.w}×${part.dataMm.h}mm`;
     document.getElementById("coverSpecBleed").textContent = `${part.bleedMm}mm`;
   }
-  if(!part){
-    document.getElementById("coverSpecEndFormat").textContent = "—";
-    document.getElementById("coverSpecSpine").textContent = "—";
-    document.getElementById("coverSpecPaperGsm").textContent = "—";
-    document.getElementById("coverSpecCutout").textContent = "—";
-    document.getElementById("coverSpecWeight").textContent = "—";
-    return;
+  if(hasSize){
+    document.getElementById("coverSpecEndFormat").textContent = `${part.trimMm.w}×${part.trimMm.h}mm`;
+    document.getElementById("coverSpecWeight").textContent = `${partWeightG(part)}g`;
   }
-  const { trimMm, spineMm, paperGsm, cutoutDiameterMm } = part;
-  document.getElementById("coverSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
-  document.getElementById("coverSpecSpine").textContent = `${spineMm}mm`;
-  document.getElementById("coverSpecPaperGsm").textContent = `${paperGsm}gsm`;
-  document.getElementById("coverSpecCutout").textContent = cutoutDiameterMm ? `⌀${cutoutDiameterMm}mm` : "none";
-  // Shipping weight — plant/?debug eyes only, not customer-facing yet.
-  document.getElementById("coverSpecWeight").textContent = `${partWeightG(part)}g`;
+  document.getElementById("coverSpecSpine").textContent = part ? `${part.spineMm}mm` : "—";
+  document.getElementById("coverSpecPaperGsm").textContent = part ? `${part.paperGsm}gsm` : "—";
+  document.getElementById("coverSpecCutout").textContent = part ? (part.cutoutDiameterMm ? `⌀${part.cutoutDiameterMm}mm` : "none") : "—";
 }
 
 export function initCover(){

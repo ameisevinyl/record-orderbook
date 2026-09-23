@@ -38,10 +38,12 @@ function inlayIncluded(){
 }
 
 // dataMm is derived (trim + bleed — a single flat sheet, no spine/
-// folding), not a stored field. undefined when "None" is selected.
+// folding), not a stored field. undefined when "None" is selected (or,
+// in principle, for a product with no trimMm — inlay never has an
+// unprinted product today, but this stays defensive either way).
 function inlaySpec(){
   const part = selectedInlayProduct();
-  return part && { ...part, dataMm: flatDataMm(part) };
+  return part && { ...part, dataMm: part.trimMm ? flatDataMm(part) : undefined };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -77,11 +79,11 @@ function createInlayArtworkSlot(prefix){
   let file = null, url = null, originalFileName = null;
   let previewFile = null, previewUrl = null;
 
-  // No-op when nothing is selected ("None") — the upload block is
-  // hidden in that state regardless.
+  // No-op when there's no dataMm to size against ("None" selected) —
+  // the upload block is hidden in that state regardless.
   function updateSizing(){
     const spec = inlaySpec();
-    if(!spec) return;
+    if(!spec || !spec.dataMm) return;
     const { dataMm } = spec;
     wrap.style.width = "100%";
     wrap.style.maxWidth = INLAY_PREVIEW_MAX_W+"px";
@@ -235,19 +237,24 @@ function populateInlayProducts(){
 }
 
 // Populates the Specifications disclosure from the selected product —
-// shows "—" in every field when "None" is selected. Allowed filetypes/
-// Colour mode/Data format/Bleed only mean anything for a printed
-// product (they describe the artwork FILE) — hidden entirely, not just
-// left blank, for "None" (inlay never has an unprinted product, so
-// there's no other case where these would need hiding).
+// shows "—" in Paper weight when "None" is selected. Allowed
+// filetypes/Colour mode/Data format/Bleed only mean anything for a
+// printed product (they describe the artwork FILE) — hidden entirely
+// for "None" (inlay never has an unprinted product, so there's no
+// other case where these would need hiding). End format/Shipping
+// weight need trimMm too (End format IS trimMm; weight is derived
+// from its area) — hidden the same way, rather than a dash, for any
+// selection that doesn't have one.
 function renderInlaySpecs(){
   const part = inlaySpec();
   const printed = !!part && part.kind === "printed";
+  const hasSize = !!part && !!part.trimMm;
   document.getElementById("inlaySpecFiletypesRow").classList.toggle("hidden", !printed);
   document.getElementById("inlaySpecColorModeRow").classList.toggle("hidden", !printed);
   document.getElementById("inlaySpecDataFormatRow").classList.toggle("hidden", !printed);
   document.getElementById("inlaySpecBleedRow").classList.toggle("hidden", !printed);
-  document.getElementById("inlaySpecWeightRow").classList.toggle("hidden", !isDebugMode() || !part);
+  document.getElementById("inlaySpecEndFormatRow").classList.toggle("hidden", !hasSize);
+  document.getElementById("inlaySpecWeightRow").classList.toggle("hidden", !isDebugMode() || !hasSize);
   if(printed){
     const colorMode = getFormat(CONFIG, inlayCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
     document.getElementById("inlaySpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
@@ -255,16 +262,11 @@ function renderInlaySpecs(){
     document.getElementById("inlaySpecDataFormat").textContent = `${part.dataMm.w}×${part.dataMm.h}mm`;
     document.getElementById("inlaySpecBleed").textContent = `${part.bleedMm}mm`;
   }
-  if(!part){
-    document.getElementById("inlaySpecEndFormat").textContent = "—";
-    document.getElementById("inlaySpecPaperGsm").textContent = "—";
-    document.getElementById("inlaySpecWeight").textContent = "—";
-    return;
+  if(hasSize){
+    document.getElementById("inlaySpecEndFormat").textContent = `${part.trimMm.w}×${part.trimMm.h}mm`;
+    document.getElementById("inlaySpecWeight").textContent = `${partWeightG(part)}g`;
   }
-  document.getElementById("inlaySpecEndFormat").textContent = `${part.trimMm.w}×${part.trimMm.h}mm`;
-  document.getElementById("inlaySpecPaperGsm").textContent = `${part.paperGsm}gsm`;
-  // Shipping weight — plant/?debug eyes only, not customer-facing yet.
-  document.getElementById("inlaySpecWeight").textContent = `${partWeightG(part)}g`;
+  document.getElementById("inlaySpecPaperGsm").textContent = part ? `${part.paperGsm}gsm` : "—";
 }
 
 export function initInlay(){

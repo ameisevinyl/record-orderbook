@@ -35,10 +35,12 @@ function selectedInnerSleeveProduct(){
 
 // dataMm is derived (trim + bleed — trimMm is already the flat-opened,
 // unfolded spread; finalMm, separately, is the folded pocket size the
-// customer actually receives), not a stored field.
+// customer actually receives), not a stored field. Only a printed
+// product carries trimMm/bleedMm at all (they describe the artwork
+// file) — dataMm is undefined for an unprinted product, which has none.
 function innerSleeveSpec(){
   const part = selectedInnerSleeveProduct();
-  return part && { ...part, dataMm: flatDataMm(part) };
+  return part && { ...part, dataMm: part.trimMm ? flatDataMm(part) : undefined };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -72,12 +74,14 @@ function createInnerSleeveArtworkSlot(){
   let file = null, url = null, originalFileName = null;
   let previewFile = null, previewUrl = null;
 
-  // No-op when nothing is selected — only possible transiently, since
-  // inner sleeve always has a default product once populateInnerSleeveProducts
-  // has run.
+  // No-op when there's no dataMm to size against — either nothing is
+  // selected (only possible transiently, since inner sleeve always has
+  // a default product once populateInnerSleeveProducts has run), or the
+  // selected product is unprinted (no artwork file, so no data size);
+  // the upload block is hidden in the latter case regardless.
   function updateSizing(){
     const spec = innerSleeveSpec();
-    if(!spec) return;
+    if(!spec || !spec.dataMm) return;
     const { dataMm } = spec;
     wrap.style.width = "100%";
     wrap.style.maxWidth = INNER_SLEEVE_PREVIEW_MAX_W+"px";
@@ -240,15 +244,22 @@ function populateInnerSleeveProducts(){
 // Allowed filetypes/Colour mode/Data format/Bleed only mean anything
 // for a printed product (they describe the artwork FILE, and an
 // unprinted product has none) — hidden entirely for an unprinted
-// selection, not just left blank.
+// selection, not just left blank. End format/Shipping weight need
+// trimMm too (End format IS trimMm; weight is derived from its area) —
+// an unprinted product without one hides those the same way. Final
+// size (finalMm) stays unconditional — it's the folded/closed size the
+// customer receives, unrelated to whether there's an artwork file.
 function renderInnerSleeveSpecs(){
   const part = innerSleeveSpec();
-  const { trimMm, finalMm, bleedMm, paperGsm, cutoutDiameterMm, dataMm, kind } = part;
+  const { finalMm, trimMm, bleedMm, paperGsm, cutoutDiameterMm, dataMm, kind } = part;
   const printed = kind === "printed";
+  const hasSize = !!trimMm;
   document.getElementById("innersleeveSpecFiletypesRow").classList.toggle("hidden", !printed);
   document.getElementById("innersleeveSpecColorModeRow").classList.toggle("hidden", !printed);
   document.getElementById("innersleeveSpecDataFormatRow").classList.toggle("hidden", !printed);
   document.getElementById("innersleeveSpecBleedRow").classList.toggle("hidden", !printed);
+  document.getElementById("innersleeveSpecEndFormatRow").classList.toggle("hidden", !hasSize);
+  document.getElementById("innersleeveSpecWeightRow").classList.toggle("hidden", !isDebugMode() || !hasSize);
   if(printed){
     const colorMode = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
     document.getElementById("innersleeveSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
@@ -257,12 +268,12 @@ function renderInnerSleeveSpecs(){
     document.getElementById("innersleeveSpecBleed").textContent = `${bleedMm}mm`;
   }
   document.getElementById("innersleeveSpecFinalSize").textContent = `${finalMm.w}×${finalMm.h}mm`;
-  document.getElementById("innersleeveSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
+  if(hasSize){
+    document.getElementById("innersleeveSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
+    document.getElementById("innersleeveSpecWeight").textContent = `${partWeightG(part)}g`;
+  }
   document.getElementById("innersleeveSpecPaperGsm").textContent = `${paperGsm}gsm`;
   document.getElementById("innersleeveSpecCutout").textContent = cutoutDiameterMm ? `⌀${cutoutDiameterMm}mm` : "none";
-  // Shipping weight — plant/?debug eyes only, not customer-facing yet.
-  document.getElementById("innersleeveSpecWeightRow").classList.toggle("hidden", !isDebugMode());
-  document.getElementById("innersleeveSpecWeight").textContent = `${partWeightG(part)}g`;
 }
 
 export function initInnerSleeve(){
