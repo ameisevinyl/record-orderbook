@@ -9,7 +9,7 @@
 // ../lib/print-artwork.js.
 
 import { CONFIG } from "../config.js";
-import { getFormat } from "../lib/format-catalogue.js";
+import { getFormat, foldedDataMm, bleedFor } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -20,8 +20,16 @@ function innerSleeveCurrentFormat(){
   return document.getElementById("format").value;
 }
 
+function innerSleevePrintableParts(){
+  return getFormat(CONFIG, innerSleeveCurrentFormat()).printableParts;
+}
+
+// dataMm is derived (trimMm is ONE folded pocket's size — foldedDataMm
+// doubles the width for the flat-opened print file), not a stored
+// field.
 function innerSleeveSpec(){
-  return getFormat(CONFIG, innerSleeveCurrentFormat()).printableParts.innerSleeve;
+  const parts = innerSleevePrintableParts();
+  return { ...parts.innerSleeve, dataMm: foldedDataMm(parts.innerSleeve, parts) };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -183,13 +191,30 @@ function updateInnerSleeveMode(){
   document.getElementById("innersleeveColorWrap").classList.toggle("hidden", !unprinted);
 }
 
+// Populates the Specifications disclosure from CONFIG — never
+// hand-typed, so it can't drift from the format's actual values.
+function renderInnerSleeveSpecs(){
+  const parts = innerSleevePrintableParts();
+  const { trimMm, dataMm } = innerSleeveSpec();
+  const bleedMm = bleedFor(parts.innerSleeve, parts);
+  const colorMode = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
+  document.getElementById("innersleeveSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
+  document.getElementById("innersleeveSpecColorMode").textContent = colorMode;
+  document.getElementById("innersleeveSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
+  document.getElementById("innersleeveSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
+  document.getElementById("innersleeveSpecBleed").textContent = `${bleedMm}mm`;
+}
+
 export function initInnerSleeve(){
   innerSleeveSlot = createInnerSleeveArtworkSlot();
   innerSleeveSlot.updateSizing();
+  document.getElementById("innersleeveinput").accept = CONFIG.artworkFileTypes.accept;
+  renderInnerSleeveSpecs();
 
   document.getElementById("format").addEventListener("change", ()=>{
     innerSleeveSlot.clear();
     innerSleeveSlot.updateSizing();
+    renderInnerSleeveSpecs();
   });
 
   document.getElementById("innersleeve-printed").addEventListener("change", updateInnerSleeveMode);

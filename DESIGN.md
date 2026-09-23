@@ -164,6 +164,15 @@ The playing-time recommendation ("within recommendation" /
 "approaching limit" / "exceeds recommendation") and the track position
 (`A1`, `B2`) are plain inline text — no pill, no chip, no border.
 
+### Specifications disclosure
+
+Collapsed by default, under each printed-part heading: an underlined
+"Specifications" link, `+`/`-` after it for open/closed state (a native
+`<details>`, not a custom widget). Its content — allowed filetypes,
+colour mode, end format, data format, bleed, and spine where it
+applies — is always rendered from `CONFIG`, never typed out per part,
+so it can't drift from the format actually selected.
+
 ## Do's and Don'ts
 
 ### Do:

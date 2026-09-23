@@ -23,6 +23,17 @@ export const CONFIG = {
   // every checklist item, including these two.
   blockIncompleteArtworkOnSend: true,
 
+  // Accepted artwork file types — the single source both the file
+  // pickers' accept="" attribute and each printed part's "Allowed
+  // filetypes" spec line read from, so they can't drift apart. `accept`
+  // is the exact string every artwork <input type=file> uses; `labels`
+  // is the human-readable list shown in the specs panel (deliberately
+  // shorter — JPG/JPEG and TIFF/TIF collapse to one label each).
+  artworkFileTypes: {
+    accept: ".pdf,.jpg,.jpeg,.tiff,.tif",
+    labels: ["PDF", "JPG", "TIFF"]
+  },
+
   formats: [
     {
       id: "12",
@@ -80,25 +91,37 @@ export const CONFIG = {
         }
       },
       printableParts: {
+        // Bleed added on every outward-facing edge of a part's print
+        // file, beyond its trim/end size — default for every part
+        // below; a part can override it (outerCover does, below). Data
+        // sizes are never hand-entered — see labelDataSizeMm/
+        // flatDataMm/foldedDataMm in lib/format-catalogue.js, which
+        // derive them from trim/diameter + bleed (+ spine for the
+        // cover), so they can't drift out of sync with each other.
+        bleedMm: 3,
         // diameterMm is the trim size (the physical label after
-        // cutting); dataSizeMm is the full print file size including
-        // bleed on every side.
-        label: { diameterMm: 100, dataSizeMm: 106 },
-        // trimMm — the finished, cut/folded size the customer sees.
-        // dataMm — the full flat print file size, delivered opened flat
-        //          with front on the right and back on the left, bleed
-        //          included (and, for the cover, the spine).
+        // cutting) — data size (with bleed) is derived, see above.
+        label: { diameterMm: 100 },
+        // trimMm — the finished, flat-opened size, front on the right
+        // and back on the left. For the cover this already includes
+        // the spine (panel + spineMm + panel width-wise, spineMm added
+        // top and bottom of panel height-wise — a "box"-style spine
+        // wraps slightly around all three of those edges). Data size
+        // (trim + bleed) is derived — see above.
         outerCover: {
-          trimMm: {w:633, h:312}, dataMm: {w:638.5, h:324},
+          trimMm: {w:633, h:318}, spineMm: 3, bleedMm: 5,
           unprintedColors: ["black", "brown", "white"]
         },
+        // trimMm here is ONE folded pocket's finished size, not the
+        // flat spread — foldedDataMm doubles the width (front+back
+        // opened flat side by side) before adding bleed.
         innerSleeve: {
-          trimMm: {w:304, h:309}, dataMm: {w:614, h:315},
+          trimMm: {w:304, h:309},
           unprintedColors: ["black", "brown", "white"],
           centerCutoutDefault: true
         },
         inlay: {
-          trimMm: {w:297, h:297}, dataMm: {w:303, h:303},
+          trimMm: {w:297, h:297},
           paperGsm: 170
         }
       }
@@ -128,20 +151,21 @@ export const CONFIG = {
         }
       },
       printableParts: {
-        label: { diameterMm: 100, dataSizeMm: 106 },
+        bleedMm: 3,
+        label: { diameterMm: 100 },
         outerCover: {
-          trimMm: {w:523, h:260}, dataMm: {w:533, h:276},
+          trimMm: {w:523, h:266}, spineMm: 3, bleedMm: 5,
           unprintedColors: ["black", "brown", "white"]
         },
         innerSleeve: {
-          trimMm: {w:255, h:255}, dataMm: {w:516, h:261},
+          trimMm: {w:255, h:255},
           unprintedColors: ["black", "brown", "white"],
           centerCutoutDefault: true
         },
         // Not supplied yet — guessed by interpolation, replace with the
         // real spec.
         inlay: {
-          trimMm: {w:250, h:250}, dataMm: {w:256, h:256},
+          trimMm: {w:250, h:250},
           paperGsm: 170
         }
       }
@@ -171,20 +195,20 @@ export const CONFIG = {
         }
       },
       printableParts: {
-        label: { diameterMm: 92, dataSizeMm: 98 },
-        // "box" style, 3mm spine — trim and data don't reduce to a
-        // single uniform bleed figure the way a simple allowance would.
+        bleedMm: 3,
+        label: { diameterMm: 92 },
+        // "box" style, 3mm spine.
         outerCover: {
-          trimMm: {w:373, h:185}, dataMm: {w:383, h:201},
+          trimMm: {w:373, h:191}, spineMm: 3, bleedMm: 5,
           unprintedColors: ["black", "brown", "white"]
         },
         innerSleeve: {
-          trimMm: {w:180, h:180}, dataMm: {w:366, h:186},
+          trimMm: {w:180, h:180},
           unprintedColors: ["black", "brown", "white"],
           centerCutoutDefault: true
         },
         inlay: {
-          trimMm: {w:181, h:181}, dataMm: {w:187, h:187},
+          trimMm: {w:181, h:181},
           paperGsm: 170
         }
       }

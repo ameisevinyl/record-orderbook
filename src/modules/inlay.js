@@ -10,7 +10,7 @@
 // ../lib/print-artwork.js.
 
 import { CONFIG } from "../config.js";
-import { getFormat } from "../lib/format-catalogue.js";
+import { getFormat, flatDataMm, bleedFor } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -21,8 +21,15 @@ function inlayCurrentFormat(){
   return document.getElementById("format").value;
 }
 
+function inlayPrintableParts(){
+  return getFormat(CONFIG, inlayCurrentFormat()).printableParts;
+}
+
+// dataMm is derived (trim + bleed — a single flat sheet, no spine/
+// folding), not a stored field.
 function inlaySpec(){
-  return getFormat(CONFIG, inlayCurrentFormat()).printableParts.inlay;
+  const parts = inlayPrintableParts();
+  return { ...parts.inlay, dataMm: flatDataMm(parts.inlay, parts) };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -181,13 +188,35 @@ function updateInlayVisibility(){
   document.getElementById("inlayBody").classList.toggle("hidden", !document.getElementById("inlayInclude").checked);
 }
 
+// Populates both sides' Specifications disclosures from CONFIG — front
+// and back share the same sheet spec, but each side gets its own
+// toggle (same placement pattern as Label A/B) rather than one shared
+// block outside either.
+function renderInlaySpecs(){
+  const parts = inlayPrintableParts();
+  const { trimMm, dataMm } = inlaySpec();
+  const bleedMm = bleedFor(parts.inlay, parts);
+  const colorMode = getFormat(CONFIG, inlayCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
+  ["inlayfront", "inlayback"].forEach(prefix=>{
+    document.getElementById(prefix+"SpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
+    document.getElementById(prefix+"SpecColorMode").textContent = colorMode;
+    document.getElementById(prefix+"SpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
+    document.getElementById(prefix+"SpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
+    document.getElementById(prefix+"SpecBleed").textContent = `${bleedMm}mm`;
+  });
+}
+
 export function initInlay(){
   inlayFrontSlot = createInlayArtworkSlot("inlayfront");
   inlayBackSlot = createInlayArtworkSlot("inlayback");
   [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
+  document.getElementById("inlayfrontinput").accept = CONFIG.artworkFileTypes.accept;
+  document.getElementById("inlaybackinput").accept = CONFIG.artworkFileTypes.accept;
+  renderInlaySpecs();
 
   document.getElementById("format").addEventListener("change", ()=>{
     [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.clear(); s.updateSizing(); });
+    renderInlaySpecs();
   });
 
   document.getElementById("inlayInclude").addEventListener("change", updateInlayVisibility);

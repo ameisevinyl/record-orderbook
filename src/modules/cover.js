@@ -13,7 +13,7 @@
 // ../lib/print-artwork.js.
 
 import { CONFIG } from "../config.js";
-import { getFormat } from "../lib/format-catalogue.js";
+import { getFormat, flatDataMm, bleedFor } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -27,8 +27,16 @@ function coverCurrentFormat(){
   return document.getElementById("format").value;
 }
 
+function coverPrintableParts(){
+  return getFormat(CONFIG, coverCurrentFormat()).printableParts;
+}
+
+// dataMm is derived (trim + bleed — spine's already folded into
+// trimMm, see config.js), not a stored field, so it can't drift out
+// of sync with trimMm/spineMm/bleedMm.
 function coverSpec(){
-  return getFormat(CONFIG, coverCurrentFormat()).printableParts.outerCover;
+  const parts = coverPrintableParts();
+  return { ...parts.outerCover, dataMm: flatDataMm(parts.outerCover, parts) };
 }
 
 function coverHasArtwork(){
@@ -196,13 +204,31 @@ function updateCoverMode(){
   document.getElementById("coverColorWrap").classList.toggle("hidden", !unprinted);
 }
 
+// Populates the Specifications disclosure from CONFIG — never
+// hand-typed, so it can't drift from the format's actual values.
+function renderCoverSpecs(){
+  const parts = coverPrintableParts();
+  const { trimMm, spineMm, dataMm } = coverSpec();
+  const bleedMm = bleedFor(parts.outerCover, parts);
+  const colorMode = getFormat(CONFIG, coverCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
+  document.getElementById("coverSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
+  document.getElementById("coverSpecColorMode").textContent = colorMode;
+  document.getElementById("coverSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
+  document.getElementById("coverSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
+  document.getElementById("coverSpecBleed").textContent = `${bleedMm}mm`;
+  document.getElementById("coverSpecSpine").textContent = `${spineMm}mm`;
+}
+
 export function initCover(){
   coverSlot = createCoverArtworkSlot();
   coverSlot.updateSizing();
+  document.getElementById("coverinput").accept = CONFIG.artworkFileTypes.accept;
+  renderCoverSpecs();
 
   document.getElementById("format").addEventListener("change", ()=>{
     coverSlot.clear();
     coverSlot.updateSizing();
+    renderCoverSpecs();
   });
 
   document.getElementById("cover-printed").addEventListener("change", updateCoverMode);

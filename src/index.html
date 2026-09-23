@@ -261,6 +261,26 @@
     font-style:normal; text-transform:none; letter-spacing:0;
   }
 
+  /* Specifications — a collapsed-by-default disclosure under each
+     printed part's heading, rendered from CONFIG (see renderXSpecs in
+     labels.js/cover.js/inner-sleeve.js/inlay.js) rather than typed out
+     per part, so it can't drift from the actual format config. */
+  details.specs{ margin:2px 0 10px; }
+  details.specs > summary{
+    display:inline-block; cursor:pointer; list-style:none;
+    color:var(--ink-dim); text-decoration:underline; text-underline-offset:2px;
+  }
+  details.specs > summary::-webkit-details-marker{ display:none; }
+  details.specs > summary::after{ content:" +"; }
+  details.specs[open] > summary::after{ content:" -"; }
+  details.specs:hover > summary, details.specs[open] > summary{ color:var(--ink); }
+  details.specs .specs-body{
+    margin-top:6px; padding:8px 10px; max-width:360px;
+    background:var(--field); border:1px solid var(--edge); border-radius:3px;
+    font-size:12px; line-height:1.6; color:var(--ink-dim);
+  }
+  details.specs .specs-body div{ display:flex; justify-content:space-between; gap:10px; }
+
   /* cover / inner sleeve flat spreads reuse the .label-preview-wrap /
      .label-preview / .labelwarnings rules above — only the back/front
      caption below the spread is new. */
@@ -437,6 +457,16 @@
   <!-- ============ INNER SLEEVE ============ -->
   <section>
     <h2>Inner Sleeve</h2>
+    <details class="specs no-print">
+      <summary>Specifications</summary>
+      <div class="specs-body">
+        <div><span>Allowed filetypes</span><span id="innersleeveSpecFiletypes"></span></div>
+        <div><span>Colour mode</span><span id="innersleeveSpecColorMode"></span></div>
+        <div><span>End format</span><span id="innersleeveSpecEndFormat"></span></div>
+        <div><span>Data format</span><span id="innersleeveSpecDataFormat"></span></div>
+        <div><span>Bleed</span><span id="innersleeveSpecBleed"></span></div>
+      </div>
+    </details>
     <div class="row">
       <div class="field" style="flex:0 0 auto;">
         <label class="chk" style="margin-top:20px;">
@@ -473,7 +503,7 @@
           <div class="filemeta empty" id="innersleevemeta"></div>
         </div>
       </div>
-      <input type="file" id="innersleeveinput" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+      <input type="file" id="innersleeveinput" class="hidden">
       <div class="label-preview-wrap" id="innersleevepreviewwrap">
         <div class="label-preview" id="innersleevepreview"><div class="label-placeholder">no artwork selected</div></div>
       </div>
@@ -486,6 +516,17 @@
   <!-- ============ OUTER COVER ============ -->
   <section>
     <h2>Outer Cover</h2>
+    <details class="specs no-print">
+      <summary>Specifications</summary>
+      <div class="specs-body">
+        <div><span>Allowed filetypes</span><span id="coverSpecFiletypes"></span></div>
+        <div><span>Colour mode</span><span id="coverSpecColorMode"></span></div>
+        <div><span>End format</span><span id="coverSpecEndFormat"></span></div>
+        <div><span>Data format</span><span id="coverSpecDataFormat"></span></div>
+        <div><span>Bleed</span><span id="coverSpecBleed"></span></div>
+        <div><span>Spine</span><span id="coverSpecSpine"></span></div>
+      </div>
+    </details>
     <div class="row">
       <div class="field" style="flex:0 0 auto;">
         <label class="chk" style="margin-top:20px;">
@@ -527,7 +568,7 @@
           <div class="filemeta empty" id="covermeta"></div>
         </div>
       </div>
-      <input type="file" id="coverinput" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+      <input type="file" id="coverinput" class="hidden">
       <div class="label-preview-wrap" id="coverpreviewwrap">
         <div class="label-preview" id="coverpreview"><div class="label-placeholder">no artwork selected</div></div>
       </div>
@@ -551,6 +592,16 @@
           <div class="side-head">
             <h3>Inlay Front</h3>
           </div>
+          <details class="specs no-print">
+            <summary>Specifications</summary>
+            <div class="specs-body">
+              <div><span>Allowed filetypes</span><span id="inlayfrontSpecFiletypes"></span></div>
+              <div><span>Colour mode</span><span id="inlayfrontSpecColorMode"></span></div>
+              <div><span>End format</span><span id="inlayfrontSpecEndFormat"></span></div>
+              <div><span>Data format</span><span id="inlayfrontSpecDataFormat"></span></div>
+              <div><span>Bleed</span><span id="inlayfrontSpecBleed"></span></div>
+            </div>
+          </details>
           <div class="row" style="align-items:end;">
             <div class="field" style="flex:0 0 auto;">
               <label>&nbsp;</label>
@@ -560,7 +611,7 @@
               <div class="filemeta empty" id="inlayfrontmeta"></div>
             </div>
           </div>
-          <input type="file" id="inlayfrontinput" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+          <input type="file" id="inlayfrontinput" class="hidden">
           <div class="label-preview-wrap" id="inlayfrontpreviewwrap">
             <div class="label-preview" id="inlayfrontpreview"><div class="label-placeholder">no artwork selected</div></div>
           </div>
@@ -570,6 +621,16 @@
           <div class="side-head">
             <h3>Inlay Back</h3>
           </div>
+          <details class="specs no-print">
+            <summary>Specifications</summary>
+            <div class="specs-body">
+              <div><span>Allowed filetypes</span><span id="inlaybackSpecFiletypes"></span></div>
+              <div><span>Colour mode</span><span id="inlaybackSpecColorMode"></span></div>
+              <div><span>End format</span><span id="inlaybackSpecEndFormat"></span></div>
+              <div><span>Data format</span><span id="inlaybackSpecDataFormat"></span></div>
+              <div><span>Bleed</span><span id="inlaybackSpecBleed"></span></div>
+            </div>
+          </details>
           <div class="row" style="align-items:end;">
             <div class="field" style="flex:0 0 auto;">
               <label>&nbsp;</label>
@@ -579,7 +640,7 @@
               <div class="filemeta empty" id="inlaybackmeta"></div>
             </div>
           </div>
-          <input type="file" id="inlaybackinput" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+          <input type="file" id="inlaybackinput" class="hidden">
           <div class="label-preview-wrap" id="inlaybackpreviewwrap">
             <div class="label-preview" id="inlaybackpreview"><div class="label-placeholder">no artwork selected</div></div>
           </div>

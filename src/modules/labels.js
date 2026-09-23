@@ -9,7 +9,7 @@
 // customer service a round trip.
 
 import { CONFIG } from "../config.js";
-import { getFormat } from "../lib/format-catalogue.js";
+import { getFormat, labelDataSizeMm, bleedFor } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
@@ -21,8 +21,12 @@ function currentFormat(){
   return document.getElementById("format").value;
 }
 
+function printableParts(){
+  return getFormat(CONFIG, currentFormat()).printableParts;
+}
+
 function formatSpec(){
-  return getFormat(CONFIG, currentFormat()).printableParts.label;
+  return printableParts().label;
 }
 
 function labelSideTemplate(side){
@@ -32,13 +36,24 @@ function labelSideTemplate(side){
       <h3>Label ${side}</h3>
     </div>
 
+    <details class="specs no-print">
+      <summary>Specifications</summary>
+      <div class="specs-body">
+        <div><span>Allowed filetypes</span><span id="labelSpecFiletypes-${side}"></span></div>
+        <div><span>Colour mode</span><span id="labelSpecColorMode-${side}"></span></div>
+        <div><span>End format</span><span id="labelSpecEndFormat-${side}"></span></div>
+        <div><span>Data format</span><span id="labelSpecDataFormat-${side}"></span></div>
+        <div><span>Bleed</span><span id="labelSpecBleed-${side}"></span></div>
+      </div>
+    </details>
+
     <div class="row" style="align-items:center;">
       <button type="button" class="pickbtn no-print" id="labelpick-${side}" title="Choose label artwork">↑</button>
       <label class="chk"><input type="checkbox" id="whitelabel-${side}"> whitelabel (blank)</label>
       <div class="filemeta empty" id="labelmeta-${side}" style="margin:0;"></div>
       <span id="labelinfo-${side}" style="margin-left:auto;"></span>
     </div>
-    <input type="file" id="labelinput-${side}" accept=".pdf,.jpg,.jpeg,.tiff,.tif" class="hidden">
+    <input type="file" id="labelinput-${side}" accept="${CONFIG.artworkFileTypes.accept}" class="hidden">
 
     <div id="labelbody-${side}">
       <div class="label-preview-wrap" id="labelpreviewwrap-${side}">
@@ -79,7 +94,8 @@ function showPreviewImage(side, previewImgFile){
 // only as accurate as the browser's mapping to the real display, which
 // isn't perfectly calibrated on every device.
 function updatePreviewSizing(){
-  const { dataSizeMm, diameterMm } = formatSpec();
+  const { diameterMm } = formatSpec();
+  const dataSizeMm = labelDataSizeMm(printableParts());
   const mmStr = dataSizeMm + "mm";
   // Inset the blank-whitelabel disc from the full data square by the
   // same margin a real label file's trim circle would sit at, so it
@@ -95,15 +111,29 @@ function updatePreviewSizing(){
   });
 }
 
-// End/data format come from getFormat (they vary by format,
-// same numbers the preview above sizes itself to) rather than being
-// duplicated as static text in CONFIG.infoText.
+// End/data format now live in the Specifications disclosure
+// (renderLabelSpecs below), not duplicated here — this stays expert-
+// reference text only (ink coverage, colour profile), from CONFIG.infoText.
 function updateLabelInfo(){
-  const spec = formatSpec();
-  const text = `End format ⌀${spec.diameterMm}mm · Data format ⌀${spec.dataSizeMm}mm (incl. bleed). `
-    + infoText(CONFIG.infoText, CONFIG.locale, "labelArtwork");
-  const html = renderInfoIcon(text);
+  const html = renderInfoIcon(infoText(CONFIG.infoText, CONFIG.locale, "labelArtwork"));
   SIDES.forEach(side=> document.getElementById("labelinfo-"+side).innerHTML = html);
+}
+
+// Populates the Specifications disclosure from CONFIG — never
+// hand-typed, so it can't drift from the format's actual values.
+function renderLabelSpecs(){
+  const parts = printableParts();
+  const { diameterMm } = parts.label;
+  const dataSizeMm = labelDataSizeMm(parts);
+  const bleedMm = bleedFor(parts.label, parts);
+  const colorMode = getFormat(CONFIG, currentFormat()).printCheck.checks.colorMode.accepted.join("/");
+  SIDES.forEach(side=>{
+    document.getElementById("labelSpecFiletypes-"+side).textContent = CONFIG.artworkFileTypes.labels.join(", ");
+    document.getElementById("labelSpecColorMode-"+side).textContent = colorMode;
+    document.getElementById("labelSpecEndFormat-"+side).textContent = `⌀${diameterMm}mm`;
+    document.getElementById("labelSpecDataFormat-"+side).textContent = `${dataSizeMm}×${dataSizeMm}mm`;
+    document.getElementById("labelSpecBleed-"+side).textContent = `${bleedMm}mm`;
+  });
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -150,7 +180,8 @@ async function handleFile(side, file){
 
   const spec = formatSpec();
   const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
-  const targetMm = {w:spec.dataSizeMm, h:spec.dataSizeMm};
+  const dataSizeMm = labelDataSizeMm(printableParts());
+  const targetMm = {w:dataSizeMm, h:dataSizeMm};
   const trimMm = {w:spec.diameterMm, h:spec.diameterMm};
   renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck);
 
@@ -215,6 +246,7 @@ export function initLabels(){
   document.getElementById("labelSides").innerHTML = SIDES.map(labelSideTemplate).join("");
   updatePreviewSizing();
   updateLabelInfo();
+  renderLabelSpecs();
   SIDES.forEach(wireLabelSide);
 
   const bigCenterWrap = document.getElementById("bigCenterWrap");
@@ -228,6 +260,7 @@ export function initLabels(){
     updateBigCenterVisibility();
     updatePreviewSizing();
     updateLabelInfo();
+    renderLabelSpecs();
   });
   updateBigCenterVisibility();
 }
