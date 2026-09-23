@@ -11,7 +11,7 @@ import { formatTime, parseTime, trackGapSeconds } from "../lib/time.js";
 import { readAudioDuration, compressionWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
-import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-catalogue.js";
+import { getFormat, enabledFormats, firstEnabledFormat, productById } from "../lib/format-catalogue.js";
 import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType, humanDate } from "../lib/package-naming.js";
 import { renderTable } from "../lib/text-table.js";
 import { defaultMatrix } from "../lib/matrix.js";
@@ -887,22 +887,28 @@ function filesManifestSection(project){
 // back to them either.
 function packagingSection(project){
   const c = project.coverSleeve;
+  const parts = getFormat(CONFIG, project.format).printableParts;
   const withOriginal = (fileName, originalFileName) =>
     (fileName || "(no file)") + (originalFileName && originalFileName !== fileName ? ` (was: ${originalFileName})` : "");
 
-  const coverModeLabel = { printed: "printed", "printed-inside-out": "printed (inside out)" };
   let out = "PACKAGING:\n";
-  out += (c.cover.mode in coverModeLabel)
-    ? `  Cover: ${coverModeLabel[c.cover.mode]} — ${withOriginal(c.cover.fileName, c.cover.originalFileName)}\n`
-    : c.cover.mode === "unprinted"
-      ? `  Cover: unprinted, ${c.cover.color}\n`
-      : `  Cover: none\n`;
 
-  out += c.innerSleeve.mode === "printed"
-    ? `  Inner sleeve: printed — ${withOriginal(c.innerSleeve.fileName, c.innerSleeve.originalFileName)} — center cut-out: ${c.innerSleeve.cutout ? "yes" : "no"}\n`
-    : `  Inner sleeve: unprinted, ${c.innerSleeve.color} — center cut-out: ${c.innerSleeve.cutout ? "yes" : "no"}\n`;
+  const coverProduct = productById(parts.outerCover.products, c.cover.productId);
+  out += !coverProduct
+    ? `  Cover: none\n`
+    : coverProduct.kind === "printed"
+      ? `  Cover: ${coverProduct.name} — ${withOriginal(c.cover.fileName, c.cover.originalFileName)}\n`
+      : `  Cover: ${coverProduct.name}\n`;
 
-  out += c.inlay.include
+  const sleeveProduct = productById(parts.innerSleeve.products, c.innerSleeve.productId);
+  out += !sleeveProduct
+    ? `  Inner sleeve: (unrecognized product)\n`
+    : sleeveProduct.kind === "printed"
+      ? `  Inner sleeve: ${sleeveProduct.name} — ${withOriginal(c.innerSleeve.fileName, c.innerSleeve.originalFileName)}\n`
+      : `  Inner sleeve: ${sleeveProduct.name}\n`;
+
+  const inlayProduct = productById(parts.inlay.products, c.inlay.productId);
+  out += inlayProduct
     ? `  Inlay: front — ${withOriginal(c.inlay.front.fileName, c.inlay.front.originalFileName)}\n`
       + `         back  — ${withOriginal(c.inlay.back.fileName, c.inlay.back.originalFileName)}\n`
     : `  Inlay: none\n`;
