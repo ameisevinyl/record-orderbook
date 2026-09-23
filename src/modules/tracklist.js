@@ -12,11 +12,12 @@ import { readAudioDuration, readAudioSpec, compressionWarning, audioSpecWarning 
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
 import { getFormat, enabledFormats, firstEnabledFormat, productById } from "../lib/format-catalogue.js";
-import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType, humanDate } from "../lib/package-naming.js";
+import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType, humanDate, slug } from "../lib/package-naming.js";
 import { renderTable } from "../lib/text-table.js";
 import { defaultMatrix } from "../lib/matrix.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { transferLink, transferInstructions } from "../lib/transfer.js";
+import { buildSpecsHtml } from "../lib/specs-document.js";
 import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
 import { collectCoverFiles, collectCover, applyCover } from "./cover.js";
 import { collectInnerSleeveFiles, collectInnerSleeve, applyInnerSleeve } from "./inner-sleeve.js";
@@ -593,6 +594,7 @@ export function initTracklist(){
   recompute();
 
   document.getElementById("btnPrint").addEventListener("click", printOrder);
+  document.getElementById("btnDownloadSpecs").addEventListener("click", downloadSpecs);
   document.getElementById("btnSaveProject").addEventListener("click", saveProject);
   document.getElementById("btnOpenProject").addEventListener("click", ()=> document.getElementById("openProjectInput").click());
   document.getElementById("openProjectInput").addEventListener("change", (e)=>{
@@ -673,6 +675,17 @@ function downloadBlob(blob, fileName){
   // abort large downloads (a multi-hundred-MB project zip is exactly the
   // case that hits this). Deferred, not immediate.
   setTimeout(()=> URL.revokeObjectURL(a.href), 30000);
+}
+
+// "Specs" button — a standalone reference document (every enabled
+// format's label/printed-part/audio specs), independent of the current
+// order (works with no catalogue number entered at all). See
+// lib/specs-document.js — the browser's own Print-to-PDF gives an
+// actual PDF from this if wanted, no hand-rolled PDF writer needed.
+function downloadSpecs(){
+  const html = buildSpecsHtml(CONFIG);
+  const blob = new Blob([html], {type:"text/html"});
+  downloadBlob(blob, `${slug(CONFIG.plant.imprint.recipientName)}_specifications.html`);
 }
 
 // The project's canonical file name, used both as the zip's own file
