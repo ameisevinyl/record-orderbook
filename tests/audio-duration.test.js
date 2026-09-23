@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {
   parseWavDuration,
   parseAiffDuration,
+  parseWavSpec,
+  parseAiffSpec,
+  audioSpecWarning,
   compressionWarningForName,
 } from "../src/lib/audio-duration.js";
 
@@ -46,12 +49,12 @@ function encodeExtended80(value) {
   return buf;
 }
 
-function buildAiffHeader({ sampleRate, numSampleFrames }) {
+function buildAiffHeader({ sampleRate, numSampleFrames, channels = 2, bitsPerSample = 16 }) {
   const commData = new ArrayBuffer(18); // channels(2) + frames(4) + sampleSize(2) + rate(10)
   const commDv = new DataView(commData);
-  commDv.setUint16(0, 2, false); // channels
+  commDv.setUint16(0, channels, false);
   commDv.setUint32(2, numSampleFrames, false);
-  commDv.setUint16(6, 16, false); // sample size
+  commDv.setUint16(6, bitsPerSample, false);
   new Uint8Array(commData, 8, 10).set(new Uint8Array(encodeExtended80(sampleRate)));
 
   const buf = new ArrayBuffer(12 + 8 + commData.byteLength);
@@ -96,4 +99,51 @@ test("compressionWarningForName flags lossy/compressed extensions", () => {
   assert.equal(compressionWarningForName("track.WAV"), null); // case-insensitive
   assert.match(compressionWarningForName("track.mp3"), /uncompressed/);
   assert.match(compressionWarningForName("track.flac"), /uncompressed/);
+});
+
+test("parseWavSpec reads sample rate/channels/bit depth from a canonical header", () => {
+  const buf = buildWavHeader({ sampleRate: 48000, channels: 2, bitsPerSample: 24, durationSeconds: 1 });
+  assert.deepEqual(parseWavSpec(buf), { sampleRate: 48000, channels: 2, bitsPerSample: 24 });
+});
+
+test("parseWavSpec returns null for a non-RIFF buffer", () => {
+  assert.equal(parseWavSpec(new ArrayBuffer(20)), null);
+});
+
+test("parseAiffSpec reads sample rate/channels/bit depth from a synthetic COMM chunk", () => {
+  const buf = buildAiffHeader({ sampleRate: 44100, numSampleFrames: 44100, channels: 1, bitsPerSample: 24 });
+  const spec = parseAiffSpec(buf);
+  assert.equal(spec.channels, 1);
+  assert.equal(spec.bitsPerSample, 24);
+  assert.equal(Math.round(spec.sampleRate), 44100);
+});
+
+test("parseAiffSpec returns null for a non-FORM buffer", () => {
+  assert.equal(parseAiffSpec(new ArrayBuffer(20)), null);
+});
+
+test("audioSpecWarning passes a file that meets both minimums", () => {
+  const spec = { sampleRate: 44100, channels: 2, bitsPerSample: 16 };
+  assert.equal(audioSpecWarning(spec, { minBitDepth: 16, minSampleRateHz: 44100 }), null);
+});
+
+test("audioSpecWarning flags a bit depth below the configured minimum", () => {
+  const spec = { sampleRate: 44100, channels: 2, bitsPerSample: 8 };
+  assert.match(audioSpecWarning(spec, { minBitDepth: 16, minSampleRateHz: 44100 }), /8-bit.*16-bit/);
+});
+
+test("audioSpecWarning flags a sample rate below the configured minimum", () => {
+  const spec = { sampleRate: 22050, channels: 2, bitsPerSample: 16 };
+  assert.match(audioSpecWarning(spec, { minBitDepth: 16, minSampleRateHz: 44100 }), /22050Hz.*44100Hz/);
+});
+
+test("audioSpecWarning flags both when both are below minimum", () => {
+  const spec = { sampleRate: 22050, channels: 2, bitsPerSample: 8 };
+  const msg = audioSpecWarning(spec, { minBitDepth: 16, minSampleRateHz: 44100 });
+  assert.match(msg, /8-bit/);
+  assert.match(msg, /22050Hz/);
+});
+
+test("audioSpecWarning returns null when spec couldn't be read at all", () => {
+  assert.equal(audioSpecWarning(null, { minBitDepth: 16, minSampleRateHz: 44100 }), null);
 });

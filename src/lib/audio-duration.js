@@ -11,7 +11,11 @@
 
 // ---- pure: WAV -------------------------------------------------------
 
-export function parseWavDuration(arrayBuffer){
+// Walks a WAV file's RIFF chunks once — duration and the spec-checklist
+// metadata (parseWavSpec, below) both read from this single parse, so
+// the chunk-walking logic exists in exactly one place. Any field is
+// null if its chunk wasn't found.
+function parseWavChunks(arrayBuffer){
   const dv = new DataView(arrayBuffer);
   if(dv.byteLength < 12) return null;
   if(dv.getUint32(0, false) !== 0x52494646) return null; // "RIFF"
@@ -33,10 +37,23 @@ export function parseWavDuration(arrayBuffer){
     offset += 8 + size + (size % 2); // chunks are word-aligned
     if(sampleRate && dataSize !== null) break;
   }
-  if(!sampleRate || !channels || !bitsPerSample || dataSize === null) return null;
-  const bytesPerSample = bitsPerSample / 8;
-  const duration = dataSize / (sampleRate * channels * bytesPerSample);
+  return { sampleRate, channels, bitsPerSample, dataSize };
+}
+
+export function parseWavDuration(arrayBuffer){
+  const meta = parseWavChunks(arrayBuffer);
+  if(!meta || !meta.sampleRate || !meta.channels || !meta.bitsPerSample || meta.dataSize === null) return null;
+  const bytesPerSample = meta.bitsPerSample / 8;
+  const duration = meta.dataSize / (meta.sampleRate * meta.channels * bytesPerSample);
   return isFinite(duration) && duration > 0 ? duration : null;
+}
+
+// Sample rate/channels/bit depth only — used by the audio Specifications
+// checklist (audioSpecWarning, below), not by duration reading.
+export function parseWavSpec(arrayBuffer){
+  const meta = parseWavChunks(arrayBuffer);
+  if(!meta || !meta.sampleRate || !meta.bitsPerSample) return null;
+  return { sampleRate: meta.sampleRate, channels: meta.channels, bitsPerSample: meta.bitsPerSample };
 }
 
 // ---- pure: AIFF --------------------------------------------------------
@@ -54,27 +71,46 @@ export function readExtendedFloat80(dv, offset){
   return sign * (mantissa / Math.pow(2,63)) * Math.pow(2, exponent);
 }
 
-export function parseAiffDuration(arrayBuffer){
+// Walks an AIFF/AIFC file's chunks once — duration and the
+// spec-checklist metadata (parseAiffSpec, below) both read from this
+// single parse. COMM chunk data layout: channels(2) + numFrames(4) +
+// bitsPerSample(2) + sampleRate(10, extended float80).
+function parseAiffChunks(arrayBuffer){
   const dv = new DataView(arrayBuffer);
   if(dv.byteLength < 12) return null;
   if(dv.getUint32(0, false) !== 0x464F524D) return null; // "FORM"
   const formType = dv.getUint32(8, false);
   if(formType !== 0x41494646 && formType !== 0x41494643) return null; // "AIFF" / "AIFC"
 
-  let offset = 12, sampleRate = null, numFrames = null;
+  let offset = 12, sampleRate = null, numFrames = null, channels = null, bitsPerSample = null;
   while(offset + 8 <= dv.byteLength){
     const id = String.fromCharCode(dv.getUint8(offset), dv.getUint8(offset+1), dv.getUint8(offset+2), dv.getUint8(offset+3));
     const size = dv.getUint32(offset+4, false);
     if(id === "COMM"){
+      channels = dv.getUint16(offset+8, false);
       numFrames = dv.getUint32(offset+10, false);
+      bitsPerSample = dv.getUint16(offset+14, false);
       sampleRate = readExtendedFloat80(dv, offset+16);
     }
     offset += 8 + size + (size % 2); // chunks are word-aligned (padded to even)
     if(sampleRate && numFrames !== null) break;
   }
-  if(!sampleRate || numFrames === null) return null;
-  const duration = numFrames / sampleRate;
+  return { sampleRate, numFrames, channels, bitsPerSample };
+}
+
+export function parseAiffDuration(arrayBuffer){
+  const meta = parseAiffChunks(arrayBuffer);
+  if(!meta || !meta.sampleRate || meta.numFrames === null) return null;
+  const duration = meta.numFrames / meta.sampleRate;
   return isFinite(duration) && duration > 0 ? duration : null;
+}
+
+// Sample rate/channels/bit depth only — used by the audio Specifications
+// checklist (audioSpecWarning, below), not by duration reading.
+export function parseAiffSpec(arrayBuffer){
+  const meta = parseAiffChunks(arrayBuffer);
+  if(!meta || !meta.sampleRate || !meta.bitsPerSample) return null;
+  return { sampleRate: Math.round(meta.sampleRate), channels: meta.channels, bitsPerSample: meta.bitsPerSample };
 }
 
 // ---- pure: uncompressed-format check ------------------------------
@@ -90,36 +126,77 @@ export function compressionWarningForName(name){
   return `⚠ .${ext || "?"} looks compressed — please only send uncompressed audio files (WAV or AIFF).`;
 }
 
+// ---- pure: audio Specifications checklist -----------------------------
+
+// Compares a parsed {sampleRate, bitsPerSample} (from parseWavSpec/
+// parseAiffSpec) against CONFIG.audioSpec's minimums. Returns null when
+// everything passes, or spec couldn't be read at all (nothing to warn
+// about beyond what compressionWarning already flags) — else a short
+// message for the same inline ⚠ slot compressionWarning uses.
+export function audioSpecWarning(spec, audioSpec){
+  if(!spec) return null;
+  const below = [];
+  if(spec.bitsPerSample && spec.bitsPerSample < audioSpec.minBitDepth){
+    below.push(`${spec.bitsPerSample}-bit (min ${audioSpec.minBitDepth}-bit)`);
+  }
+  if(spec.sampleRate && spec.sampleRate < audioSpec.minSampleRateHz){
+    below.push(`${spec.sampleRate}Hz (min ${audioSpec.minSampleRateHz}Hz)`);
+  }
+  if(!below.length) return null;
+  return `⚠ below spec: ${below.join(", ")}`;
+}
+
 // ---- browser-only: File I/O -----------------------------------------
 
 export function compressionWarning(file){
   return compressionWarningForName(file.name);
 }
 
+// "wav" | "aiff" | null — shared by fallbackDuration (below) and
+// readAudioSpec, so the extension dispatch lives in exactly one place.
+function containerFromName(name){
+  if(/\.wav$/i.test(name) || /\.wave$/i.test(name)) return "wav";
+  if(/\.aiff?$/i.test(name) || /\.aifc$/i.test(name)) return "aiff";
+  return null;
+}
+
+async function readHead(file){
+  // RIFF/WAV and AIFF headers are small — the chunks these parsers need
+  // are typically within the first ~1MB even for large recordings.
+  return file.slice(0, Math.min(file.size, 1_000_000)).arrayBuffer();
+}
+
 async function fallbackToWav(file){
-  try{
-    // RIFF/WAV headers are small — the fmt and data chunk sizes are
-    // typically within the first ~1MB even for large recordings.
-    const head = await file.slice(0, Math.min(file.size, 1_000_000)).arrayBuffer();
-    return parseWavDuration(head);
-  }catch(e){
-    return null;
-  }
+  try{ return parseWavDuration(await readHead(file)); }
+  catch(e){ return null; }
 }
 
 async function fallbackToAiff(file){
-  try{
-    const head = await file.slice(0, Math.min(file.size, 1_000_000)).arrayBuffer();
-    return parseAiffDuration(head);
-  }catch(e){
-    return null;
-  }
+  try{ return parseAiffDuration(await readHead(file)); }
+  catch(e){ return null; }
 }
 
 function fallbackDuration(file){
-  if(/\.wav$/i.test(file.name) || /\.wave$/i.test(file.name)) return fallbackToWav(file);
-  if(/\.aiff?$/i.test(file.name) || /\.aifc$/i.test(file.name)) return fallbackToAiff(file);
+  const container = containerFromName(file.name);
+  if(container === "wav") return fallbackToWav(file);
+  if(container === "aiff") return fallbackToAiff(file);
   return Promise.resolve(null);
+}
+
+// Always attempts a header parse (unlike readAudioDuration below, which
+// only falls back to one when native <audio> metadata already failed) —
+// bit depth/sample rate aren't exposed by <audio> at all, so this is the
+// only way to get them. Returns null for a non-WAV/AIFF file or an
+// unparseable header.
+export async function readAudioSpec(file){
+  const container = containerFromName(file.name);
+  if(!container) return null;
+  try{
+    const head = await readHead(file);
+    return container === "wav" ? parseWavSpec(head) : parseAiffSpec(head);
+  }catch(e){
+    return null;
+  }
 }
 
 export function readAudioDuration(file){
