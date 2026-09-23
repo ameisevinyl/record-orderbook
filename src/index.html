@@ -121,11 +121,11 @@
     gap:6px; align-items:center;
     padding:6px 4px;
   }
-  .pos{ font-weight:700; font-size:13px; color:var(--ink); text-align:center; }
+  .pos{ font-weight:700; font-size:13.5px; color:var(--ink); text-align:center; }
 
   .pickbtn, .rmbtn{
     cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
-    font-family:var(--sans); font-size:12px; font-weight:600;
+    font-family:var(--sans); font-size:11px; font-weight:600;
     border-radius:3px; padding:5px 8px;
   }
   .pickbtn{ border:1px solid var(--edge); background:var(--field); color:var(--ink-dim); }
@@ -149,14 +149,13 @@
   .artist-change, .artist-revert{
     position:absolute; top:50%; right:7px; transform:translateY(-50%);
     background:none; border:none; padding:0; cursor:pointer;
-    font-family:var(--sans); font-size:10px; color:var(--ink-dim);
+    font-family:var(--sans); font-size:11px; color:var(--ink-dim);
     text-decoration:underline; text-underline-offset:2px;
   }
   .artist-change:hover, .artist-revert:hover{ color:var(--ink); }
 
   .len-wrap{ display:flex; align-items:center; gap:4px; }
   .len-wrap input{ text-align:center; }
-  .autoflag{ font-size:11px; color:var(--ink-dim); white-space:nowrap; }
   .gap-wrap{ display:flex; gap:4px; align-items:center; }
   .gap-wrap select{ flex:1; }
   .gap-wrap input{ width:44px; display:none; text-align:center; }
@@ -177,7 +176,7 @@
      its own compact size (screen only; print keeps the generic select
      "blank line" styling). */
   @media screen{
-    .rpm-select{ font-size:12px; height:24px; padding:0 6px; }
+    .rpm-select{ font-size:11px; height:24px; padding:0 6px; }
   }
 
   .addbtn{
@@ -192,7 +191,7 @@
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
   }
   .total-fig{ font-size:18px; font-weight:700; color:var(--ink); }
-  .badge{ font-size:13px; font-weight:600; }
+  .badge{ font-size:13.5px; font-weight:600; }
   .badge.ok{ color:var(--ink-dim); }
   .badge.warn{ color:var(--danger); }
   .badge.danger{ color:var(--danger); }

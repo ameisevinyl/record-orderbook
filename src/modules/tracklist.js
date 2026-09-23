@@ -458,7 +458,7 @@ function sideTemplate(side){
 
       <div id="trackswrap-${side}">
         <div class="grid-head">
-          <div>pos</div><div></div><div>title</div><div>artist</div><div>length</div><div>gap before</div><div></div>
+          <div></div><div></div><div></div><div></div><div></div><div>gap</div><div></div>
         </div>
         <div id="tracks-${side}"></div>
       </div>
