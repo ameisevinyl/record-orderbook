@@ -1,9 +1,8 @@
 // Pure lookups over CONFIG.formats — no DOM, no CONFIG import (the
 // caller passes CONFIG in, so this stays testable independently of
-// where CONFIG lives). See docs/superpowers/specs/2026-09-20-catalogue-
-// schema-restructure-design.md for the schema this operates on: `formats`
-// is an array, each entry a fully self-contained description of one
-// physical format; array order is display order.
+// where CONFIG lives). `formats` is an array, each entry a fully
+// self-contained description of one physical format; array order is
+// display order.
 
 export function getFormat(config, id){
   return config.formats.find(f => f.id === id);
