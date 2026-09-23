@@ -18,6 +18,7 @@ import { getFormat, flatDataMm, partWeightG, groupProductsByKind, productById } 
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
+import { requiredFileIssue } from "../lib/file-issues.js";
 
 const INLAY_PREVIEW_MAX_W = 640;
 
@@ -65,19 +66,23 @@ function renderInlayChecklist(tableEl, parsed, kind, targetMm, trimMm, printChec
     tbody.appendChild(tr);
   }
   tableEl.appendChild(tbody);
+  return rows;
 }
 
 // prefix is "inlayfront" or "inlayback" — the two sides share this
 // scaffolding (unlike cover.js/inner-sleeve.js, which each have exactly
 // one slot), since front/back are otherwise identical.
-function createInlayArtworkSlot(prefix){
+function createInlayArtworkSlot(prefix, onStateChange){
   const input = document.getElementById(prefix+"input");
   const meta = document.getElementById(prefix+"meta");
   const preview = document.getElementById(prefix+"preview");
   const wrap = document.getElementById(prefix+"previewwrap");
   const warningsList = document.getElementById(prefix+"warnings");
-  let file = null, url = null, originalFileName = null;
-  let previewFile = null, previewUrl = null;
+  const state = {
+    file: null, originalFileName: null, storedFileName: null,
+    pending: false, rows: [], error: null, revision: 0,
+    url: null, previewFile: null, previewUrl: null
+  };
 
   // No-op when there's no dataMm to size against ("None" selected) —
   // the upload block is hidden in that state regardless.
@@ -116,51 +121,73 @@ function createInlayArtworkSlot(prefix){
   // adding new markup/CSS for a separate caption. Shared by both the
   // front and back slots (this factory is called once per side).
   function showPreviewImage(previewImgFile){
-    previewFile = previewImgFile;
-    if(previewUrl) URL.revokeObjectURL(previewUrl);
-    previewUrl = URL.createObjectURL(previewImgFile);
-    preview.innerHTML = `<img src="${previewUrl}" alt="plant preview">`;
-    renderInlayFileMeta(file.name, originalFileName, "plant preview");
+    if(!state.file) return;
+    state.previewFile = previewImgFile;
+    if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    state.previewUrl = URL.createObjectURL(previewImgFile);
+    preview.innerHTML = `<img src="${state.previewUrl}" alt="plant preview">`;
+    renderInlayFileMeta(state.file.name, state.originalFileName, "plant preview");
   }
 
   // origName defaults to the file's own name (a fresh manual pick);
   // applyInlaySlotFile passes the name recorded before renaming, on a
   // project reload, so renderInlayFileMeta can show it as the "was:" line.
   async function handleFile(f, origName = f.name){
-    file = f;
-    originalFileName = origName;
+    const revision = ++state.revision;
     meta.classList.remove("empty");
     renderInlayFileMeta(f.name, origName, "checking…");
-    if(url) URL.revokeObjectURL(url);
-    if(previewUrl) URL.revokeObjectURL(previewUrl);
-    previewFile = null;
-    previewUrl = null;
+    if(state.url) URL.revokeObjectURL(state.url);
+    if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    Object.assign(state, {
+      file: f, originalFileName: origName, storedFileName: null,
+      pending: true, rows: [], error: null,
+      url: null, previewFile: null, previewUrl: null
+    });
+    onStateChange();
 
-    const buf = await f.arrayBuffer();
-    const kind = sniffFileKind(buf);
-    let parsed = null;
-    if(kind === "pdf") parsed = await parsePdfArtwork(buf);
-    else if(kind === "jpeg") parsed = parseJpegArtwork(buf);
-    else if(kind === "tiff") parsed = parseTiffArtwork(buf);
+    let kind = null;
+    try{
+      const buf = await f.arrayBuffer();
+      if(state.revision !== revision || state.file !== f) return false;
+      kind = sniffFileKind(buf);
+      let parsed = null;
+      if(kind === "pdf") parsed = await parsePdfArtwork(buf);
+      else if(kind === "jpeg") parsed = parseJpegArtwork(buf);
+      else if(kind === "tiff") parsed = parseTiffArtwork(buf);
+      if(state.revision !== revision || state.file !== f) return false;
 
-    const { dataMm, trimMm } = inlaySpec();
-    const printCheck = getFormat(CONFIG, inlayCurrentFormat()).printCheck;
-    renderInlayChecklist(warningsList, parsed, kind, dataMm, trimMm, printCheck);
+      const { dataMm, trimMm } = inlaySpec();
+      const printCheck = getFormat(CONFIG, inlayCurrentFormat()).printCheck;
+      state.rows = renderInlayChecklist(warningsList, parsed, kind, dataMm, trimMm, printCheck);
+      state.pending = false;
+      state.error = null;
 
-    url = URL.createObjectURL(f);
-    if(kind === "pdf"){
-      // Fills via CSS (.label-preview iframe{width/height:100%}) — see
-      // cover.js's identical comment on Safari's PDF viewer margin.
-      preview.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0"></iframe>`;
-    } else if(kind === "jpeg"){
-      preview.innerHTML = `<img src="${url}" alt="artwork">`;
-    } else if(kind === "tiff"){
-      const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
-      preview.innerHTML = `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`;
-    } else{
+      state.url = URL.createObjectURL(f);
+      if(kind === "pdf"){
+        // Fills via CSS (.label-preview iframe{width/height:100%}) — see
+        // cover.js's identical comment on Safari's PDF viewer margin.
+        preview.innerHTML = `<iframe src="${state.url}#toolbar=0&navpanes=0"></iframe>`;
+      } else if(kind === "jpeg"){
+        preview.innerHTML = `<img src="${state.url}" alt="artwork">`;
+      } else if(kind === "tiff"){
+        const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
+        preview.innerHTML = `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`;
+      } else{
+        preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
+      }
+      renderInlayFileMeta(f.name, origName, null);
+    } catch(error){
+      if(state.revision !== revision || state.file !== f) return false;
+      const { dataMm, trimMm } = inlaySpec();
+      const printCheck = getFormat(CONFIG, inlayCurrentFormat()).printCheck;
+      state.rows = renderInlayChecklist(warningsList, null, kind, dataMm, trimMm, printCheck);
+      state.pending = false;
+      state.error = error;
       preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
+      renderInlayFileMeta(f.name, origName, null);
     }
-    renderInlayFileMeta(f.name, origName, null);
+    onStateChange();
+    return true;
   }
 
   // A file picked for one product is sized for that product's dataMm —
@@ -168,10 +195,14 @@ function createInlayArtworkSlot(prefix){
   // initInlay's listeners), rather than leaving a now-wrong-size file
   // attached.
   function clear(){
-    if(url) URL.revokeObjectURL(url);
-    file = null; url = null; originalFileName = null;
-    if(previewUrl) URL.revokeObjectURL(previewUrl);
-    previewFile = null; previewUrl = null;
+    ++state.revision;
+    if(state.url) URL.revokeObjectURL(state.url);
+    if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    Object.assign(state, {
+      file: null, originalFileName: null, storedFileName: null,
+      pending: false, rows: [], error: null,
+      url: null, previewFile: null, previewUrl: null
+    });
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
@@ -186,8 +217,9 @@ function createInlayArtworkSlot(prefix){
   });
 
   return {
-    updateSizing, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName,
-    setFile: handleFile, setPreviewImage: showPreviewImage, getPreviewFile: ()=> previewFile
+    updateSizing, clear, getFile: ()=> state.file, getOriginalFileName: ()=> state.originalFileName,
+    setFile: handleFile, setPreviewImage: showPreviewImage, getPreviewFile: ()=> state.previewFile,
+    getState: ()=> state
   };
 }
 
@@ -195,13 +227,14 @@ function inlaySlotFileName(variant, file){
   return printedPartFileName({catalogue: document.getElementById("catalogue").value, part:"inlay", variant, ext: fileExt(file.name)});
 }
 
-async function collectInlaySlotFile(slot, variant){
+function collectInlaySlotFile(slot, variant){
   const file = slot.getFile();
   if(!file) return null;
-  return { name: inlaySlotFileName(variant, file), data: await file.arrayBuffer() };
+  return { name: inlaySlotFileName(variant, file), data: file };
 }
 
 let inlayFrontSlot, inlayBackSlot;
+let inlayOnStateChange = ()=>{};
 
 function updateInlayVisibility(){
   document.getElementById("inlayBody").classList.toggle("hidden", !inlayIncluded());
@@ -269,9 +302,10 @@ function renderInlaySpecs(){
   document.getElementById("inlaySpecPaperGsm").textContent = part ? `${part.paperGsm}gsm` : "—";
 }
 
-export function initInlay(){
-  inlayFrontSlot = createInlayArtworkSlot("inlayfront");
-  inlayBackSlot = createInlayArtworkSlot("inlayback");
+export function initInlay(onStateChange = ()=>{}){
+  inlayOnStateChange = onStateChange;
+  inlayFrontSlot = createInlayArtworkSlot("inlayfront", ()=> inlayOnStateChange());
+  inlayBackSlot = createInlayArtworkSlot("inlayback", ()=> inlayOnStateChange());
   populateInlayProducts();
   [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
   document.getElementById("inlayfrontinput").accept = CONFIG.artworkFileTypes.accept;
@@ -285,12 +319,14 @@ export function initInlay(){
     [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
     renderInlaySpecs();
     updateInlayVisibility();
+    inlayOnStateChange();
   });
 
   document.getElementById("inlayProduct").addEventListener("change", ()=>{
     [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.clear(); s.updateSizing(); });
     renderInlaySpecs();
     updateInlayVisibility();
+    inlayOnStateChange();
   });
 }
 
@@ -316,11 +352,15 @@ function setInlayFileNamePlaceholder(prefix, name, originalName){
 async function applyInlaySlotFile(slot, prefix, variant, fileName, originalFileName, fileMap){
   const file = fileMap && fileName && fileMap.get(fileName);
   if(file){
-    await slot.setFile(file, originalFileName || fileName);
-    const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"inlay", variant});
-    const previewImg = fileMap && fileMap.get(previewName);
-    if(previewImg) slot.setPreviewImage(previewImg);
+    const current = await slot.setFile(file, originalFileName || fileName);
+    if(current){
+      const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"inlay", variant});
+      const previewImg = fileMap && fileMap.get(previewName);
+      if(previewImg) slot.setPreviewImage(previewImg);
+    }
   } else {
+    slot.clear();
+    slot.getState().storedFileName = fileName || null;
     setInlayFileNamePlaceholder(prefix, fileName, originalFileName);
   }
 }
@@ -350,29 +390,42 @@ export async function applyInlay(data, fileMap){
   const inlay = data || {};
   const match = productById(inlayProducts(), inlay.productId);
   document.getElementById("inlayProduct").value = match ? match.id : "";
-  await applyInlaySlotFile(inlayFrontSlot, "inlayfront", "front", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap);
-  await applyInlaySlotFile(inlayBackSlot, "inlayback", "back", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap);
+  await Promise.all([
+    applyInlaySlotFile(inlayFrontSlot, "inlayfront", "front", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap),
+    applyInlaySlotFile(inlayBackSlot, "inlayback", "back", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap)
+  ]);
   updateInlayVisibility();
   [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
   renderInlaySpecs();
+  inlayOnStateChange();
 }
 
-export async function collectInlayFiles(){
+export function inlayIssues(){
+  if(!inlayFrontSlot || !inlayBackSlot || !inlayIncluded()) return [];
+  const issues = [];
+  for(const [name, slot] of [["front", inlayFrontSlot], ["back", inlayBackSlot]]){
+    const issue = requiredFileIssue(`Inlay ${name}`, slot.getState());
+    if(issue) issues.push(issue);
+  }
+  return issues;
+}
+
+export function collectInlayFiles(){
   const files = [];
   if(inlayIncluded()){
-    const front = await collectInlaySlotFile(inlayFrontSlot, "front");
+    const front = collectInlaySlotFile(inlayFrontSlot, "front");
     if(front) files.push(front);
     const frontPreview = inlayFrontSlot.getPreviewFile();
     if(frontPreview){
       const name = previewFileName({catalogue: document.getElementById("catalogue").value, part:"inlay", variant:"front"});
-      files.push({name, data: await frontPreview.arrayBuffer()});
+      files.push({name, data: frontPreview});
     }
-    const back = await collectInlaySlotFile(inlayBackSlot, "back");
+    const back = collectInlaySlotFile(inlayBackSlot, "back");
     if(back) files.push(back);
     const backPreview = inlayBackSlot.getPreviewFile();
     if(backPreview){
       const name = previewFileName({catalogue: document.getElementById("catalogue").value, part:"inlay", variant:"back"});
-      files.push({name, data: await backPreview.arrayBuffer()});
+      files.push({name, data: backPreview});
     }
   }
   return files;

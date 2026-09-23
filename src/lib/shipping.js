@@ -24,11 +24,30 @@ export const REQUIRED_ADDRESS_FIELDS = [
 // every additional address's qty is subtracted from the total pressed.
 // Recomputed fresh from (total, extras) rather than mutated in place, so
 // it stays correct through add / edit / remove alike.
+export function parseQuantity(value){
+  const raw = String(value ?? "").trim();
+  if(!/^\d+$/.test(raw)) return null;
+  const quantity = Number(raw);
+  return Number.isSafeInteger(quantity) ? quantity : null;
+}
+
 export function allocateQuantities(total, extraQtys){
-  const totalNum = Number(total) || 0;
-  const extras = extraQtys.map(n => Number(n) || 0);
+  let invalidQuantity = false;
+  const read = value => {
+    if(String(value ?? "").trim() === "") return 0;
+    const quantity = parseQuantity(value);
+    if(quantity !== null) return quantity;
+    invalidQuantity = true;
+    return 0;
+  };
+  const totalNum = read(total);
+  const extras = extraQtys.map(read);
   const extraSum = extras.reduce((a, b) => a + b, 0);
-  return { firstQty: totalNum - extraSum, overAllocated: extraSum > totalNum };
+  return {
+    firstQty: totalNum - extraSum,
+    overAllocated: invalidQuantity || extraSum > totalNum,
+    invalidQuantity
+  };
 }
 
 export function missingAddressFields(addr){

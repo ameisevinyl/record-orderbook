@@ -2,6 +2,8 @@
 // from CONFIG.vinylColor, and checks a quantity against that colour's
 // configured minimum order.
 
+import { parseQuantity } from "./shipping.js";
+
 function capitalize(s){
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -26,6 +28,8 @@ export function buildColorOptions(vinylColorConfig){
 // colour row hasn't been filled in yet.
 export function belowMinimum(color, qty, minOrderQty){
   const min = minOrderQty[color] || 0;
-  const q = Number(qty) || 0;
+  if(String(qty ?? "").trim() === "") return false;
+  const q = parseQuantity(qty);
+  if(q === null) return true;
   return q > 0 && q < min;
 }

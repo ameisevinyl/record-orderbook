@@ -32,6 +32,14 @@ test("belowMinimum flags a quantity under the configured minimum", () => {
   assert.equal(belowMinimum("yellow", 301, vinylColorConfig.minOrderQty), false);
 });
 
+test("belowMinimum flags invalid nonblank quantities", () => {
+  assert.equal(belowMinimum("yellow", -1, vinylColorConfig.minOrderQty), true);
+  assert.equal(belowMinimum("yellow", 300.5, vinylColorConfig.minOrderQty), true);
+  assert.equal(belowMinimum("yellow", Infinity, vinylColorConfig.minOrderQty), true);
+  assert.equal(belowMinimum("yellow", NaN, vinylColorConfig.minOrderQty), true);
+  assert.equal(belowMinimum("yellow", "300 copies", vinylColorConfig.minOrderQty), true);
+});
+
 test("belowMinimum defaults to 0 (no minimum) for an unlisted colour", () => {
   assert.equal(belowMinimum("black", 1, vinylColorConfig.minOrderQty), false);
   assert.equal(belowMinimum("unknown", 1, vinylColorConfig.minOrderQty), false);

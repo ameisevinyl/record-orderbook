@@ -240,6 +240,12 @@ test("parseJpegArtwork returns null for non-JPEG bytes", () => {
   assert.equal(parseJpegArtwork(new Uint8Array([1, 2, 3, 4]).buffer), null);
 });
 
+test("parseJpegArtwork returns null rather than throwing for a truncated segment", () => {
+  const truncated = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A]).buffer;
+  assert.doesNotThrow(() => parseJpegArtwork(truncated));
+  assert.equal(parseJpegArtwork(truncated), null);
+});
+
 test("parseJpegArtwork reports the PDF/X-3 proxy checks as not applicable (null), not false", () => {
   // A raster upload has no PDF/X concept at all — false would wrongly
   // suggest buildChecklistRows should flag a missing TrimBox on a plain
@@ -276,6 +282,13 @@ test("parseTiffArtwork converts resolution unit cm to inch-equivalent dpi", () =
 
 test("parseTiffArtwork returns null for non-TIFF bytes", () => {
   assert.equal(parseTiffArtwork(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]).buffer), null);
+});
+
+test("parseTiffArtwork returns null rather than accepting a truncated IFD", () => {
+  const full = buildTiffHeader({ width: 1157, height: 1157, photometric: 5 });
+  const truncated = full.slice(0, 8 + 2 + 2 * 12);
+  assert.doesNotThrow(() => parseTiffArtwork(truncated));
+  assert.equal(parseTiffArtwork(truncated), null);
 });
 
 test("parseTiffArtwork reports the PDF/X-3 proxy checks as not applicable (null), not false", () => {
@@ -696,6 +709,22 @@ test("buildChecklistRows flags spot colours as a warning when the config's spotC
   assert.equal(cm.expected, "no spot colour");
 });
 
+test("buildChecklistRows uses the strongest severity when colour mode and spot colour both fail", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, colorMode: "RGB", spotColors: ["PANTONE 186 C"] };
+  const printCheck = {
+    ...PRINT_CHECK,
+    checks: {
+      ...PRINT_CHECK.checks,
+      colorMode: { accepted: ["CMYK"], severity: "warn" },
+      spotColors: { accepted: false, severity: "error" },
+    },
+  };
+  const row = buildChecklistRows(parsed, "pdf", TARGET, TRIM, printCheck, false)
+    .find((r) => r.feature === "Colour mode");
+  assert.equal(row.severity, "error");
+  assert.equal(row.expected, "CMYK, no spot colour");
+});
+
 test("buildChecklistRows shows a Detected/Expected pair for confirmed problems, using each check's own severity", () => {
   const parsed = {
     ...CLEAN_PDF_PARSED,
@@ -776,6 +805,19 @@ test("buildChecklistRows flags a missing colour profile only when the config mar
   assert.deepEqual(rows.find((r) => r.feature === "Colour profile"), { feature: "Colour profile", severity: "warn", detected: "none", expected: "required" });
 });
 
+test("buildChecklistRows omits the font check when embedding is not required", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, hasUnembeddedFonts: true };
+  const printCheck = {
+    ...PRINT_CHECK,
+    checks: {
+      ...PRINT_CHECK.checks,
+      fonts: { requireEmbedded: false, severity: "warn" },
+    },
+  };
+  const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, printCheck, false);
+  assert.equal(rows.some(row => row.feature === "Fonts"), false);
+});
+
 test("buildChecklistRows shows resolution as 'n/a (vector)' unconditionally — a known fact, not an uncertainty", () => {
   const parsed = { ...CLEAN_PDF_PARSED, imagePx: null, pageSizeMm: { w: 98, h: 98 } };
   for (const debugMode of [false, true]) {
@@ -785,6 +827,36 @@ test("buildChecklistRows shows resolution as 'n/a (vector)' unconditionally — 
     assert.equal(resolution.detected, "n/a (vector)");
     assert.equal(resolution.expected, null);
   }
+});
+
+test("buildChecklistRows reports and fails the lower Y-axis effective DPI", () => {
+  const parsed = {
+    ...CLEAN_PDF_PARSED,
+    pageSizeMm: null,
+    imagePx: { w: 1158, h: 772 },
+    declaredDpi: null,
+    encrypted: null,
+    trimBoxMm: null,
+    hasUnembeddedFonts: null,
+  };
+  const row = buildChecklistRows(parsed, "jpeg", TARGET, TRIM, PRINT_CHECK, false)
+    .find((r) => r.feature === "Resolution");
+  assert.equal(row.severity, "warn");
+  assert.equal(row.detected, "~200dpi");
+  assert.equal(row.expected, "≥300dpi");
+});
+
+test("buildChecklistRows reports and fails the lower X-axis effective DPI", () => {
+  const parsed = {
+    ...CLEAN_PDF_PARSED,
+    pageSizeMm: { w: 98, h: 98 },
+    imagePx: { w: 772, h: 1158 },
+  };
+  const row = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, false)
+    .find((r) => r.feature === "Resolution");
+  assert.equal(row.severity, "warn");
+  assert.equal(row.detected, "~200dpi");
+  assert.equal(row.expected, "≥300dpi");
 });
 
 // ---- computePrintSimGeometry ----

@@ -21,6 +21,7 @@ import { getFormat, flatDataMm, partWeightG, groupProductsByKind, productById } 
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
+import { requiredFileIssue } from "../lib/file-issues.js";
 
 // On-screen preview cap, in px. A flat cover spread can be 600+mm wide —
 // displaying that at true CSS-mm size would make the preview several
@@ -73,17 +74,21 @@ function renderCoverChecklist(tableEl, parsed, kind, targetMm, trimMm, printChec
     tbody.appendChild(tr);
   }
   tableEl.appendChild(tbody);
+  return rows;
 }
 
-function createCoverArtworkSlot(){
+function createCoverArtworkSlot(onStateChange){
   const input = document.getElementById("coverinput");
   const meta = document.getElementById("covermeta");
   const preview = document.getElementById("coverpreview");
   const wrap = document.getElementById("coverpreviewwrap");
   const warningsList = document.getElementById("coverwarnings");
   const caption = document.getElementById("covercaption");
-  let file = null, url = null, originalFileName = null;
-  let previewFile = null, previewUrl = null;
+  const state = {
+    file: null, originalFileName: null, storedFileName: null,
+    pending: false, rows: [], error: null, revision: 0,
+    url: null, previewFile: null, previewUrl: null
+  };
 
   // No-op when there's no dataMm to size against — "None" selected, or
   // an unprinted product (no artwork file, so no data size) — the
@@ -123,55 +128,77 @@ function createCoverArtworkSlot(){
   // yet). Reuses the existing file-meta status-text slot instead of
   // adding new markup/CSS for a separate caption.
   function showPreviewImage(previewImgFile){
-    previewFile = previewImgFile;
-    if(previewUrl) URL.revokeObjectURL(previewUrl);
-    previewUrl = URL.createObjectURL(previewImgFile);
-    preview.innerHTML = `<img src="${previewUrl}" alt="plant preview">`;
-    renderCoverFileMeta(file.name, originalFileName, "plant preview");
+    if(!state.file) return;
+    state.previewFile = previewImgFile;
+    if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    state.previewUrl = URL.createObjectURL(previewImgFile);
+    preview.innerHTML = `<img src="${state.previewUrl}" alt="plant preview">`;
+    renderCoverFileMeta(state.file.name, state.originalFileName, "plant preview");
   }
 
   // origName defaults to the file's own name (a fresh manual pick);
   // applyCoverSlotFile passes the name recorded before renaming, on a
   // project reload, so renderCoverFileMeta can show it as the "was:" line.
   async function handleFile(f, origName = f.name){
-    file = f;
-    originalFileName = origName;
+    const revision = ++state.revision;
     meta.classList.remove("empty");
     renderCoverFileMeta(f.name, origName, "checking…");
-    if(url) URL.revokeObjectURL(url);
-    if(previewUrl) URL.revokeObjectURL(previewUrl);
-    previewFile = null;
-    previewUrl = null;
+    if(state.url) URL.revokeObjectURL(state.url);
+    if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    Object.assign(state, {
+      file: f, originalFileName: origName, storedFileName: null,
+      pending: true, rows: [], error: null,
+      url: null, previewFile: null, previewUrl: null
+    });
+    onStateChange();
 
-    const buf = await f.arrayBuffer();
-    const kind = sniffFileKind(buf);
-    let parsed = null;
-    if(kind === "pdf") parsed = await parsePdfArtwork(buf);
-    else if(kind === "jpeg") parsed = parseJpegArtwork(buf);
-    else if(kind === "tiff") parsed = parseTiffArtwork(buf);
+    let kind = null;
+    try{
+      const buf = await f.arrayBuffer();
+      if(state.revision !== revision || state.file !== f) return false;
+      kind = sniffFileKind(buf);
+      let parsed = null;
+      if(kind === "pdf") parsed = await parsePdfArtwork(buf);
+      else if(kind === "jpeg") parsed = parseJpegArtwork(buf);
+      else if(kind === "tiff") parsed = parseTiffArtwork(buf);
+      if(state.revision !== revision || state.file !== f) return false;
 
-    const { dataMm, trimMm } = coverSpec();
-    const printCheck = getFormat(CONFIG, coverCurrentFormat()).printCheck;
-    renderCoverChecklist(warningsList, parsed, kind, dataMm, trimMm, printCheck);
+      const { dataMm, trimMm } = coverSpec();
+      const printCheck = getFormat(CONFIG, coverCurrentFormat()).printCheck;
+      state.rows = renderCoverChecklist(warningsList, parsed, kind, dataMm, trimMm, printCheck);
+      state.pending = false;
+      state.error = null;
 
-    url = URL.createObjectURL(f);
-    if(kind === "pdf"){
-      // Fills via CSS (.label-preview iframe{width/height:100%}). Safari's
-      // built-in PDF viewer renders its own margin inside the page content
-      // itself — not reachable or fixable from the host page (verified: a
-      // CSS-transform-scale attempt scaled that margin right along with
-      // it) — so Safari shows a grey margin around the artwork here;
-      // Chrome/Firefox fill exactly.
-      preview.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0"></iframe>`;
-    } else if(kind === "jpeg"){
-      preview.innerHTML = `<img src="${url}" alt="artwork">`;
-    } else if(kind === "tiff"){
-      const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
-      preview.innerHTML = `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`;
-    } else{
+      state.url = URL.createObjectURL(f);
+      if(kind === "pdf"){
+        // Fills via CSS (.label-preview iframe{width/height:100%}). Safari's
+        // built-in PDF viewer renders its own margin inside the page content
+        // itself — not reachable or fixable from the host page (verified: a
+        // CSS-transform-scale attempt scaled that margin right along with
+        // it) — so Safari shows a grey margin around the artwork here;
+        // Chrome/Firefox fill exactly.
+        preview.innerHTML = `<iframe src="${state.url}#toolbar=0&navpanes=0"></iframe>`;
+      } else if(kind === "jpeg"){
+        preview.innerHTML = `<img src="${state.url}" alt="artwork">`;
+      } else if(kind === "tiff"){
+        const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
+        preview.innerHTML = `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`;
+      } else{
+        preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
+      }
+      renderCoverFileMeta(f.name, origName, null);
+    } catch(error){
+      if(state.revision !== revision || state.file !== f) return false;
+      const { dataMm, trimMm } = coverSpec();
+      const printCheck = getFormat(CONFIG, coverCurrentFormat()).printCheck;
+      state.rows = renderCoverChecklist(warningsList, null, kind, dataMm, trimMm, printCheck);
+      state.pending = false;
+      state.error = error;
       preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
+      renderCoverFileMeta(f.name, origName, null);
     }
-    renderCoverFileMeta(f.name, origName, null);
+    onStateChange();
+    return true;
   }
 
   // A file picked for one product is sized for that product's dataMm —
@@ -179,10 +206,14 @@ function createCoverArtworkSlot(){
   // initCover's listeners), rather than leaving a now-wrong-size file
   // attached.
   function clear(){
-    if(url) URL.revokeObjectURL(url);
-    file = null; url = null; originalFileName = null;
-    if(previewUrl) URL.revokeObjectURL(previewUrl);
-    previewFile = null; previewUrl = null;
+    ++state.revision;
+    if(state.url) URL.revokeObjectURL(state.url);
+    if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    Object.assign(state, {
+      file: null, originalFileName: null, storedFileName: null,
+      pending: false, rows: [], error: null,
+      url: null, previewFile: null, previewUrl: null
+    });
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
@@ -197,8 +228,9 @@ function createCoverArtworkSlot(){
   });
 
   return {
-    updateSizing, clear, getFile: ()=> file, getOriginalFileName: ()=> originalFileName,
-    setFile: handleFile, setPreviewImage: showPreviewImage, getPreviewFile: ()=> previewFile
+    updateSizing, clear, getFile: ()=> state.file, getOriginalFileName: ()=> state.originalFileName,
+    setFile: handleFile, setPreviewImage: showPreviewImage, getPreviewFile: ()=> state.previewFile,
+    getState: ()=> state
   };
 }
 
@@ -206,13 +238,14 @@ function coverSlotFileName(file){
   return printedPartFileName({catalogue: document.getElementById("catalogue").value, part:"cover", ext: fileExt(file.name)});
 }
 
-async function collectCoverSlotFile(){
+function collectCoverSlotFile(){
   const file = coverSlot.getFile();
   if(!file) return null;
-  return { name: coverSlotFileName(file), data: await file.arrayBuffer() };
+  return { name: coverSlotFileName(file), data: file };
 }
 
 let coverSlot;
+let coverOnStateChange = ()=>{};
 
 function updateCoverMode(){
   document.getElementById("coverPrintedBody").classList.toggle("hidden", !coverHasArtwork());
@@ -287,8 +320,9 @@ function renderCoverSpecs(){
   document.getElementById("coverSpecCutout").textContent = part ? (part.cutoutDiameterMm ? `⌀${part.cutoutDiameterMm}mm` : "none") : "—";
 }
 
-export function initCover(){
-  coverSlot = createCoverArtworkSlot();
+export function initCover(onStateChange = ()=>{}){
+  coverOnStateChange = onStateChange;
+  coverSlot = createCoverArtworkSlot(()=> coverOnStateChange());
   populateCoverProducts();
   coverSlot.updateSizing();
   document.getElementById("coverinput").accept = CONFIG.artworkFileTypes.accept;
@@ -301,6 +335,7 @@ export function initCover(){
     coverSlot.updateSizing();
     renderCoverSpecs();
     updateCoverMode();
+    coverOnStateChange();
   });
 
   document.getElementById("coverProduct").addEventListener("change", ()=>{
@@ -308,6 +343,7 @@ export function initCover(){
     coverSlot.updateSizing();
     renderCoverSpecs();
     updateCoverMode();
+    coverOnStateChange();
   });
 }
 
@@ -337,11 +373,15 @@ function setCoverFileNamePlaceholder(name, originalName){
 async function applyCoverSlotFile(fileName, originalFileName, fileMap){
   const file = fileMap && fileName && fileMap.get(fileName);
   if(file){
-    await coverSlot.setFile(file, originalFileName || fileName);
-    const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"cover"});
-    const previewImg = fileMap && fileMap.get(previewName);
-    if(previewImg) coverSlot.setPreviewImage(previewImg);
+    const current = await coverSlot.setFile(file, originalFileName || fileName);
+    if(current){
+      const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"cover"});
+      const previewImg = fileMap && fileMap.get(previewName);
+      if(previewImg) coverSlot.setPreviewImage(previewImg);
+    }
   } else {
+    coverSlot.clear();
+    coverSlot.getState().storedFileName = fileName || null;
     setCoverFileNamePlaceholder(fileName, originalFileName);
   }
 }
@@ -372,19 +412,26 @@ export async function applyCover(data, fileMap){
   updateCoverMode();
   coverSlot.updateSizing();
   renderCoverSpecs();
+  coverOnStateChange();
+}
+
+export function coverIssues(){
+  if(!coverSlot || !coverHasArtwork()) return [];
+  const issue = requiredFileIssue("Cover", coverSlot.getState());
+  return issue ? [issue] : [];
 }
 
 // Exported for the tracklist module's package export, same pattern as
 // labels.js's collectLabelFiles — the only interface between modules.
-export async function collectCoverFiles(){
+export function collectCoverFiles(){
   const files = [];
   if(coverHasArtwork()){
-    const cover = await collectCoverSlotFile();
+    const cover = collectCoverSlotFile();
     if(cover) files.push(cover);
     const previewImg = coverSlot.getPreviewFile();
     if(previewImg){
       const name = previewFileName({catalogue: document.getElementById("catalogue").value, part:"cover"});
-      files.push({name, data: await previewImg.arrayBuffer()});
+      files.push({name, data: previewImg});
     }
   }
   return files;

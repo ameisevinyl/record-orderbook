@@ -14,8 +14,19 @@ import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, bui
 import { isDebugMode } from "../lib/debug-mode.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
+import { requiredFileIssue } from "../lib/file-issues.js";
 
 const SIDES = ["A", "B"];
+let labelStates = null;
+let labelsOnStateChange = ()=>{};
+
+function newLabelState(){
+  return {
+    file: null, originalFileName: null, storedFileName: null,
+    pending: false, rows: [], error: null, revision: 0,
+    url: null, previewFile: null, previewUrl: null
+  };
+}
 
 function currentFormat(){
   return document.getElementById("format").value;
@@ -79,13 +90,26 @@ function setPreview(side, html){
 // yet). Reuses the existing "file: <name> — <status>" meta line instead
 // of adding new markup/CSS for a separate caption.
 function showPreviewImage(side, previewImgFile){
-  const box = document.getElementById("labelbox-"+side);
+  const state = labelStates[side];
+  if(!state.file) return;
+  if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+  state.previewFile = previewImgFile;
+  state.previewUrl = URL.createObjectURL(previewImgFile);
+  setPreview(side, `<img src="${state.previewUrl}" alt="plant preview">`);
+  renderLabelFileMeta(side, state.file.name, state.originalFileName, "plant preview");
+}
+
+function renderLabelFileMeta(side, currentName, originalName, statusText){
   const meta = document.getElementById("labelmeta-"+side);
-  if(box._previewUrl) URL.revokeObjectURL(box._previewUrl);
-  box._previewFile = previewImgFile;
-  box._previewUrl = URL.createObjectURL(previewImgFile);
-  setPreview(side, `<img src="${box._previewUrl}" alt="plant preview">`);
-  meta.textContent = "file: " + box._file.name + " — plant preview";
+  meta.textContent = "";
+  meta.append(statusText ? `file: ${currentName} — ${statusText}` : `file: ${currentName}`);
+  if(originalName && originalName !== currentName){
+    meta.append(document.createElement("br"));
+    const orig = document.createElement("span");
+    orig.className = "filemeta-orig";
+    orig.textContent = "was: " + originalName;
+    meta.append(orig);
+  }
 }
 
 // Sizes the preview box to the format's actual data size in mm, so the
@@ -155,64 +179,87 @@ function renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck){
     tbody.appendChild(tr);
   }
   table.appendChild(tbody);
+  return rows;
 }
 
-async function handleFile(side, file){
-  const box = document.getElementById("labelbox-"+side);
+async function handleFile(side, file, originalFileName = file.name){
+  const state = labelStates[side];
+  const revision = ++state.revision;
   const meta = document.getElementById("labelmeta-"+side);
   meta.classList.remove("empty");
-  meta.textContent = "file: " + file.name + " — checking…";
+  renderLabelFileMeta(side, file.name, originalFileName, "checking…");
 
-  if(box._url) URL.revokeObjectURL(box._url);
-  box._file = file;
-  if(box._previewUrl) URL.revokeObjectURL(box._previewUrl);
-  box._previewFile = null;
-  box._previewUrl = null;
+  if(state.url) URL.revokeObjectURL(state.url);
+  if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+  Object.assign(state, {
+    file, originalFileName, storedFileName: null, pending: true,
+    rows: [], error: null, url: null, previewFile: null, previewUrl: null
+  });
+  labelsOnStateChange();
 
-  const buf = await file.arrayBuffer();
-  const kind = sniffFileKind(buf);
+  let kind = null;
+  try{
+    const buf = await file.arrayBuffer();
+    if(state.revision !== revision || state.file !== file) return false;
+    kind = sniffFileKind(buf);
 
-  let parsed = null;
-  if(kind === "pdf") parsed = await parsePdfArtwork(buf);
-  else if(kind === "jpeg") parsed = parseJpegArtwork(buf);
-  else if(kind === "tiff") parsed = parseTiffArtwork(buf);
+    let parsed = null;
+    if(kind === "pdf") parsed = await parsePdfArtwork(buf);
+    else if(kind === "jpeg") parsed = parseJpegArtwork(buf);
+    else if(kind === "tiff") parsed = parseTiffArtwork(buf);
+    if(state.revision !== revision || state.file !== file) return false;
 
-  const spec = formatSpec();
-  const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
-  const dataSizeMm = labelDataSizeMm(spec);
-  const targetMm = {w:dataSizeMm, h:dataSizeMm};
-  const trimMm = {w:spec.diameterMm, h:spec.diameterMm};
-  renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck);
+    const spec = formatSpec();
+    const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
+    const dataSizeMm = labelDataSizeMm(spec);
+    const targetMm = {w:dataSizeMm, h:dataSizeMm};
+    const trimMm = {w:spec.diameterMm, h:spec.diameterMm};
+    state.rows = renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck);
+    state.pending = false;
+    state.error = null;
 
-  const url = URL.createObjectURL(file);
-  box._url = url;
-  if(kind === "pdf"){
-    // Fills via CSS (.label-preview iframe{width/height:100%}) — see
-    // cover.js's identical comment on Safari's PDF viewer margin.
-    setPreview(side, `<iframe src="${url}#toolbar=0&navpanes=0"></iframe>`);
-  } else if(kind === "jpeg"){
-    setPreview(side, `<img src="${url}" alt="label ${side} artwork">`);
-  } else if(kind === "tiff"){
-    const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
-    setPreview(side, `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`);
-  } else{
+    state.url = URL.createObjectURL(file);
+    if(kind === "pdf"){
+      // Fills via CSS (.label-preview iframe{width/height:100%}) — see
+      // cover.js's identical comment on Safari's PDF viewer margin.
+      setPreview(side, `<iframe src="${state.url}#toolbar=0&navpanes=0"></iframe>`);
+    } else if(kind === "jpeg"){
+      setPreview(side, `<img src="${state.url}" alt="label ${side} artwork">`);
+    } else if(kind === "tiff"){
+      const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
+      setPreview(side, `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`);
+    } else{
+      setPreview(side, `<div class="label-placeholder">preview not available</div>`);
+    }
+    renderLabelFileMeta(side, file.name, originalFileName, null);
+  } catch(error){
+    if(state.revision !== revision || state.file !== file) return false;
+    const spec = formatSpec();
+    const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
+    const dataSizeMm = labelDataSizeMm(spec);
+    state.rows = renderChecklist(side, null, kind, {w:dataSizeMm, h:dataSizeMm}, {w:spec.diameterMm, h:spec.diameterMm}, printCheck);
+    state.pending = false;
+    state.error = error;
     setPreview(side, `<div class="label-placeholder">preview not available</div>`);
+    renderLabelFileMeta(side, file.name, originalFileName, null);
   }
-
-  meta.textContent = "file: " + file.name;
+  labelsOnStateChange();
+  return true;
 }
 
 // A file picked for one format is sized for that format's dataSizeMm —
 // switching format invalidates it outright (see initLabels's format
 // change listener), rather than leaving a now-wrong-size file attached.
 function clearLabelArtwork(side){
-  const box = document.getElementById("labelbox-"+side);
-  if(box._url) URL.revokeObjectURL(box._url);
-  box._file = null;
-  box._url = null;
-  if(box._previewUrl) URL.revokeObjectURL(box._previewUrl);
-  box._previewFile = null;
-  box._previewUrl = null;
+  const state = labelStates[side];
+  ++state.revision;
+  if(state.url) URL.revokeObjectURL(state.url);
+  if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+  Object.assign(state, {
+    file: null, originalFileName: null, storedFileName: null,
+    pending: false, rows: [], error: null,
+    url: null, previewFile: null, previewUrl: null
+  });
   document.getElementById("labelinput-"+side).value = "";
   const meta = document.getElementById("labelmeta-"+side);
   meta.classList.add("empty");
@@ -238,11 +285,14 @@ function wireLabelSide(side){
     document.getElementById("labelpreview-"+side).classList.toggle("blanked", e.target.checked);
     document.getElementById("labelwarnings-"+side).classList.toggle("hidden", e.target.checked);
     document.getElementById("labelblanknote-"+side).classList.toggle("hidden", !e.target.checked);
+    labelsOnStateChange();
   });
 }
 
-export function initLabels(){
+export function initLabels(onStateChange = ()=>{}){
+  labelsOnStateChange = onStateChange;
   document.getElementById("labelSides").innerHTML = SIDES.map(labelSideTemplate).join("");
+  labelStates = Object.fromEntries(SIDES.map(side => [side, newLabelState()]));
   updatePreviewSizing();
   updateLabelInfo();
   renderLabelSpecs();
@@ -252,7 +302,9 @@ export function initLabels(){
   bigCenterWrap.insertAdjacentHTML("beforeend",
     renderInfoIcon(infoText(CONFIG.infoText, CONFIG.locale, "bigCenter")));
   const updateBigCenterVisibility = ()=>{
-    bigCenterWrap.classList.toggle("hidden", !getFormat(CONFIG, currentFormat()).centerHole.big);
+    const supported = !!getFormat(CONFIG, currentFormat()).centerHole.big;
+    bigCenterWrap.classList.toggle("hidden", !supported);
+    if(!supported) document.getElementById("bigCenter").checked = false;
   };
   document.getElementById("format").addEventListener("change", ()=>{
     SIDES.forEach(clearLabelArtwork);
@@ -260,6 +312,7 @@ export function initLabels(){
     updatePreviewSizing();
     updateLabelInfo();
     renderLabelSpecs();
+    labelsOnStateChange();
   });
   updateBigCenterVisibility();
 }
@@ -289,11 +342,13 @@ export function collectLabels(forSend = false){
     bigCenter: document.getElementById("bigCenter").checked,
     sides: Object.fromEntries(SIDES.map(side => {
       const whitelabel = document.getElementById("whitelabel-"+side).checked;
-      const file = document.getElementById("labelbox-"+side)._file;
+      const state = labelStates[side];
+      const file = state.file;
       const included = file && !(forSend && whitelabel);
       return [side, {
         whitelabel,
-        fileName: included ? labelFileName(side, file) : null
+        fileName: included ? labelFileName(side, file) : null,
+        originalFileName: included ? state.originalFileName : null
       }];
     }))
   };
@@ -305,30 +360,49 @@ export function collectLabels(forSend = false){
 export async function applyLabels(data, fileMap){
   const d = data || {};
   const bigCenter = document.getElementById("bigCenter");
-  bigCenter.checked = !!d.bigCenter;
+  bigCenter.checked = !!d.bigCenter && !!getFormat(CONFIG, currentFormat()).centerHole.big;
   bigCenter.dispatchEvent(new Event("change"));
 
-  for(const side of SIDES){
+  await Promise.all(SIDES.map(async side => {
     const s = (d.sides && d.sides[side]) || {};
     const whitelabel = document.getElementById("whitelabel-"+side);
     whitelabel.checked = !!s.whitelabel;
-    whitelabel.dispatchEvent(new Event("change"));
+    document.getElementById("labelblankdisc-"+side).classList.toggle("hidden", !whitelabel.checked);
+    document.getElementById("labelpreview-"+side).classList.toggle("blanked", whitelabel.checked);
+    document.getElementById("labelwarnings-"+side).classList.toggle("hidden", whitelabel.checked);
+    document.getElementById("labelblanknote-"+side).classList.toggle("hidden", !whitelabel.checked);
 
     const meta = document.getElementById("labelmeta-"+side);
     const file = fileMap && s.fileName && fileMap.get(s.fileName);
     if(file){
-      await handleFile(side, file);
-      const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"labels", variant:side});
-      const previewImg = fileMap && fileMap.get(previewName);
-      if(previewImg) showPreviewImage(side, previewImg);
+      const current = await handleFile(side, file, s.originalFileName || s.fileName);
+      if(current){
+        const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"labels", variant:side});
+        const previewImg = fileMap && fileMap.get(previewName);
+        if(previewImg) showPreviewImage(side, previewImg);
+      }
     } else if(s.fileName){
+      clearLabelArtwork(side);
+      labelStates[side].storedFileName = s.fileName;
       meta.classList.remove("empty");
-      meta.textContent = "file: " + s.fileName + " — please re-select this file (not stored in the order file)";
+      renderLabelFileMeta(side, s.fileName, s.originalFileName, "please re-select this file (not stored in the order file)");
     } else {
-      meta.classList.add("empty");
-      meta.textContent = "";
+      clearLabelArtwork(side);
     }
+  }));
+  labelsOnStateChange();
+}
+
+export function labelIssues(){
+  if(!labelStates || !document.getElementById("whitelabel-A")) return [];
+  const issues = [];
+  for(const side of SIDES){
+    if(document.getElementById("whitelabel-"+side).checked) continue;
+    const state = labelStates[side];
+    const issue = requiredFileIssue(`Label ${side}`, state);
+    if(issue) issues.push(issue);
   }
+  return issues;
 }
 
 // Exported for the tracklist module's package export — labels doesn't
@@ -337,17 +411,17 @@ export async function applyLabels(data, fileMap){
 // forSend: see collectLabels above — same condition, kept in sync so a
 // side's fileName in project.json always matches whether its bytes are
 // actually in this same package.
-export async function collectLabelFiles(forSend = false){
+export function collectLabelFiles(forSend = false){
   const files = [];
   for(const side of SIDES){
-    const box = document.getElementById("labelbox-"+side);
-    const file = box._file;
+    const state = labelStates[side];
+    const file = state.file;
     const whitelabel = document.getElementById("whitelabel-"+side).checked;
     if(!file || (forSend && whitelabel)) continue;
-    files.push({ name: labelFileName(side, file), data: await file.arrayBuffer() });
-    if(box._previewFile){
+    files.push({ name: labelFileName(side, file), data: file });
+    if(state.previewFile){
       const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"labels", variant:side});
-      files.push({ name: previewName, data: await box._previewFile.arrayBuffer() });
+      files.push({ name: previewName, data: state.previewFile });
     }
   }
   return files;

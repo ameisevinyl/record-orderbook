@@ -1,9 +1,25 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  allocateQuantities, missingAddressFields,
+  parseQuantity, allocateQuantities, missingAddressFields,
   emailFormatValid, phoneFormatValid, vatIdFormatValid, eoriFormatValid
 } from "../src/lib/shipping.js";
+
+test("parseQuantity accepts complete nonnegative integers", () => {
+  assert.equal(parseQuantity(0), 0);
+  assert.equal(parseQuantity("150"), 150);
+  assert.equal(parseQuantity(" 150 "), 150);
+});
+
+test("parseQuantity rejects blanks and invalid quantities", () => {
+  assert.equal(parseQuantity(""), null);
+  assert.equal(parseQuantity("-1"), null);
+  assert.equal(parseQuantity("1.5"), null);
+  assert.equal(parseQuantity("12 copies"), null);
+  assert.equal(parseQuantity(Infinity), null);
+  assert.equal(parseQuantity(NaN), null);
+  assert.equal(parseQuantity(Number.MAX_SAFE_INTEGER + 1), null);
+});
 
 test("allocateQuantities gives address #1 the remainder", () => {
   const r = allocateQuantities(1000, [50, 150]);
@@ -25,9 +41,20 @@ test("allocateQuantities recovers correctly after a removal", () => {
   assert.equal(afterRemove.firstQty, 970);
 });
 
-test("allocateQuantities treats blank/non-numeric extras as zero", () => {
+test("allocateQuantities treats blanks as zero and flags malformed extras", () => {
   const r = allocateQuantities(500, ["", "abc", 100]);
   assert.equal(r.firstQty, 400);
+  assert.equal(r.invalidQuantity, true);
+  assert.equal(r.overAllocated, true);
+});
+
+test("allocateQuantities flags negative, fractional, and non-finite quantities", () => {
+  for(const invalid of [-1, 1.5, Infinity, NaN]){
+    const r = allocateQuantities(500, [invalid]);
+    assert.equal(r.firstQty, 500);
+    assert.equal(r.invalidQuantity, true);
+    assert.equal(r.overAllocated, true);
+  }
 });
 
 test("missingAddressFields lists only the blank required fields", () => {

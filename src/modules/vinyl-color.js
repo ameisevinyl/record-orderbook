@@ -7,6 +7,7 @@
 
 import { CONFIG } from "../config.js";
 import { buildColorOptions, belowMinimum } from "../lib/vinyl-color.js";
+import { parseQuantity } from "../lib/shipping.js";
 
 function colorRowTemplate(){
   const options = buildColorOptions(CONFIG.vinylColor)
@@ -50,11 +51,23 @@ export function onColorChange(cb){
 function updateColorChecklist(){
   const list = document.getElementById("colourChecklist");
   const items = [];
+  const totals = new Map();
   colorRowEls().forEach(row=>{
     const color = row.querySelector(".colour").value;
     const label = row.querySelector(".colour option:checked").textContent;
-    const qty = row.querySelector(".colourQty").value;
-    if(!Number(qty)) return; // blank/zero row — nothing to check yet
+    const raw = row.querySelector(".colourQty").value;
+    if(!raw.trim()) return;
+    const qty = parseQuantity(raw);
+    if(qty === null){
+      items.push([false, `${label}: quantity must be a non-negative whole number`]);
+      return;
+    }
+    if(qty === 0) return;
+    const existing = totals.get(color);
+    if(existing) existing.qty += qty;
+    else totals.set(color, {color, label, qty});
+  });
+  totals.forEach(({color, label, qty})=>{
     const under = belowMinimum(color, qty, CONFIG.vinylColor.minOrderQty);
     const min = CONFIG.vinylColor.minOrderQty[color] || 0;
     items.push([!under, under ? `${label}: qty ${qty} is below the minimum order of ${min}` : `${label}: qty ${qty}`]);
@@ -110,8 +123,8 @@ export function getColorBreakdown(){
   const byColor = new Map();
   for(const row of colorRowEls()){
     const color = row.querySelector(".colour").value;
-    const qty = Number(row.querySelector(".colourQty").value) || 0;
-    if(qty <= 0) continue;
+    const qty = parseQuantity(row.querySelector(".colourQty").value);
+    if(qty === null || qty === 0) continue;
     const label = row.querySelector(".colour option:checked").textContent;
     const existing = byColor.get(color);
     if(existing) existing.qty += qty;

@@ -88,13 +88,17 @@ export function parseJpegArtwork(arrayBuffer){
     if(marker === 0xD9) break; // EOI
 
     const segLen = dv.getUint16(offset+2, false);
+    if(segLen < 2) return null;
+    const segmentEnd = offset + 2 + segLen;
+    if(segmentEnd > dv.byteLength) return null;
 
     const isSof = marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC;
-    if(isSof && offset + 9 < dv.byteLength){
+    if(isSof && segLen >= 8){
       heightPx = dv.getUint16(offset+5, false);
       widthPx  = dv.getUint16(offset+7, false);
       components = dv.getUint8(offset+9);
-    } else if(marker === 0xE0 && segLen >= 14){
+      if(segLen < 8 + components * 3) return null;
+    } else if(marker === 0xE0 && segLen >= 16){
       const id = String.fromCharCode(
         dv.getUint8(offset+4), dv.getUint8(offset+5), dv.getUint8(offset+6), dv.getUint8(offset+7));
       if(id === "JFIF"){
@@ -106,7 +110,7 @@ export function parseJpegArtwork(arrayBuffer){
       }
     }
 
-    offset += 2 + segLen;
+    offset = segmentEnd;
     if(marker === 0xDA) break; // start of scan — no more header info follows
   }
 
@@ -144,27 +148,28 @@ export function parseTiffArtwork(arrayBuffer){
 
   const g16 = (o)=> dv.getUint16(o, little);
   const g32 = (o)=> dv.getUint32(o, little);
+  if(g16(2) !== 42) return null;
   const ifdOffset = g32(4);
   if(ifdOffset + 2 > dv.byteLength) return null;
 
   const count = g16(ifdOffset);
+  if(ifdOffset + 2 + count * 12 + 4 > dv.byteLength) return null;
   const tags = {};
   for(let i=0; i<count; i++){
     const entryOff = ifdOffset + 2 + i*12;
-    if(entryOff + 12 > dv.byteLength) break;
-    tags[g16(entryOff)] = { type: g16(entryOff+2), valueOff: entryOff+8 };
+    tags[g16(entryOff)] = { type: g16(entryOff+2), count: g32(entryOff+4), valueOff: entryOff+8 };
   }
 
   function tagInt(tagId){
     const t = tags[tagId];
-    if(!t) return null;
+    if(!t || t.count !== 1) return null;
     if(t.type === 3) return g16(t.valueOff); // SHORT, inline
     if(t.type === 4) return g32(t.valueOff); // LONG, inline
     return null;
   }
   function tagRational(tagId){
     const t = tags[tagId];
-    if(!t || t.type !== 5) return null;
+    if(!t || t.type !== 5 || t.count !== 1) return null;
     const off = g32(t.valueOff); // RATIONAL is always stored by reference
     if(off + 8 > dv.byteLength) return null;
     const num = g32(off), den = g32(off+4);
@@ -649,6 +654,8 @@ function resolveSeverity(configSeverity, passed){
   return passed ? "info" : configSeverity;
 }
 
+const SEVERITY_RANK = { debug: 0, info: 1, warn: 2, error: 3 };
+
 // Only pushes a "debug" row when debugMode is on — this is the sole
 // place production visibility is enforced, so every row (regardless of
 // why it ended up "debug") goes through it.
@@ -676,11 +683,17 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
   let checkedSizeMm = null;
   if(parsed.pageSizeMm){
     checkedSizeMm = parsed.pageSizeMm;
-    if(parsed.imagePx && parsed.pageSizeMm.w > 0){
-      impliedDpi = parsed.imagePx.w / (parsed.pageSizeMm.w / 25.4);
+    if(parsed.imagePx && parsed.pageSizeMm.w > 0 && parsed.pageSizeMm.h > 0){
+      impliedDpi = {
+        x: parsed.imagePx.w / (parsed.pageSizeMm.w / 25.4),
+        y: parsed.imagePx.h / (parsed.pageSizeMm.h / 25.4)
+      };
     }
   } else if(parsed.imagePx){
-    impliedDpi = parsed.imagePx.w / (targetMm.w / 25.4);
+    impliedDpi = {
+      x: parsed.imagePx.w / (targetMm.w / 25.4),
+      y: parsed.imagePx.h / (targetMm.h / 25.4)
+    };
     if(parsed.declaredDpi){
       checkedSizeMm = {
         w: parsed.imagePx.w / parsed.declaredDpi.x * 25.4,
@@ -706,7 +719,7 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
     // file naturally produces pixel counts like 1157px for a 98mm label
     // (98/25.4*300 = 1157.48), which computes back to 299.84dpi — a
     // rounding artifact of integer pixels, not an actually low-res file.
-    const rounded = Math.round(impliedDpi);
+    const rounded = Math.round(Math.min(impliedDpi.x, impliedDpi.y));
     const { min, max } = printCheck.dpi;
     const passed = rounded >= min && rounded <= max;
     pushRow(rows, debugMode, {
@@ -738,7 +751,11 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
       if(!modeOk) parts.push(checks.colorMode.accepted.join("/"));
       if(!spotOk) parts.push("no spot colour");
       expected = parts.join(", ");
-      severity = !modeOk ? checks.colorMode.severity : checks.spotColors.severity;
+      const failedSeverities = [];
+      if(!modeOk) failedSeverities.push(checks.colorMode.severity);
+      if(!spotOk) failedSeverities.push(checks.spotColors.severity);
+      severity = failedSeverities.reduce((strongest, value) =>
+        SEVERITY_RANK[value] > SEVERITY_RANK[strongest] ? value : strongest);
     }
     pushRow(rows, debugMode, { feature: "Colour mode", severity, detected, expected });
   }
@@ -790,11 +807,8 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
     }
   }
 
-  // Whether an encrypted file reaches a customer at all — and whether it
-  // hard-blocks Send to Plant (tracklist.js's `.labelwarnings .error`
-  // scan) — is purely a function of checks.encryption.severity: "error"
-  // shows it and blocks, "debug" hides it from everyone but the plant
-  // and never blocks, "warn" shows it as a dismissible warning.
+  // Whether an encrypted file blocks sending is controlled by the
+  // configured severity consumed by each artwork module's issue status.
   if(isPdf){
     const passed = !parsed.encrypted;
     pushRow(rows, debugMode, {
@@ -803,7 +817,7 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
     });
   }
 
-  if(parsed.hasUnembeddedFonts !== null){
+  if(checks.fonts.requireEmbedded && parsed.hasUnembeddedFonts !== null){
     const passed = !parsed.hasUnembeddedFonts;
     pushRow(rows, debugMode, {
       feature: "Fonts", severity: resolveSeverity(checks.fonts.severity, passed),

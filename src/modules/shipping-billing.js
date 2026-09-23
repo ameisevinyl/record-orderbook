@@ -30,9 +30,8 @@
 // ISO 3166-1 alpha-2 list in ../lib/countries.js, so its value is always
 // either blank or a real code — no separate format check needed.
 
-import { allocateQuantities, missingAddressFields, emailFormatValid, phoneFormatValid, vatIdFormatValid, eoriFormatValid } from "../lib/shipping.js";
+import { parseQuantity, allocateQuantities, missingAddressFields, emailFormatValid, phoneFormatValid, vatIdFormatValid, eoriFormatValid } from "../lib/shipping.js";
 import { COUNTRIES } from "../lib/countries.js";
-import { colorLabel } from "../lib/vinyl-color.js";
 import { getColorBreakdown, onColorChange } from "./vinyl-color.js";
 
 const COUNTRY_OPTIONS_HTML = `<option value="">— select country —</option>`
@@ -192,6 +191,7 @@ function recomputeColorQtys(){
     const primaryInput = colorQtyInput(els[0], color);
     primaryInput.value = firstQty;
     primaryInput.classList.toggle("warn-qty", overAllocated);
+    primaryInput.dataset.allocationError = overAllocated ? "true" : "";
   });
 }
 
@@ -223,7 +223,12 @@ function addressFormatWarnings(addr){
 
 function shipAddrWarnings(el){
   const items = addressFormatWarnings(readAddress(el));
-  const total = Array.from(el.querySelectorAll(".colourQtyShip")).reduce((sum, inp)=> sum + (Number(inp.value) || 0), 0);
+  const inputs = Array.from(el.querySelectorAll(".colourQtyShip"));
+  const invalid = inputs.filter(inp => inp.value.trim() && parseQuantity(inp.value) === null);
+  const overAllocated = inputs.some(inp => inp.dataset.allocationError === "true");
+  if(invalid.length) items.push([false, "Quantity must be a non-negative whole number"]);
+  if(overAllocated) items.push([false, "Shipping quantities exceed the pressed quantity for a colour"]);
+  const total = inputs.reduce((sum, inp)=> sum + (parseQuantity(inp.value) || 0), 0);
   items.push([total > 0, total > 0 ? `Qty: ${total}` : "No quantity assigned yet"]);
   return items;
 }
@@ -400,36 +405,4 @@ export function applyShippingBilling(data){
   });
 
   updateAll();
-}
-
-// shippingBilling/vinylColor are project.shippingBilling/project.vinylColor
-// — buildOrderSummaryText builds order_summary.txt from the project object
-// alone (never the live DOM), so this must too.
-export function buildShippingBillingSummary({billing, shipping}, vinylColor){
-  const overallBreakdown = vinylColor
-    .filter(r => Number(r.qty) > 0)
-    .map(r => `${r.qty} ${colorLabel(r.color)}`)
-    .join(", ");
-
-  let out = "BILLING ADDRESS:\n";
-  out += `  ${billing.recipientName}${billing.attention ? " — " + billing.attention : ""}\n`;
-  out += `  ${billing.addressLine1}\n`;
-  if(billing.addressLine2) out += `  ${billing.addressLine2}\n`;
-  if(billing.addressLine3) out += `  ${billing.addressLine3}\n`;
-  out += `  ${billing.postalCode} ${billing.city}${billing.stateProvince ? ", " + billing.stateProvince : ""}\n`;
-  out += `  ${billing.countryCode}\n`;
-  out += `  ${billing.email}${billing.phone ? "  " + billing.phone : ""}\n`;
-  if(billing.vat) out += `  VAT: ${billing.vat}\n`;
-  if(billing.eori) out += `  EORI: ${billing.eori}\n`;
-
-  out += `\nSHIPPING${overallBreakdown ? " (pressed: " + overallBreakdown + ")" : ""}:\n`;
-  shipping.forEach((s, i)=>{
-    const parts = Object.entries(s.qtyByColor || {}).filter(([,q])=> Number(q) > 0).map(([color,q])=> `${q} ${color}`).join(", ");
-    out += `  [${i+1}] ${parts || "no qty"} — ${s.recipientName}${s.attention ? " / " + s.attention : ""}\n`;
-    out += `      ${s.addressLine1}${s.addressLine2 ? ", " + s.addressLine2 : ""}${s.addressLine3 ? ", " + s.addressLine3 : ""}\n`;
-    out += `      ${s.postalCode} ${s.city}${s.stateProvince ? ", " + s.stateProvince : ""}, ${s.countryCode}${s.isResidential ? " (residential)" : ""}\n`;
-    out += `      ${s.email}${s.phone ? "  " + s.phone : ""}${s.eori ? "  EORI: " + s.eori : ""}${s.vat ? "  VAT: " + s.vat : ""}\n`;
-    if(s.note) out += `      note: ${s.note}\n`;
-  });
-  return out;
 }

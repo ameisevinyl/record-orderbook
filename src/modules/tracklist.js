@@ -11,19 +11,20 @@ import { formatTime, parseTime, trackGapSeconds } from "../lib/time.js";
 import { readAudioDuration, readAudioSpec, compressionWarning, audioSpecWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
-import { getFormat, enabledFormats, firstEnabledFormat, productById } from "../lib/format-catalogue.js";
+import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-catalogue.js";
 import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType, humanDate, slug } from "../lib/package-naming.js";
-import { renderTable } from "../lib/text-table.js";
 import { defaultMatrix } from "../lib/matrix.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { transferLink, transferInstructions } from "../lib/transfer.js";
 import { buildSpecsHtml } from "../lib/specs-document.js";
-import { collectLabelFiles, collectLabels, applyLabels } from "./labels.js";
-import { collectCoverFiles, collectCover, applyCover } from "./cover.js";
-import { collectInnerSleeveFiles, collectInnerSleeve, applyInnerSleeve } from "./inner-sleeve.js";
-import { collectInlayFiles, collectInlay, applyInlay } from "./inlay.js";
+import { PROJECT_VERSION, includeSideFile, prepareProject, assertProjectFiles } from "../lib/project.js";
+import { buildOrderSummaryText, buildTracklistText } from "../lib/order-documents.js";
+import { collectLabelFiles, collectLabels, applyLabels, labelIssues } from "./labels.js";
+import { collectCoverFiles, collectCover, applyCover, coverIssues } from "./cover.js";
+import { collectInnerSleeveFiles, collectInnerSleeve, applyInnerSleeve, innerSleeveIssues } from "./inner-sleeve.js";
+import { collectInlayFiles, collectInlay, applyInlay, inlayIssues } from "./inlay.js";
 import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
-import { collectShippingBilling, applyShippingBilling, buildShippingBillingSummary } from "./shipping-billing.js";
+import { collectShippingBilling, applyShippingBilling } from "./shipping-billing.js";
 
 // Renders "file: <current name> — <status>", plus a tight second line
 // with the original filename when it differs from the current one —
@@ -49,8 +50,12 @@ function renderFileMeta(el, currentName, originalName, statusText){
 // manual pick); loadProject passes the name recorded before renaming,
 // so renderFileMeta can show it as the "was:" line.
 function attachTrackFile(row, f, originalFileName = f.name){
+  const revision = (row._analysisRevision || 0) + 1;
+  row._analysisRevision = revision;
   row._file = f;
   row._originalFileName = originalFileName;
+  row._analysisPending = true;
+  row._analysisError = null;
   const pickbtn = row.querySelector(".pickbtn");
   const meta = row.querySelector(".filemeta");
   const lengthInput = row.querySelector(".length");
@@ -59,7 +64,9 @@ function attachTrackFile(row, f, originalFileName = f.name){
   meta.classList.remove("empty");
   meta.classList.remove("warn", "compressed", "underspec");
   const compressionWarn = compressionWarning(f);
-  Promise.all([readAudioDuration(f), readAudioSpec(f)]).then(([dur, spec])=>{
+  recompute();
+  row._analysisPromise = Promise.all([readAudioDuration(f), readAudioSpec(f)]).then(([dur, spec])=>{
+    if(row._analysisRevision !== revision || row._file !== f) return;
     const durText = (isFinite(dur) && dur > 0)
       ? (()=>{ lengthInput.value = formatTime(dur); recompute();
                return formatTime(dur) + " (auto)"; })()
@@ -70,6 +77,13 @@ function attachTrackFile(row, f, originalFileName = f.name){
     meta.classList.toggle("warn", !!warning);
     meta.classList.toggle("compressed", !!compressionWarn);
     meta.classList.toggle("underspec", !!specWarn);
+    row._analysisPending = false;
+    recompute();
+  }).catch(error=>{
+    if(row._analysisRevision !== revision || row._file !== f) return;
+    row._analysisPending = false;
+    row._analysisError = error;
+    renderFileMeta(meta, f.name, originalFileName, "could not inspect file, enter length manually");
     recompute();
   });
 }
@@ -142,6 +156,7 @@ function createTrackRow(side){
   });
   gapCustom.addEventListener("input", recompute);
   row.querySelector(".rmbtn").addEventListener("click", ()=>{
+    row._analysisRevision = (row._analysisRevision || 0) + 1;
     row.remove(); renumber(side); recompute();
   });
 
@@ -204,12 +219,18 @@ function attachContinuousFile(side, f, originalFileName = f.name){
   const contWrap = document.getElementById("contfile-"+side);
   const contMeta = document.getElementById("contfilemeta-"+side);
   const contOverride = document.getElementById("contoverride-"+side);
+  const revision = (contWrap._analysisRevision || 0) + 1;
+  contWrap._analysisRevision = revision;
   contWrap._file = f;
   contWrap._originalFileName = originalFileName;
+  contWrap._analysisPending = true;
+  contWrap._analysisError = null;
   renderFileMeta(contMeta, f.name, originalFileName, "reading duration…");
   contMeta.classList.remove("warn", "compressed", "underspec");
   const compressionWarn = compressionWarning(f);
-  Promise.all([readAudioDuration(f), readAudioSpec(f)]).then(([dur, spec])=>{
+  recompute();
+  contWrap._analysisPromise = Promise.all([readAudioDuration(f), readAudioSpec(f)]).then(([dur, spec])=>{
+    if(contWrap._analysisRevision !== revision || contWrap._file !== f) return;
     // The read length lands in the field itself (contoverride), not
     // restated here next to the filename — unlike attachTrackFile,
     // which has no separate always-visible length field of its own to
@@ -227,8 +248,29 @@ function attachContinuousFile(side, f, originalFileName = f.name){
     contMeta.classList.toggle("warn", !!warning);
     contMeta.classList.toggle("compressed", !!compressionWarn);
     contMeta.classList.toggle("underspec", !!specWarn);
+    contWrap._analysisPending = false;
+    recompute();
+  }).catch(error=>{
+    if(contWrap._analysisRevision !== revision || contWrap._file !== f) return;
+    contWrap._analysisPending = false;
+    contWrap._analysisError = error;
+    renderFileMeta(contMeta, f.name, originalFileName, "could not inspect file, enter length manually");
     recompute();
   });
+}
+
+function clearContinuousFile(side){
+  const wrap = document.getElementById("contfile-"+side);
+  wrap._analysisRevision = (wrap._analysisRevision || 0) + 1;
+  wrap._file = null;
+  wrap._originalFileName = null;
+  wrap._analysisPending = false;
+  wrap._analysisError = null;
+  wrap._analysisPromise = null;
+  document.getElementById("contfileinput-"+side).value = "";
+  const meta = document.getElementById("contfilemeta-"+side);
+  meta.classList.remove("warn", "compressed", "underspec");
+  meta.innerHTML = `file: <span class="filemeta-placeholder">please select</span>`;
 }
 
 function wireSideOptions(side){
@@ -246,9 +288,6 @@ function wireSideOptions(side){
       el.disabled = on;
     });
     tracksWrap.querySelectorAll(".gap-wrap").forEach(el=> el.style.opacity = on ? .4 : 1);
-    if(on){
-      document.querySelectorAll("#tracks-"+side+" .gap").forEach(s=> s.value = "0");
-    }
     recompute();
   });
 
@@ -335,16 +374,16 @@ function updateChecklist(){
 
   const rowsA = document.querySelectorAll("#tracks-A .track-row");
   const contA = document.getElementById("cont-A").checked;
-  const hasSideA = contA ? !!document.getElementById("contoverride-A").value
-                          : Array.from(rowsA).some(r=> r.querySelector(".length").value.trim());
+  const hasSideA = contA ? (parseTime(document.getElementById("contoverride-A").value) || 0) > 0
+                          : Array.from(rowsA).some(r=> (parseTime(r.querySelector(".length").value) || 0) > 0);
   items.push([hasSideA, hasSideA ? "Side A has timed content" : "Side A has no timed tracks yet"]);
 
   const blankB = document.getElementById("blankB").checked;
   if(!blankB){
     const rowsB = document.querySelectorAll("#tracks-B .track-row");
     const contB = document.getElementById("cont-B").checked;
-    const hasSideB = contB ? !!document.getElementById("contoverride-B").value
-                            : Array.from(rowsB).some(r=> r.querySelector(".length").value.trim());
+    const hasSideB = contB ? (parseTime(document.getElementById("contoverride-B").value) || 0) > 0
+                            : Array.from(rowsB).some(r=> (parseTime(r.querySelector(".length").value) || 0) > 0);
     items.push([hasSideB, hasSideB ? "Side B has timed content" : "Side B has no timed tracks yet (or mark it blank)"]);
   } else {
     items.push([true, "Side B marked blank"]);
@@ -360,6 +399,32 @@ function updateChecklist(){
       : `Side ${side} within playing-time recommendation`]);
   });
 
+  let invalidTimes = 0;
+  let invalidGaps = 0;
+  let pendingAudio = 0;
+  ["A","B"].forEach(side=>{
+    if(side === "B" && document.getElementById("blankB").checked) return;
+    const continuous = document.getElementById("cont-"+side).checked;
+    if(continuous){
+      const raw = document.getElementById("contoverride-"+side).value.trim();
+      if(raw && parseTime(raw) === null) invalidTimes++;
+      if(document.getElementById("contfile-"+side)._analysisPending) pendingAudio++;
+      return;
+    }
+    document.querySelectorAll("#tracks-"+side+" .track-row").forEach(row=>{
+      const raw = row.querySelector(".length").value.trim();
+      if(raw && parseTime(raw) === null) invalidTimes++;
+      if(row.querySelector(".gap").value === "custom"){
+        const gap = row.querySelector(".gapcustom").value.trim();
+        if(!/^\d+(?:\.\d+)?$/.test(gap) || !Number.isFinite(Number(gap))) invalidGaps++;
+      }
+      if(row._analysisPending) pendingAudio++;
+    });
+  });
+  if(invalidTimes) items.push([false, `${invalidTimes} track/side length value(s) are invalid`]);
+  if(invalidGaps) items.push([false, `${invalidGaps} custom gap value(s) are invalid`]);
+  if(pendingAudio) items.push([false, `${pendingAudio} audio file inspection(s) still pending`, true, true]);
+
   // Separate classes, not the shared .filemeta.warn: a compressed-format
   // warning and a below-spec (bit depth/sample rate) warning are
   // different problems with different fixes — see attachTrackFile.
@@ -372,41 +437,11 @@ function updateChecklist(){
     items.push([false, `${underspecCount} file(s) below audio spec — check bit depth / sample rate`]);
   }
 
-  // Every printed-part module (labels/cover/inner-sleeve/inlay) hides its
-  // file-picker body entirely when that part doesn't need a file
-  // (whitelabel, unprinted, none, or inlay not included — see each
-  // module's own mode toggle), so a still-empty artwork .filemeta whose
-  // section isn't hidden means a file the order still needs is missing.
-  // [id] excludes the per-track .filemeta (tracklist.js's own row
-  // template) — those are unlabelled by design and already covered by
-  // the "has timed tracks" check above; .filemeta.empty is always
-  // display:none itself (a separate, cosmetic CSS rule — see
-  // src/index.html), so applicability has to come from an ancestor's
-  // .hidden class, not this element's own visibility.
-  const missingArtwork = Array.from(document.querySelectorAll(".filemeta.empty[id]"))
-    .filter(el => !el.closest(".hidden")).length;
-  if(missingArtwork > 0){
-    items.push([false, `${missingArtwork} artwork file(s) not yet attached`, true]);
-  }
+  const artworkIssues = [
+    ...labelIssues(), ...coverIssues(), ...innerSleeveIssues(), ...inlayIssues()
+  ];
+  artworkIssues.forEach(issue=> items.push([false, issue.text, issue.blocking, issue.pending]));
 
-  // Errors from label/cover/inner-sleeve/inlay's own checklist rows (see
-  // each module's render*Checklist, buildChecklistRows in
-  // print-artwork.js) — e.g. an unreadable file, or any check a plant
-  // configured with severity:"error" (CONFIG.printCheck.checks) — not
-  // merely a dismissible "warn" row.
-  const erroredArtwork = Array.from(document.querySelectorAll(".labelwarnings .error"))
-    .filter(el => !el.closest(".hidden")).length;
-  if(erroredArtwork > 0){
-    items.push([false, `${erroredArtwork} artwork file(s) have errors — check labels/cover/inner sleeve/inlay`, true]);
-  }
-
-  // The third, optional element marks a checklist item as "blocking" —
-  // Send to Plant refuses outright on these (see confirmIncompleteSend
-  // below), unlike every other item here, which stays a dismissible
-  // warning. Only missingArtwork/erroredArtwork set it; every earlier
-  // items.push(...) in this function omits it, so it's undefined/falsy
-  // there — see CONFIG.blockIncompleteArtworkOnSend for the on/off switch.
-  //
   // Satisfied (ok) items are hidden outside debug mode — this is a
   // status block a customer checks before sending, not a running log of
   // everything that's already fine; a still-blank form filling up with
@@ -416,8 +451,8 @@ function updateChecklist(){
   // ever look at li.bad), so omitting ok rows from the DOM entirely is
   // safe — it doesn't affect Send/Print gating.
   const visibleItems = isDebugMode() ? items : items.filter(([ok]) => !ok);
-  list.innerHTML = visibleItems.map(([ok, text, blocking])=>
-    `<li class="${ok?'ok':'bad'}${blocking?' blocking':''}"><span class="mark">${ok?'✓':'!'}</span>${text}</li>`
+  list.innerHTML = visibleItems.map(([ok, text, blocking, pending])=>
+    `<li class="${ok?'ok':'bad'}${blocking?' blocking':''}${pending?' pending':''}"><span class="mark">${ok?'✓':'!'}</span>${text}</li>`
   ).join("");
 }
 
@@ -495,6 +530,17 @@ function populateFormatOptions(){
     .join("");
 }
 
+function ensureFormatOption(formatId){
+  const select = document.getElementById("format");
+  if(Array.from(select.options).some(option => option.value === formatId)) return;
+  const format = getFormat(CONFIG, formatId);
+  const option = document.createElement("option");
+  option.value = format.id;
+  option.textContent = `${format.label} (disabled for new orders)`;
+  option.disabled = true;
+  select.appendChild(option);
+}
+
 function applyDefaultRpm(){
   const format = document.getElementById("format").value;
   const def = getFormat(CONFIG, format).rpm;
@@ -523,16 +569,8 @@ function applyDefaultMatrix(){
   });
 }
 
-// The querySelectorAll(".checklist li.bad") below aggregates every
-// <ul class="checklist"> on the page at once, by shared class rather
-// than per-module import: tracklist's own #checklist (this function),
-// shipping-billing's billing/each-shipping-address checklist, and
-// vinyl-color's #colourChecklist all render the same <li class="ok"|
-// "bad"> shape independently. labels/cover/inner-sleeve/inlay never
-// render their own checklist — updateChecklist() folds their state in
-// directly instead, via the .filemeta/.labelwarnings classes they do
-// share. Refuses to print while anything is flagged, so a half-filled
-// order can't go out as a finished-looking PDF.
+// All modules render the same checklist item shape. Refuse to print while
+// any module still reports an issue, so an incomplete form cannot look final.
 function printOrder(){
   // Force a fresh check rather than trusting whatever last triggered
   // updateChecklist() — artwork state (a file attached, a mode toggled)
@@ -602,13 +640,9 @@ export function initTracklist(){
   document.getElementById("albumTitle").addEventListener("input", updateChecklist);
   document.getElementById("albumArtist").addEventListener("input", syncAlbumArtistToLinkedTracks);
 
-  // Delegated, page-wide: every checkbox/radio/select/file-input's native
-  // "change" event bubbles to document, including ones in modules whose
-  // DOM doesn't exist yet at this point (labels/cover/inner-sleeve/inlay
-  // init after this) — so a file attach or a mode toggle there refreshes
-  // the checklist live, not just at print/send time (updateChecklist()
-  // is cheap and idempotent; printOrder()/confirmIncompleteSend() already
-  // force a final fresh call regardless of this).
+  // Native changes cover tracklist, quantity, and address controls.
+  // Artwork modules also receive updateChecklist as an explicit callback
+  // for asynchronous inspection completion.
   document.addEventListener("change", updateChecklist);
 
   applyDefaultRpm();
@@ -617,14 +651,14 @@ export function initTracklist(){
 
   document.getElementById("btnPrint").addEventListener("click", printOrder);
   document.getElementById("btnDownloadSpecs").addEventListener("click", openSpecs);
-  document.getElementById("btnSaveProject").addEventListener("click", saveProject);
+  document.getElementById("btnSaveProject").addEventListener("click", ()=> runProjectAction(saveProject, "Couldn't save project"));
   document.getElementById("btnOpenProject").addEventListener("click", ()=> document.getElementById("openProjectInput").click());
   document.getElementById("openProjectInput").addEventListener("change", (e)=>{
     const file = e.target.files[0];
     e.target.value = "";
-    if(file) loadProject(file);
+    if(file) runProjectAction(()=> loadProject(file), "Couldn't open project");
   });
-  document.getElementById("btnSend").addEventListener("click", sendToPlant);
+  document.getElementById("btnSend").addEventListener("click", ()=> runProjectAction(sendToPlant, "Couldn't prepare project package"));
   document.getElementById("btnResendZip").addEventListener("click", ()=>{
     if(!lastSentZip) return;
     downloadBlob(lastSentZip.blob, lastSentZip.fileName);
@@ -634,24 +668,27 @@ export function initTracklist(){
     const steps = transferInstructions(CONFIG.plant.transfer, lastSentZip.fileName);
     copyToClipboard(steps.join("\n"));
   });
+  return updateChecklist;
 }
 
-function serializeSide(side){
+function serializeSide(side, forSend = false){
   const catalogue = document.getElementById("catalogue").value;
   const blankChk = side==="B" ? document.getElementById("blankB") : null;
+  const blank = blankChk ? blankChk.checked : false;
   const cont = document.getElementById("cont-"+side).checked;
   const contWrap = document.getElementById("contfile-"+side);
   const contFile = contWrap._file;
+  const includeContinuous = contFile && includeSideFile({forSend, blank, continuous:cont, kind:"continuous"});
   const matrixInput = document.getElementById("matrix-"+side);
   const data = {
-    blank: blankChk ? blankChk.checked : false,
+    blank,
     rpm: document.getElementById("rpm-"+side).value,
     matrixInscription: matrixInput.value,
     matrixInscriptionAuto: matrixInput._auto !== false,
     continuous: cont,
     continuousLength: document.getElementById("contoverride-"+side).value,
-    continuousFileName: contFile ? continuousSideFileName({catalogue, side, ext: fileExt(contFile.name)}) : null,
-    continuousOriginalFileName: contFile ? (contWrap._originalFileName || contFile.name) : null,
+    continuousFileName: includeContinuous ? continuousSideFileName({catalogue, side, ext: fileExt(contFile.name)}) : null,
+    continuousOriginalFileName: includeContinuous ? (contWrap._originalFileName || contFile.name) : null,
     tracks: []
   };
   document.querySelectorAll("#tracks-"+side+" .track-row").forEach((row, i)=>{
@@ -664,8 +701,10 @@ function serializeSide(side){
       length: row.querySelector(".length").value,
       gap: row.querySelector(".gap").value,
       gapCustom: row.querySelector(".gapcustom").value,
-      fileName: row._file ? trackFileName({catalogue, side, index: i+1, title, artist, ext: fileExt(row._file.name)}) : null,
-      originalFileName: row._file ? (row._originalFileName || row._file.name) : null
+      fileName: row._file && includeSideFile({forSend, blank, continuous:cont, kind:"track"})
+        ? trackFileName({catalogue, side, index: i+1, title, artist, ext: fileExt(row._file.name)}) : null,
+      originalFileName: row._file && includeSideFile({forSend, blank, continuous:cont, kind:"track"})
+        ? (row._originalFileName || row._file.name) : null
     });
   });
   return data;
@@ -673,13 +712,14 @@ function serializeSide(side){
 
 function buildProjectObject(forSend = false){
   return {
+    projectVersion: PROJECT_VERSION,
     catalogue: document.getElementById("catalogue").value,
     format: document.getElementById("format").value,
     soundsystem: document.getElementById("soundsystem").checked,
     albumTitle: document.getElementById("albumTitle").value,
     albumArtist: document.getElementById("albumArtist").value,
     notes: document.getElementById("notes").value,
-    sides: { A: serializeSide("A"), B: serializeSide("B") },
+    sides: { A: serializeSide("A", forSend), B: serializeSide("B", forSend) },
     vinylColor: collectVinylColor(),
     shippingBilling: collectShippingBilling(),
     labels: collectLabels(forSend),
@@ -723,28 +763,45 @@ function openSpecs(){
 // The project's canonical file name, used both as the zip's own file
 // name and as the single folder nested inside it (unzipping then drops
 // one tidy folder rather than scattering files loose).
-function currentProjectFileName(project){
+function currentProjectFileName(project, date){
   const customerEmail = project.shippingBilling && project.shippingBilling.billing
     ? project.shippingBilling.billing.email : null;
-  return projectFileName({catalogue: project.catalogue, customerEmail});
+  return projectFileName({catalogue: project.catalogue, customerEmail, date});
+}
+
+async function waitForAudioInspections(forSend){
+  const pending = [];
+  for(const side of ["A", "B"]){
+    const blank = side === "B" && document.getElementById("blankB").checked;
+    const continuous = document.getElementById("cont-"+side).checked;
+    const sideWrap = document.getElementById("contfile-"+side);
+    if(sideWrap._analysisPromise && includeSideFile({forSend, blank, continuous, kind:"continuous"})){
+      pending.push(sideWrap._analysisPromise);
+    }
+    document.querySelectorAll("#tracks-"+side+" .track-row").forEach(row=>{
+      if(row._analysisPromise && includeSideFile({forSend, blank, continuous, kind:"track"})) pending.push(row._analysisPromise);
+    });
+  }
+  await Promise.all(pending);
 }
 
 // A project is always a .zip — see CLAUDE.md's Workflow. Builds it fresh
 // from the current form state every time, so it's never stale.
 // forSend: true for the package handed to the plant (sendToPlant),
-// false for a customer-facing save (saveProject) — the only
-// difference it makes is whitelabel label sides: their file is kept
-// for a save (so re-opening it later doesn't lose work) but left out
-// of what's actually sent, since the plant doesn't need it. See
-// collectLabels/collectLabelFiles in labels.js.
+// false for a customer-facing save (saveProject). Saves retain inactive
+// draft audio and whitelabel artwork; send packages contain only files
+// used by the production choices in project.json.
 async function buildProjectZip(forSend = false){
+  await waitForAudioInspections(forSend);
+  const date = new Date();
   const project = buildProjectObject(forSend);
-  const files = await collectPackageFiles(forSend);
-  files.push({name:"order_summary.txt", data: new TextEncoder().encode(buildOrderSummaryText(project)).buffer});
-  files.push({name:"tracklist.txt", data: new TextEncoder().encode(buildTracklistText(project)).buffer});
+  const files = collectPackageFiles(forSend);
+  assertProjectFiles(project, files);
+  files.push({name:"order_summary.txt", data: new TextEncoder().encode(buildOrderSummaryText(project, CONFIG, date))});
+  files.push({name:"tracklist.txt", data: new TextEncoder().encode(buildTracklistText(project, CONFIG, date))});
   files.push({name:"project.json", data: new TextEncoder().encode(JSON.stringify(project, null, 2)).buffer});
 
-  const baseName = currentProjectFileName(project);
+  const baseName = currentProjectFileName(project, date);
   const foldered = files.map(f => ({name: baseName + "/" + f.name, data: f.data}));
   const blob = await buildZip(foldered);
   return {blob, fileName: baseName + ".zip"};
@@ -757,7 +814,28 @@ function stampSaved(){
   const d = new Date();
   const hh = String(d.getHours()).padStart(2, "0");
   const min = String(d.getMinutes()).padStart(2, "0");
-  document.getElementById("stamp").textContent = `Saved ${humanDate(d)} ${hh}:${min}`;
+  document.getElementById("stamp").textContent = `Last saved ${humanDate(d)} ${hh}:${min}`;
+}
+
+let projectActionRunning = false;
+async function runProjectAction(action, errorMessage){
+  if(projectActionRunning) return;
+  projectActionRunning = true;
+  const sheet = document.querySelector(".sheet");
+  sheet.inert = true;
+  sheet.setAttribute("aria-busy", "true");
+  const controls = ["btnSaveProject", "btnOpenProject", "btnSend"].map(id => document.getElementById(id));
+  controls.forEach(control => { control.disabled = true; });
+  try{
+    await action();
+  }catch(error){
+    alert(`${errorMessage}: ${error.message || error}`);
+  }finally{
+    controls.forEach(control => { control.disabled = false; });
+    sheet.inert = false;
+    sheet.removeAttribute("aria-busy");
+    projectActionRunning = false;
+  }
 }
 
 async function saveProject(){
@@ -782,26 +860,40 @@ async function loadProject(file){
     alert("Not a valid project file (" + err.message + ").");
     return;
   }
-  const jsonEntry = entries.find(e => baseEntryName(e.name) === "project.json");
-  if(!jsonEntry){ alert("No project.json found inside this zip."); return; }
+  const jsonEntries = entries.filter(e => baseEntryName(e.name) === "project.json");
+  if(jsonEntries.length !== 1){
+    alert(jsonEntries.length ? "More than one project.json found inside this zip." : "No project.json found inside this zip.");
+    return;
+  }
+  const jsonEntry = jsonEntries[0];
 
   let p;
   try{ p = JSON.parse(new TextDecoder().decode(jsonEntry.data)); }
   catch(err){ alert("project.json inside the zip isn't valid JSON."); return; }
+  try{ p = prepareProject(p, CONFIG); }
+  catch(err){ alert("This project can't be opened: " + err.message); return; }
 
   // Canonical package name -> File, for auto re-attaching audio/artwork
   // that was renamed to our convention when this zip was built — see
   // trackFileName/printedPartFileName. A project.json loaded stand-alone
   // (not inside one of our zips) simply won't find any matches here.
   const fileMap = new Map();
-  entries.forEach(e=>{
-    const name = baseEntryName(e.name);
-    if(name === "project.json" || name === "order_summary.txt" || name === "tracklist.txt") return;
+  const root = jsonEntry.name.slice(0, -"project.json".length);
+  for(const e of entries){
+    if(!e.name.startsWith(root)) continue;
+    const name = e.name.slice(root.length);
+    if(!name || name.includes("/")) continue;
+    if(name === "project.json" || name === "order_summary.txt" || name === "tracklist.txt") continue;
+    if(fileMap.has(name)){
+      alert(`This project can't be opened: duplicate filename inside project zip: ${name}`);
+      return;
+    }
     fileMap.set(name, new File([e.data], name, {type: mimeType(fileExt(name))}));
-  });
+  }
 
   document.getElementById("catalogue").value = p.catalogue || "";
-  document.getElementById("format").value = p.format || firstEnabledFormat(CONFIG);
+  ensureFormatOption(p.format);
+  document.getElementById("format").value = p.format;
   // Formats drive label/cover-sleeve sizing and visibility (big center
   // hole options, preview dimensions) — dispatch so those modules'
   // format-change handlers run before we apply their saved state below.
@@ -820,6 +912,7 @@ async function loadProject(file){
 
   ["A","B"].forEach(side=>{
     const s = (p.sides && p.sides[side]) || {tracks:[]};
+    clearContinuousFile(side);
     document.getElementById("tracks-"+side).innerHTML = "";
     (s.tracks || []).forEach(t=>{
       addTrack(side);
@@ -883,190 +976,37 @@ async function loadProject(file){
   recompute();
 }
 
-async function collectPackageFiles(forSend = false){
+function collectPackageFiles(forSend = false){
   const catalogue = document.getElementById("catalogue").value;
   const files = [];
   for(const side of ["A","B"]){
     const blankChk = side==="B" ? document.getElementById("blankB") : null;
-    if(blankChk && blankChk.checked) continue;
-    if(document.getElementById("cont-"+side).checked){
-      const f = document.getElementById("contfile-"+side)._file;
-      if(f) files.push({name: continuousSideFileName({catalogue, side, ext: fileExt(f.name)}), data: await f.arrayBuffer()});
-    } else {
-      const rows = document.querySelectorAll("#tracks-"+side+" .track-row");
-      let i=1;
-      for(const row of rows){
-        if(row._file){
-          const title = row.querySelector(".title").value;
-          const artist = row.querySelector(".artist").value;
-          const name = trackFileName({catalogue, side, index:i, title, artist, ext: fileExt(row._file.name)});
-          files.push({name, data: await row._file.arrayBuffer()});
-        }
-        i++;
+    const blank = blankChk && blankChk.checked;
+    const continuous = document.getElementById("cont-"+side).checked;
+    const sideFile = document.getElementById("contfile-"+side)._file;
+    if(sideFile && includeSideFile({forSend, blank, continuous, kind:"continuous"})){
+      files.push({
+        name: continuousSideFileName({catalogue, side, ext: fileExt(sideFile.name)}),
+        data: sideFile
+      });
+    }
+    const rows = document.querySelectorAll("#tracks-"+side+" .track-row");
+    let i=1;
+    for(const row of rows){
+      if(row._file && includeSideFile({forSend, blank, continuous, kind:"track"})){
+        const title = row.querySelector(".title").value;
+        const artist = row.querySelector(".artist").value;
+        const name = trackFileName({catalogue, side, index:i, title, artist, ext: fileExt(row._file.name)});
+        files.push({name, data:row._file});
       }
+      i++;
     }
   }
-  files.push(...await collectLabelFiles(forSend));
-  files.push(...await collectCoverFiles());
-  files.push(...await collectInnerSleeveFiles());
-  files.push(...await collectInlayFiles());
+  files.push(...collectLabelFiles(forSend));
+  files.push(...collectCoverFiles());
+  files.push(...collectInnerSleeveFiles());
+  files.push(...collectInlayFiles());
   return files;
-}
-
-// Only worth a column when some track's artist actually differs from
-// the album artist (a various-artists release) — otherwise it's
-// redundant with the artist already shown once in the header above.
-// order_summary.txt and tracklist.txt are always built from the project
-// object (the same one that becomes project.json), never read back out
-// of the DOM directly — that's what guarantees the filenames printed in
-// these documents (already-renamed, catalogue#-prefixed) are exactly
-// the ones actually in the zip, with no separate re-derivation to drift
-// out of sync.
-
-function tracksNeedArtistColumn(project){
-  return ["A","B"].some(side =>
-    project.sides[side].tracks.some(t => t.artist && t.artist !== project.albumArtist)
-  );
-}
-
-function documentHeader(project, label){
-  const cat = project.catalogue || "(no catalogue number)";
-  const title = project.albumTitle || "(no title)";
-  const artist = project.albumArtist || "(no artist)";
-  return `${label}\n${cat} - ${title} - ${artist} - ${humanDate()}\nFormat: ${project.format}"\n\n`;
-}
-
-// Printed-part filenames only — tracks/continuous-side files are already
-// listed in the per-side tables below, so repeating them here would be
-// redundant. A null fileName means "not actually included in THIS
-// package" (unprinted, inlay not included, no file attached, or — for
-// a whitelabel label side — deliberately left out of what's sent to
-// the plant even though it's still kept in a customer's own saved
-// project; see collectLabels/collectLabelFiles's forSend parameter) —
-// see also collectCover/collectInnerSleeve/collectInlay. order_summary.txt
-// only — the mastering engineer and graphics department (tracklist.txt)
-// don't need a manifest of the artwork files, they already have the
-// files themselves.
-function filesManifestSection(project){
-  const l = project.labels, c = project.coverSleeve;
-  const packageFiles = [
-    l.sides.A.fileName, l.sides.B.fileName,
-    c.innerSleeve.fileName, c.cover.fileName,
-    c.inlay.front.fileName, c.inlay.back.fileName
-  ].filter(Boolean);
-  if(!packageFiles.length) return "";
-  return "Files:\n" + packageFiles.map(f => `  ${f}`).join("\n") + "\n\n";
-}
-
-// Full packaging spec — what each printed part actually IS (mode,
-// colour when unprinted, filename + the customer's original filename
-// when printed), not just its bare name (filesManifestSection above is
-// a flat file list for a quick zip cross-check; this reads like a
-// production instruction). order_summary.txt only, same reasoning as
-// filesManifestSection above — the mastering engineer and graphics
-// department already have the files, they don't need them described
-// back to them either.
-function packagingSection(project){
-  const c = project.coverSleeve;
-  const parts = getFormat(CONFIG, project.format).printableParts;
-  const withOriginal = (fileName, originalFileName) =>
-    (fileName || "(no file)") + (originalFileName && originalFileName !== fileName ? ` (was: ${originalFileName})` : "");
-
-  let out = "PACKAGING:\n";
-
-  const coverProduct = productById(parts.outerCover.products, c.cover.productId);
-  out += !coverProduct
-    ? `  Cover: none\n`
-    : coverProduct.kind === "printed"
-      ? `  Cover: ${coverProduct.name} — ${withOriginal(c.cover.fileName, c.cover.originalFileName)}\n`
-      : `  Cover: ${coverProduct.name}\n`;
-
-  const sleeveProduct = productById(parts.innerSleeve.products, c.innerSleeve.productId);
-  out += !sleeveProduct
-    ? `  Inner sleeve: (unrecognized product)\n`
-    : sleeveProduct.kind === "printed"
-      ? `  Inner sleeve: ${sleeveProduct.name} — ${withOriginal(c.innerSleeve.fileName, c.innerSleeve.originalFileName)}\n`
-      : `  Inner sleeve: ${sleeveProduct.name}\n`;
-
-  const inlayProduct = productById(parts.inlay.products, c.inlay.productId);
-  out += inlayProduct
-    ? `  Inlay: front — ${withOriginal(c.inlay.front.fileName, c.inlay.front.originalFileName)}\n`
-      + `         back  — ${withOriginal(c.inlay.back.fileName, c.inlay.back.originalFileName)}\n`
-    : `  Inlay: none\n`;
-
-  return out + "\n";
-}
-
-// The tracklist body (per-side track tables) — shared by order_summary.txt
-// (the complete order, for customer service / production management) and
-// tracklist.txt (audio filenames and notes only, no billing/shipping or
-// artwork manifest — this one goes to the mastering engineer and graphics
-// department, who don't need to see the customer's order details).
-function tracklistBody(project){
-  const showArtist = tracksNeedArtistColumn(project);
-  let out = "";
-
-  ["A","B"].forEach(side=>{
-    const s = project.sides[side];
-    if(s.blank){ out += `SIDE ${side} — blank\n\n`; return; }
-
-    if(s.continuous){
-      const total = parseTime(s.continuousLength) || 0;
-      out += `SIDE ${side} — ${s.rpm} RPM — total ${formatTime(total)}\n`;
-      out += `  matrix: ${s.matrixInscription || "(none)"}\n`;
-      out += `  continuous file: ${s.continuousFileName || "(none selected)"}\n\n`;
-      return;
-    }
-
-    const headers = ["Pos.", "Pregap", "Start", "Length", "Title"];
-    if(showArtist) headers.push("Artist");
-    headers.push("filename");
-
-    // Running start time within the side: silence (pregap) plays first,
-    // then the track, so pregap accumulates before start and the
-    // track's own length accumulates after it.
-    let cursor = 0;
-    const rows = s.tracks.map((t, i)=>{
-      const gap = trackGapSeconds(t, i===0);
-      cursor += gap;
-      const cells = [side+(i+1), formatTime(gap), formatTime(cursor), t.length || "?:??", t.title || "(untitled)"];
-      if(showArtist) cells.push(t.artist || "");
-      cells.push(t.fileName || "(no file — manual entry)");
-      cursor += parseTime(t.length) || 0;
-      return cells;
-    });
-
-    out += `SIDE ${side} — ${s.rpm} RPM — total ${formatTime(cursor)}\n`;
-    out += `  matrix: ${s.matrixInscription || "(none)"}\n`;
-    out += renderTable(headers, rows) + "\n\n";
-  });
-  return out;
-}
-
-function notesSection(project){
-  return project.notes.trim() ? `NOTES TO CUTTING ENGINEER:\n${project.notes.trim()}\n` : "";
-}
-
-// The complete order in human-readable form — release info, package file
-// manifest, tracklist, notes, and the customer's billing/shipping details.
-// Goes to customer service / production management.
-function buildOrderSummaryText(project){
-  return documentHeader(project, "ORDER SUMMARY")
-    + filesManifestSection(project)
-    + packagingSection(project)
-    + tracklistBody(project)
-    + notesSection(project)
-    + "\n" + buildShippingBillingSummary(project.shippingBilling, project.vinylColor);
-}
-
-// Same tracklist as above, minus the customer's billing/shipping details
-// and the artwork file manifest — this one goes to the mastering engineer
-// and graphics department, who don't need to see the rest of the order or
-// a listing of files they already have.
-function buildTracklistText(project){
-  return documentHeader(project, "TRACKLIST")
-    + tracklistBody(project)
-    + notesSection(project);
 }
 
 // Same completeness scan printOrder uses (every module's checklist, at
@@ -1077,6 +1017,13 @@ function confirmIncompleteSend(){
   // Same reasoning as printOrder() — force a fresh check before gating.
   updateChecklist();
 
+  const pending = document.querySelectorAll(".checklist li.bad.pending");
+  if(pending.length > 0){
+    pending[0].scrollIntoView({behavior:"smooth", block:"center"});
+    alert(`Can't send yet — file inspection is still pending:\n\n${pending[0].textContent.trim()}`);
+    return false;
+  }
+
   // Missing/unreadable required artwork can't be sent at all — unlike
   // every other checklist item, there's no "send anyway" here. Gated by
   // CONFIG.blockIncompleteArtworkOnSend so a plant that wants the old
@@ -1086,7 +1033,7 @@ function confirmIncompleteSend(){
     const blocking = document.querySelectorAll(".checklist li.bad.blocking");
     if(blocking.length > 0){
       blocking[0].scrollIntoView({behavior:"smooth", block:"center"});
-      alert(`Can't send yet — ${blocking.length} artwork item${blocking.length===1?"":"s"} still missing or unreadable, starting with:\n\n${blocking[0].textContent.trim()}`);
+      alert(`Can't send yet — ${blocking.length} required item${blocking.length===1?"":"s"} still missing or unreadable, starting with:\n\n${blocking[0].textContent.trim()}`);
       return false;
     }
   }
@@ -1163,4 +1110,3 @@ function copyViaTextarea(text){
   try{ document.execCommand("copy"); } catch(e){ /* best effort */ }
   document.body.removeChild(ta);
 }
-

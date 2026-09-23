@@ -22,13 +22,44 @@ function parseWavChunks(arrayBuffer){
   if(dv.getUint32(8, false) !== 0x57415645) return null; // "WAVE"
 
   let offset = 12, sampleRate = null, channels = null, bitsPerSample = null, dataSize = null;
+  let encoding = null, encodingSupported = null;
   while(offset + 8 <= dv.byteLength){
     const id = String.fromCharCode(dv.getUint8(offset), dv.getUint8(offset+1), dv.getUint8(offset+2), dv.getUint8(offset+3));
     const size = dv.getUint32(offset+4, true);
     if(id === "fmt "){
+      const payload = offset + 8;
+      if(size < 16 || payload + size > dv.byteLength) return null;
+      const formatTag = dv.getUint16(payload, true);
       channels = dv.getUint16(offset+10, true);
       sampleRate = dv.getUint32(offset+12, true);
       bitsPerSample = dv.getUint16(offset+22, true);
+      if(formatTag === 0x0001){
+        encoding = "PCM";
+        encodingSupported = true;
+      } else if(formatTag === 0x0003){
+        encoding = "IEEE float";
+        encodingSupported = true;
+      } else if(formatTag === 0xFFFE){
+        // WAVE_FORMAT_EXTENSIBLE stores the real format in a 16-byte
+        // SubFormat GUID after the 22-byte extension.
+        if(size < 40 || payload + 40 > dv.byteLength || dv.getUint16(payload+16, true) < 22) return null;
+        const guidTail = [0x00,0x00,0x10,0x00,0x80,0x00,0x00,0xAA,0x00,0x38,0x9B,0x71];
+        const waveGuid = guidTail.every((byte, i) => dv.getUint8(payload+28+i) === byte);
+        const subtype = dv.getUint32(payload+24, true);
+        if(waveGuid && subtype === 0x0001){
+          encoding = "PCM (extensible)";
+          encodingSupported = true;
+        } else if(waveGuid && subtype === 0x0003){
+          encoding = "IEEE float (extensible)";
+          encodingSupported = true;
+        } else{
+          encoding = `WAV extensible subtype 0x${subtype.toString(16).padStart(8, "0")}`;
+          encodingSupported = false;
+        }
+      } else{
+        encoding = `WAV format 0x${formatTag.toString(16).padStart(4, "0")}`;
+        encodingSupported = false;
+      }
     } else if(id === "data"){
       // actual data chunk may extend beyond our slice — read its
       // declared size from the header, not from arrayBuffer.byteLength
@@ -37,23 +68,26 @@ function parseWavChunks(arrayBuffer){
     offset += 8 + size + (size % 2); // chunks are word-aligned
     if(sampleRate && dataSize !== null) break;
   }
-  return { sampleRate, channels, bitsPerSample, dataSize };
+  return { sampleRate, channels, bitsPerSample, dataSize, encoding, encodingSupported };
 }
 
 export function parseWavDuration(arrayBuffer){
   const meta = parseWavChunks(arrayBuffer);
-  if(!meta || !meta.sampleRate || !meta.channels || !meta.bitsPerSample || meta.dataSize === null) return null;
+  if(!meta || !meta.encodingSupported || !meta.sampleRate || !meta.channels || !meta.bitsPerSample || meta.dataSize === null) return null;
   const bytesPerSample = meta.bitsPerSample / 8;
   const duration = meta.dataSize / (meta.sampleRate * meta.channels * bytesPerSample);
   return isFinite(duration) && duration > 0 ? duration : null;
 }
 
-// Sample rate/channels/bit depth only — used by the audio Specifications
-// checklist (audioSpecWarning, below), not by duration reading.
+// Sample rate/channels/bit depth and container encoding — used by the
+// audio Specifications checklist (audioSpecWarning, below).
 export function parseWavSpec(arrayBuffer){
   const meta = parseWavChunks(arrayBuffer);
   if(!meta || !meta.sampleRate || !meta.bitsPerSample) return null;
-  return { sampleRate: meta.sampleRate, channels: meta.channels, bitsPerSample: meta.bitsPerSample };
+  return {
+    sampleRate: meta.sampleRate, channels: meta.channels, bitsPerSample: meta.bitsPerSample,
+    encoding: meta.encoding, encodingSupported: meta.encodingSupported
+  };
 }
 
 // ---- pure: AIFF --------------------------------------------------------
@@ -61,6 +95,7 @@ export function parseWavSpec(arrayBuffer){
 // Reads an 80-bit IEEE-754 "extended" float (big-endian), as used for
 // the sample rate in an AIFF COMM chunk.
 export function readExtendedFloat80(dv, offset){
+  if(offset < 0 || offset + 10 > dv.byteLength) return null;
   const expSign = dv.getUint16(offset, false);
   const hi = dv.getUint32(offset+2, false);
   const lo = dv.getUint32(offset+6, false);
@@ -83,34 +118,53 @@ function parseAiffChunks(arrayBuffer){
   if(formType !== 0x41494646 && formType !== 0x41494643) return null; // "AIFF" / "AIFC"
 
   let offset = 12, sampleRate = null, numFrames = null, channels = null, bitsPerSample = null;
+  let encoding = null, encodingSupported = null;
   while(offset + 8 <= dv.byteLength){
     const id = String.fromCharCode(dv.getUint8(offset), dv.getUint8(offset+1), dv.getUint8(offset+2), dv.getUint8(offset+3));
     const size = dv.getUint32(offset+4, false);
     if(id === "COMM"){
+      const requiredSize = formType === 0x41494643 ? 22 : 18;
+      if(size < requiredSize || offset + 8 + size > dv.byteLength) return null;
       channels = dv.getUint16(offset+8, false);
       numFrames = dv.getUint32(offset+10, false);
       bitsPerSample = dv.getUint16(offset+14, false);
       sampleRate = readExtendedFloat80(dv, offset+16);
+      if(formType === 0x41494646){
+        encoding = "PCM";
+        encodingSupported = true;
+      } else{
+        const compressionType = String.fromCharCode(
+          dv.getUint8(offset+26), dv.getUint8(offset+27), dv.getUint8(offset+28), dv.getUint8(offset+29));
+        const pcm = new Set(["NONE", "twos", "sowt", "raw ", "in24", "in32"]);
+        const float = new Set(["fl32", "FL32", "fl64", "FL64"]);
+        encoding = pcm.has(compressionType) ? `PCM (${compressionType.trim()})`
+          : float.has(compressionType) ? `IEEE float (${compressionType})`
+          : `AIFC ${compressionType}`;
+        encodingSupported = pcm.has(compressionType) || float.has(compressionType);
+      }
     }
     offset += 8 + size + (size % 2); // chunks are word-aligned (padded to even)
     if(sampleRate && numFrames !== null) break;
   }
-  return { sampleRate, numFrames, channels, bitsPerSample };
+  return { sampleRate, numFrames, channels, bitsPerSample, encoding, encodingSupported };
 }
 
 export function parseAiffDuration(arrayBuffer){
   const meta = parseAiffChunks(arrayBuffer);
-  if(!meta || !meta.sampleRate || meta.numFrames === null) return null;
+  if(!meta || !meta.encodingSupported || !meta.sampleRate || meta.numFrames === null) return null;
   const duration = meta.numFrames / meta.sampleRate;
   return isFinite(duration) && duration > 0 ? duration : null;
 }
 
-// Sample rate/channels/bit depth only — used by the audio Specifications
-// checklist (audioSpecWarning, below), not by duration reading.
+// Sample rate/channels/bit depth and container encoding — used by the
+// audio Specifications checklist (audioSpecWarning, below).
 export function parseAiffSpec(arrayBuffer){
   const meta = parseAiffChunks(arrayBuffer);
   if(!meta || !meta.sampleRate || !meta.bitsPerSample) return null;
-  return { sampleRate: Math.round(meta.sampleRate), channels: meta.channels, bitsPerSample: meta.bitsPerSample };
+  return {
+    sampleRate: Math.round(meta.sampleRate), channels: meta.channels, bitsPerSample: meta.bitsPerSample,
+    encoding: meta.encoding, encodingSupported: meta.encodingSupported
+  };
 }
 
 // ---- pure: uncompressed-format check ------------------------------
@@ -128,11 +182,11 @@ export function compressionWarningForName(name){
 
 // ---- pure: audio Specifications checklist -----------------------------
 
-// Compares a parsed {sampleRate, bitsPerSample} (from parseWavSpec/
-// parseAiffSpec) against CONFIG.audioSpec's minimums. Returns null when
-// everything passes, or spec couldn't be read at all (nothing to warn
-// about beyond what compressionWarning already flags) — else a short
-// message for the same inline ⚠ slot compressionWarning uses.
+// Checks a parsed spec's encoding and compares its sample rate/bit depth
+// against CONFIG.audioSpec's minimums. Returns null when everything
+// passes, or spec couldn't be read at all (nothing to warn about beyond
+// what compressionWarning already flags) — else a short message for the
+// same inline ⚠ slot compressionWarning uses.
 // 44100 -> "44.1kHz", 48000 -> "48kHz", 22050 -> "22.05kHz" — up to two
 // decimals, no trailing zeros.
 function khz(hz){
@@ -141,6 +195,10 @@ function khz(hz){
 
 export function audioSpecWarning(spec, audioSpec){
   if(!spec) return null;
+  const problems = [];
+  if(spec.encodingSupported === false){
+    problems.push(`unsupported audio encoding: ${spec.encoding || "unknown"}`);
+  }
   const below = [];
   if(spec.bitsPerSample && spec.bitsPerSample < audioSpec.minBitDepth){
     below.push(`${spec.bitsPerSample}-bit (min ${audioSpec.minBitDepth}-bit)`);
@@ -148,8 +206,8 @@ export function audioSpecWarning(spec, audioSpec){
   if(spec.sampleRate && spec.sampleRate < audioSpec.minSampleRateHz){
     below.push(`${khz(spec.sampleRate)} (min ${khz(audioSpec.minSampleRateHz)})`);
   }
-  if(!below.length) return null;
-  return `⚠ below spec: ${below.join(", ")}`;
+  if(below.length) problems.push(`below spec: ${below.join(", ")}`);
+  return problems.length ? `⚠ ${problems.join("; ")}` : null;
 }
 
 // ---- browser-only: File I/O -----------------------------------------
@@ -161,7 +219,7 @@ export function compressionWarning(file){
 // "wav" | "aiff" | null — shared by fallbackDuration (below) and
 // readAudioSpec, so the extension dispatch lives in exactly one place.
 function containerFromName(name){
-  if(/\.wav$/i.test(name) || /\.wave$/i.test(name)) return "wav";
+  if(/\.wav$/i.test(name) || /\.wave$/i.test(name) || /\.bwf$/i.test(name)) return "wav";
   if(/\.aiff?$/i.test(name) || /\.aifc$/i.test(name)) return "aiff";
   return null;
 }

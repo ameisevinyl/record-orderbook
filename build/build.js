@@ -19,7 +19,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -61,6 +61,10 @@ const FILES = [
   "src/lib/format-catalogue.js",
   "src/lib/transfer.js",
   "src/lib/specs-document.js",
+  "src/lib/project.js",
+  "src/lib/order-documents.js",
+  "src/lib/file-issues.js",
+  "src/lib/config-validation.js",
   "src/modules/labels.js",
   "src/modules/cover.js",
   "src/modules/inner-sleeve.js",
@@ -71,16 +75,47 @@ const FILES = [
   "src/app.js",
 ];
 
+const IMPORT_STATEMENT = /^import\s[\s\S]*?;\s*$/gm;
+
+function importsIn(source, filePath){
+  const pattern = new RegExp(IMPORT_STATEMENT.source, IMPORT_STATEMENT.flags);
+  return [...source.matchAll(pattern)].map(match => {
+    const specifier = match[0].match(/\bfrom\s+["']([^"']+)["']/) || match[0].match(/^import\s+["']([^"']+)["']/);
+    if(!specifier) throw new Error(`${filePath}: couldn't parse import statement: ${match[0].trim()}`);
+    return specifier[1];
+  });
+}
+
+function validateFileOrder(sources){
+  if(new Set(FILES).size !== FILES.length) throw new Error("build.js: FILES contains a duplicate path");
+  const positions = new Map(FILES.map((file, i) => [file, i]));
+  for(let i=0;i<FILES.length;i++){
+    const file = FILES[i];
+    for(const specifier of importsIn(sources.get(file), file)){
+      if(!specifier.startsWith(".")) throw new Error(`${file}: unlisted non-local import ${JSON.stringify(specifier)}`);
+      let dependency = relative(ROOT, resolve(dirname(join(ROOT, file)), specifier)).split(sep).join("/");
+      // config.js points at the committed fallback so src/ works directly;
+      // the build deliberately substitutes the local plant config when present.
+      if(file === "src/config.js" && dependency === "src/plant.config.local.example.js") dependency = PLANT_CONFIG;
+      const dependencyPosition = positions.get(dependency);
+      if(dependencyPosition === undefined) throw new Error(`${file}: imported file is not listed in FILES: ${dependency}`);
+      if(dependencyPosition >= i) throw new Error(`${file}: dependency must be listed first in FILES: ${dependency}`);
+    }
+  }
+}
+
 function stripModuleSyntax(source, filePath){
-  return source
+  const stripped = source
     // [\s\S]*? (not .*?) so a multi-line import (braces spanning several
     // lines) still gets stripped in full, not left half-stripped as a
     // dangling `import` keyword that breaks the flattened, module-less
     // script this produces.
-    .replace(/^import\s[\s\S]*?;\s*$/gm, "")
+    .replace(IMPORT_STATEMENT, "")
     .replace(/^export\s+(?=(function|async function|const|let|class))/gm, "")
     .replace(/^\n+/, "")
     .replace(/\n+$/, "\n");
+  if(/^\s*(import|export)\b/m.test(stripped)) throw new Error(`${filePath}: unsupported module syntax remains after flattening`);
+  return stripped;
 }
 
 // app.js declares `const BUILD_STAMP = "dev";` as its own fallback for
@@ -90,29 +125,33 @@ function stripModuleSyntax(source, filePath){
 const BUILD_STAMP_MARKER = 'const BUILD_STAMP = "dev";';
 
 function buildBundle(){
+  const sources = new Map(FILES.map(rel => [rel, readFileSync(join(ROOT, rel), "utf8")]));
+  validateFileOrder(sources);
   const sections = FILES.map(rel => {
-    const full = join(ROOT, rel);
-    const raw = readFileSync(full, "utf8");
+    const raw = sources.get(rel);
     const stripped = stripModuleSyntax(raw, rel);
     return `// ---- ${rel} ----\n${stripped}`;
   });
   const bundle = sections.join("\n");
-  if(!bundle.includes(BUILD_STAMP_MARKER)){
-    throw new Error(`build.js: couldn't find the BUILD_STAMP marker in app.js to stamp`);
-  }
+  if(bundle.split(BUILD_STAMP_MARKER).length !== 2) throw new Error(`build.js: expected exactly one BUILD_STAMP marker in app.js`);
   // Europe/Berlin, not UTC or the build machine's own zone — the plant
   // is in Hamburg, so a stamp they read should match their wall clock.
   const stamp = new Date().toLocaleString("de-DE", { timeZone: "Europe/Berlin", dateStyle: "short", timeStyle: "medium" }) + " (Berlin time)";
-  return bundle.replace(BUILD_STAMP_MARKER, `const BUILD_STAMP = ${JSON.stringify(stamp)};`);
+  const stamped = bundle.replace(BUILD_STAMP_MARKER, `const BUILD_STAMP = ${JSON.stringify(stamp)};`);
+  try{
+    Function(stamped);
+  }catch(error){
+    throw new Error(`build.js: flattened script does not compile: ${error.message}`);
+  }
+  return stamped;
 }
 
 function buildHtml(bundleJs){
   const shellPath = join(ROOT, "src/index.html");
   const shell = readFileSync(shellPath, "utf8");
   const marker = /<script type="module" src="app\.js"><\/script>/;
-  if(!marker.test(shell)){
-    throw new Error(`src/index.html: couldn't find the app.js module script tag to replace`);
-  }
+  const matches = shell.match(new RegExp(marker.source, "g")) || [];
+  if(matches.length !== 1) throw new Error(`src/index.html: expected exactly one app.js module script tag to replace, found ${matches.length}`);
   return shell.replace(marker, `<script>\n${bundleJs}\n</script>`);
 }
 

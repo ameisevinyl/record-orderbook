@@ -14,11 +14,12 @@ export function parseTime(str){
   if(!str) return null;
   const m = str.match(/^(\d+):([0-5]?\d)(?:\.(\d+))?$/);
   if(m){
-    return parseInt(m[1],10)*60 + parseInt(m[2],10) + (m[3]?parseFloat("0."+m[3]):0);
+    const seconds = Number(m[1])*60 + Number(m[2]) + (m[3] ? Number("0."+m[3]) : 0);
+    return Number.isFinite(seconds) ? seconds : null;
   }
-  const asNum = parseFloat(str.replace(",", "."));
-  if(!isNaN(asNum)) return asNum; // bare seconds
-  return null;
+  if(!/^\d+(?:[.,]\d+)?$/.test(str)) return null;
+  const seconds = Number(str.replace(",", "."));
+  return Number.isFinite(seconds) ? seconds : null;
 }
 
 // {gap, gapCustom} is the shape both a track-row's fields and a
@@ -27,6 +28,8 @@ export function trackGapSeconds({gap, gapCustom}, isFirst){
   if(isFirst) return 0;
   if(gap === "0") return 0;
   if(gap === "2") return 2;
-  const v = parseFloat(gapCustom);
-  return isFinite(v) ? v : 0;
+  const raw = String(gapCustom ?? "").trim();
+  if(!/^\d+(?:\.\d+)?$/.test(raw)) return 0;
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) ? seconds : 0;
 }
