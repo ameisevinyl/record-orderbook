@@ -62,7 +62,7 @@
   h1{ font-size:18px; letter-spacing:-.005em; color:var(--ink); }
   h2{ font-size:15px; color:var(--ink); margin-bottom:10px; }
   h3{ font-size:13.5px; color:var(--ink); margin-bottom:8px; }
-  section{ border-bottom:1px solid var(--edge); margin-bottom:20px; }
+  section{ margin-bottom:20px; }
 
   header.top{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
   header.top .idline{
@@ -115,9 +115,8 @@
     display:grid;
     grid-template-columns: 42px 26px 1fr 1fr 84px 150px 24px;
     gap:6px; align-items:center;
-    padding:6px 4px; border-bottom:1px solid var(--edge);
+    padding:6px 4px;
   }
-  .track-row:last-child{ border-bottom:none; }
   .pos{ font-weight:700; font-size:13px; color:var(--ink); text-align:center; }
 
   .pickbtn, .rmbtn{
@@ -178,7 +177,7 @@
   .addbtn:hover{ border-color:var(--ink); border-style:solid; color:var(--ink); }
 
   .side-total{
-    margin-top:12px; padding-bottom:10px; border-bottom:1px solid var(--edge);
+    margin-top:12px; padding-bottom:10px;
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
   }
   .total-fig{ font-size:18px; font-weight:700; color:var(--ink); }
@@ -232,7 +231,7 @@
      at all — see buildChecklistRows' pushRow — only real rows reach
      this markup, so no CSS visibility rule is needed for them. */
   .labelwarnings{ width:100%; border-collapse:collapse; margin:8px 0 0; font-size:11px; }
-  .labelwarnings th{ text-align:left; font-weight:600; color:var(--ink-dim); padding:2px 8px 2px 0; border-bottom:1px solid var(--edge); }
+  .labelwarnings th{ text-align:left; font-weight:600; color:var(--ink-dim); padding:2px 8px 2px 0; }
   .labelwarnings td{ padding:2px 8px 2px 0; white-space:nowrap; }
   .labelwarnings tr.info{ color:var(--ink-dim); }
   .labelwarnings tr.warn{ color:var(--danger); }
@@ -312,7 +311,7 @@
   .hidden{ display:none !important; }
 
   .foot{
-    margin-top:24px; padding-top:12px; border-top:1px solid var(--edge);
+    margin-top:24px; padding-top:12px;
     font-size:10px; color:var(--ink-dim); letter-spacing:.03em;
   }
 
