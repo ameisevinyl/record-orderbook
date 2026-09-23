@@ -195,7 +195,7 @@ function updateInnerSleeveMode(){
 // hand-typed, so it can't drift from the format's actual values.
 function renderInnerSleeveSpecs(){
   const parts = innerSleevePrintableParts();
-  const { trimMm, dataMm } = innerSleeveSpec();
+  const { trimMm, paperGsm, dataMm } = innerSleeveSpec();
   const bleedMm = bleedFor(parts.innerSleeve, parts);
   const colorMode = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
   document.getElementById("innersleeveSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
@@ -203,6 +203,7 @@ function renderInnerSleeveSpecs(){
   document.getElementById("innersleeveSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
   document.getElementById("innersleeveSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
   document.getElementById("innersleeveSpecBleed").textContent = `${bleedMm}mm`;
+  document.getElementById("innersleeveSpecPaperGsm").textContent = `${paperGsm}gsm`;
 }
 
 export function initInnerSleeve(){

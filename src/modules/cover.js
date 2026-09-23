@@ -208,7 +208,7 @@ function updateCoverMode(){
 // hand-typed, so it can't drift from the format's actual values.
 function renderCoverSpecs(){
   const parts = coverPrintableParts();
-  const { trimMm, spineMm, dataMm } = coverSpec();
+  const { trimMm, spineMm, paperGsm, dataMm } = coverSpec();
   const bleedMm = bleedFor(parts.outerCover, parts);
   const colorMode = getFormat(CONFIG, coverCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
   document.getElementById("coverSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
@@ -217,6 +217,7 @@ function renderCoverSpecs(){
   document.getElementById("coverSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
   document.getElementById("coverSpecBleed").textContent = `${bleedMm}mm`;
   document.getElementById("coverSpecSpine").textContent = `${spineMm}mm`;
+  document.getElementById("coverSpecPaperGsm").textContent = `${paperGsm}gsm`;
 }
 
 export function initCover(){

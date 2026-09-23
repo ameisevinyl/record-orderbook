@@ -109,14 +109,14 @@ export const CONFIG = {
         // wraps slightly around all three of those edges). Data size
         // (trim + bleed) is derived — see above.
         outerCover: {
-          trimMm: {w:633, h:318}, spineMm: 3, bleedMm: 5,
+          trimMm: {w:633, h:318}, spineMm: 3, bleedMm: 5, paperGsm: 300,
           unprintedColors: ["black", "brown", "white"]
         },
         // trimMm here is ONE folded pocket's finished size, not the
         // flat spread — foldedDataMm doubles the width (front+back
         // opened flat side by side) before adding bleed.
         innerSleeve: {
-          trimMm: {w:304, h:309},
+          trimMm: {w:304, h:309}, paperGsm: 135,
           unprintedColors: ["black", "brown", "white"],
           centerCutoutDefault: true
         },
@@ -154,11 +154,11 @@ export const CONFIG = {
         bleedMm: 3,
         label: { diameterMm: 100 },
         outerCover: {
-          trimMm: {w:523, h:266}, spineMm: 3, bleedMm: 5,
+          trimMm: {w:523, h:266}, spineMm: 3, bleedMm: 5, paperGsm: 300,
           unprintedColors: ["black", "brown", "white"]
         },
         innerSleeve: {
-          trimMm: {w:255, h:255},
+          trimMm: {w:255, h:255}, paperGsm: 135,
           unprintedColors: ["black", "brown", "white"],
           centerCutoutDefault: true
         },
@@ -199,11 +199,11 @@ export const CONFIG = {
         label: { diameterMm: 92 },
         // "box" style, 3mm spine.
         outerCover: {
-          trimMm: {w:373, h:191}, spineMm: 3, bleedMm: 5,
+          trimMm: {w:373, h:191}, spineMm: 3, bleedMm: 5, paperGsm: 300,
           unprintedColors: ["black", "brown", "white"]
         },
         innerSleeve: {
-          trimMm: {w:180, h:180},
+          trimMm: {w:180, h:180}, paperGsm: 135,
           unprintedColors: ["black", "brown", "white"],
           centerCutoutDefault: true
         },

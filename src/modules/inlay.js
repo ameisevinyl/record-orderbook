@@ -195,7 +195,7 @@ function updateInlayVisibility(){
 // checked, matching every other printed part's specs link.
 function renderInlaySpecs(){
   const parts = inlayPrintableParts();
-  const { trimMm, dataMm } = inlaySpec();
+  const { trimMm, paperGsm, dataMm } = inlaySpec();
   const bleedMm = bleedFor(parts.inlay, parts);
   const colorMode = getFormat(CONFIG, inlayCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
   document.getElementById("inlaySpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
@@ -203,6 +203,7 @@ function renderInlaySpecs(){
   document.getElementById("inlaySpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
   document.getElementById("inlaySpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
   document.getElementById("inlaySpecBleed").textContent = `${bleedMm}mm`;
+  document.getElementById("inlaySpecPaperGsm").textContent = `${paperGsm}gsm`;
 }
 
 export function initInlay(){
