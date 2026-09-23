@@ -45,3 +45,20 @@ export function partWeightG(part){
   const areaM2 = (part.trimMm.w * part.trimMm.h) / 1_000_000;
   return Math.round(areaM2 * part.paperGsm * 10) / 10;
 }
+
+// Splits a category's product list by kind, for building <optgroup>s in
+// the category's dropdown. Either array may be empty — e.g. inlay's
+// product list never has an "unprinted" entry.
+export function groupProductsByKind(products){
+  return {
+    printed: products.filter(p => p.kind === "printed"),
+    unprinted: products.filter(p => p.kind === "unprinted")
+  };
+}
+
+// Looks up one product by id. undefined for a null id (the "None"
+// selection) or an id with no match (e.g. a stale id from a project
+// saved against a different/older product list).
+export function productById(products, id){
+  return id == null ? undefined : products.find(p => p.id === id);
+}

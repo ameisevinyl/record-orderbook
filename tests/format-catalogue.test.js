@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   getFormat, enabledFormats, firstEnabledFormat,
-  labelDataSizeMm, flatDataMm, partWeightG
+  labelDataSizeMm, flatDataMm, partWeightG,
+  groupProductsByKind, productById
 } from "../src/lib/format-catalogue.js";
 
 const config = {
@@ -71,4 +72,38 @@ test("partWeightG derives grams from trim area x paperGsm (inner sleeve, unfolde
 
 test("partWeightG derives grams from trim area x paperGsm (inlay)", () => {
   assert.equal(partWeightG(printableParts12.inlay), 15);
+});
+
+const innerSleeveProducts12 = [
+  { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",
+    trimMm:{w:608,h:309}, finalMm:{w:304,h:309}, bleedMm:3, paperGsm:135,
+    color:"white", cutoutDiameterMm:85, default:true },
+  { id:"sleeve-black-closed", name:"black, closed", kind:"unprinted",
+    trimMm:{w:608,h:309}, finalMm:{w:304,h:309}, bleedMm:3, paperGsm:170,
+    color:"black" },
+  { id:"sleeve-printed", name:"printed", kind:"printed",
+    trimMm:{w:608,h:309}, finalMm:{w:304,h:309}, bleedMm:3, paperGsm:135 }
+];
+
+test("groupProductsByKind splits printed and unprinted products", () => {
+  const { printed, unprinted } = groupProductsByKind(innerSleeveProducts12);
+  assert.deepEqual(printed.map(p=>p.id), ["sleeve-printed"]);
+  assert.deepEqual(unprinted.map(p=>p.id), ["sleeve-white-cutout", "sleeve-black-closed"]);
+});
+
+test("groupProductsByKind returns an empty array for a kind with no products", () => {
+  const { unprinted } = groupProductsByKind([innerSleeveProducts12[2]]);
+  assert.deepEqual(unprinted, []);
+});
+
+test("productById finds a product by id", () => {
+  assert.equal(productById(innerSleeveProducts12, "sleeve-black-closed").color, "black");
+});
+
+test("productById returns undefined for an unknown id", () => {
+  assert.equal(productById(innerSleeveProducts12, "nope"), undefined);
+});
+
+test("productById returns undefined for a null id (the None selection)", () => {
+  assert.equal(productById(innerSleeveProducts12, null), undefined);
 });
