@@ -1,6 +1,11 @@
-// Inner Sleeve module — printed or plain-colour inner sleeve, optional
-// center cut-out. Delivered as a single flat print file with front on
-// the right and back on the left. Split out of the former
+// Inner Sleeve module — one product per selection from the plant's
+// inner-sleeve catalog (printed, or a specific unprinted colour/paper/
+// cut-out combination) — see CONFIG.formats[i].printableParts.
+// innerSleeve.products and the packaging product catalog design spec.
+// Always required (never "none") — a sleeve protects the record, so
+// the dropdown never offers that option, unlike cover/inlay. Delivered
+// as a single flat print file with front on the right and back on the
+// left, when the selected product is printed. Split out of the former
 // cover-sleeve.js along with cover.js and inlay.js (see the catalogue
 // schema restructure design spec, Decision 8) — each owns its own copy
 // of the artwork-slot scaffolding on purpose.
@@ -9,7 +14,7 @@
 // ../lib/print-artwork.js.
 
 import { CONFIG } from "../config.js";
-import { getFormat, flatDataMm, partWeightG } from "../lib/format-catalogue.js";
+import { getFormat, flatDataMm, partWeightG, groupProductsByKind, productById } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -20,16 +25,20 @@ function innerSleeveCurrentFormat(){
   return document.getElementById("format").value;
 }
 
-function innerSleevePrintableParts(){
-  return getFormat(CONFIG, innerSleeveCurrentFormat()).printableParts;
+function innerSleeveProducts(){
+  return getFormat(CONFIG, innerSleeveCurrentFormat()).printableParts.innerSleeve.products;
+}
+
+function selectedInnerSleeveProduct(){
+  return productById(innerSleeveProducts(), document.getElementById("innersleeveProduct").value || null);
 }
 
 // dataMm is derived (trim + bleed — trimMm is already the flat-opened,
 // unfolded spread; finalMm, separately, is the folded pocket size the
 // customer actually receives), not a stored field.
 function innerSleeveSpec(){
-  const part = innerSleevePrintableParts().innerSleeve;
-  return { ...part, dataMm: flatDataMm(part) };
+  const part = selectedInnerSleeveProduct();
+  return part && { ...part, dataMm: flatDataMm(part) };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -63,8 +72,13 @@ function createInnerSleeveArtworkSlot(){
   let file = null, url = null, originalFileName = null;
   let previewFile = null, previewUrl = null;
 
+  // No-op when nothing is selected — only possible transiently, since
+  // inner sleeve always has a default product once populateInnerSleeveProducts
+  // has run.
   function updateSizing(){
-    const { dataMm } = innerSleeveSpec();
+    const spec = innerSleeveSpec();
+    if(!spec) return;
+    const { dataMm } = spec;
     wrap.style.width = "100%";
     wrap.style.maxWidth = INNER_SLEEVE_PREVIEW_MAX_W+"px";
     wrap.style.aspectRatio = dataMm.w+" / "+dataMm.h;
@@ -145,10 +159,10 @@ function createInnerSleeveArtworkSlot(){
     renderInnerSleeveFileMeta(f.name, origName, null);
   }
 
-  // A file picked for one format is sized for that format's dataMm —
-  // switching format invalidates it outright (see initInnerSleeve's
-  // format change listener), rather than leaving a now-wrong-size file
-  // attached.
+  // A file picked for one product is sized for that product's dataMm —
+  // switching product or format invalidates it outright (see
+  // initInnerSleeve's listeners), rather than leaving a now-wrong-size
+  // file attached.
   function clear(){
     if(url) URL.revokeObjectURL(url);
     file = null; url = null; originalFileName = null;
@@ -185,17 +199,47 @@ async function collectInnerSleeveSlotFile(){
 
 let innerSleeveSlot;
 
-function updateInnerSleeveMode(){
-  const unprinted = document.getElementById("innersleeve-unprinted").checked;
-  document.getElementById("innersleevePrintedBody").classList.toggle("hidden", unprinted);
-  document.getElementById("innersleeveColorWrap").classList.toggle("hidden", !unprinted);
+function innerSleeveHasArtwork(){
+  const product = selectedInnerSleeveProduct();
+  return !!product && product.kind === "printed";
 }
 
-// Populates the Specifications disclosure from CONFIG — never
-// hand-typed, so it can't drift from the format's actual values.
+function updateInnerSleeveMode(){
+  document.getElementById("innersleevePrintedBody").classList.toggle("hidden", !innerSleeveHasArtwork());
+}
+
+// Rebuilds the product dropdown from CONFIG for the current format —
+// options grouped by kind (Printed/Unprinted), no "None" entry (a
+// sleeve is always required). Pre-selects the product flagged
+// default:true.
+function populateInnerSleeveProducts(){
+  const select = document.getElementById("innersleeveProduct");
+  const products = innerSleeveProducts();
+  const { printed, unprinted } = groupProductsByKind(products);
+  select.innerHTML = "";
+  const addGroup = (label, list) => {
+    if(!list.length) return;
+    const group = document.createElement("optgroup");
+    group.label = label;
+    for(const p of list){
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      group.appendChild(opt);
+    }
+    select.appendChild(group);
+  };
+  addGroup("Printed", printed);
+  addGroup("Unprinted", unprinted);
+  const defaultProduct = products.find(p => p.default) || products[0];
+  select.value = defaultProduct.id;
+}
+
+// Populates the Specifications disclosure from the selected product —
+// never hand-typed, so it can't drift from the format's actual values.
 function renderInnerSleeveSpecs(){
   const part = innerSleeveSpec();
-  const { trimMm, finalMm, bleedMm, paperGsm, dataMm } = part;
+  const { trimMm, finalMm, bleedMm, paperGsm, cutoutDiameterMm, dataMm } = part;
   const colorMode = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
   document.getElementById("innersleeveSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
   document.getElementById("innersleeveSpecColorMode").textContent = colorMode;
@@ -204,6 +248,7 @@ function renderInnerSleeveSpecs(){
   document.getElementById("innersleeveSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
   document.getElementById("innersleeveSpecBleed").textContent = `${bleedMm}mm`;
   document.getElementById("innersleeveSpecPaperGsm").textContent = `${paperGsm}gsm`;
+  document.getElementById("innersleeveSpecCutout").textContent = cutoutDiameterMm ? `⌀${cutoutDiameterMm}mm` : "none";
   // Shipping weight — plant/?debug eyes only, not customer-facing yet.
   document.getElementById("innersleeveSpecWeightRow").classList.toggle("hidden", !isDebugMode());
   document.getElementById("innersleeveSpecWeight").textContent = `${partWeightG(part)}g`;
@@ -211,19 +256,26 @@ function renderInnerSleeveSpecs(){
 
 export function initInnerSleeve(){
   innerSleeveSlot = createInnerSleeveArtworkSlot();
+  populateInnerSleeveProducts();
   innerSleeveSlot.updateSizing();
   document.getElementById("innersleeveinput").accept = CONFIG.artworkFileTypes.accept;
   renderInnerSleeveSpecs();
+  updateInnerSleeveMode();
 
   document.getElementById("format").addEventListener("change", ()=>{
     innerSleeveSlot.clear();
+    populateInnerSleeveProducts();
     innerSleeveSlot.updateSizing();
     renderInnerSleeveSpecs();
+    updateInnerSleeveMode();
   });
 
-  document.getElementById("innersleeve-printed").addEventListener("change", updateInnerSleeveMode);
-  document.getElementById("innersleeve-unprinted").addEventListener("change", updateInnerSleeveMode);
-  updateInnerSleeveMode();
+  document.getElementById("innersleeveProduct").addEventListener("change", ()=>{
+    innerSleeveSlot.clear();
+    innerSleeveSlot.updateSizing();
+    renderInnerSleeveSpecs();
+    updateInnerSleeveMode();
+  });
 }
 
 function setInnerSleeveFileNamePlaceholder(name, originalName){
@@ -258,31 +310,31 @@ async function applyInnerSleeveSlotFile(fileName, originalFileName, fileMap){
 }
 
 export function collectInnerSleeve(){
-  const innerSleevePrinted = document.getElementById("innersleeve-printed").checked;
+  const product = selectedInnerSleeveProduct();
   const file = innerSleeveSlot.getFile();
+  const printed = !!product && product.kind === "printed";
   return {
-    mode: innerSleevePrinted ? "printed" : "unprinted",
-    color: document.getElementById("innersleeveColor").value,
-    cutout: document.getElementById("innersleeveCutout").checked,
-    fileName: (innerSleevePrinted && file) ? innerSleeveSlotFileName(file) : null,
-    originalFileName: (innerSleevePrinted && file) ? innerSleeveSlot.getOriginalFileName() : null
+    productId: product ? product.id : null,
+    fileName: (printed && file) ? innerSleeveSlotFileName(file) : null,
+    originalFileName: (printed && file) ? innerSleeveSlot.getOriginalFileName() : null
   };
 }
 
 export async function applyInnerSleeve(data, fileMap){
   const is = data || {};
-  document.getElementById("innersleeve-printed").checked = is.mode === "printed";
-  document.getElementById("innersleeve-unprinted").checked = is.mode !== "printed";
-  document.getElementById("innersleeveColor").value = is.color || "white";
-  document.getElementById("innersleeveCutout").checked = is.cutout !== false;
+  const products = innerSleeveProducts();
+  const match = productById(products, is.productId);
+  const fallback = products.find(p => p.default) || products[0];
+  document.getElementById("innersleeveProduct").value = (match || fallback).id;
   await applyInnerSleeveSlotFile(is.fileName, is.originalFileName, fileMap);
   updateInnerSleeveMode();
   innerSleeveSlot.updateSizing();
+  renderInnerSleeveSpecs();
 }
 
 export async function collectInnerSleeveFiles(){
   const files = [];
-  if(document.getElementById("innersleeve-printed").checked){
+  if(innerSleeveHasArtwork()){
     const sleeve = await collectInnerSleeveSlotFile();
     if(sleeve) files.push(sleeve);
     const previewImg = innerSleeveSlot.getPreviewFile();
