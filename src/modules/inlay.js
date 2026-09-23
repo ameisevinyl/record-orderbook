@@ -188,22 +188,21 @@ function updateInlayVisibility(){
   document.getElementById("inlayBody").classList.toggle("hidden", !document.getElementById("inlayInclude").checked);
 }
 
-// Populates both sides' Specifications disclosures from CONFIG — front
-// and back share the same sheet spec, but each side gets its own
-// toggle (same placement pattern as Label A/B) rather than one shared
-// block outside either.
+// Populates the Specifications disclosure from CONFIG — front and back
+// share the same sheet spec, so one shared block sits under the "Inlay"
+// heading itself (outside #inlayBody, unlike front/back's own artwork
+// slots) — that also keeps it visible even before "include inlay" is
+// checked, matching every other printed part's specs link.
 function renderInlaySpecs(){
   const parts = inlayPrintableParts();
   const { trimMm, dataMm } = inlaySpec();
   const bleedMm = bleedFor(parts.inlay, parts);
   const colorMode = getFormat(CONFIG, inlayCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
-  ["inlayfront", "inlayback"].forEach(prefix=>{
-    document.getElementById(prefix+"SpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
-    document.getElementById(prefix+"SpecColorMode").textContent = colorMode;
-    document.getElementById(prefix+"SpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
-    document.getElementById(prefix+"SpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
-    document.getElementById(prefix+"SpecBleed").textContent = `${bleedMm}mm`;
-  });
+  document.getElementById("inlaySpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
+  document.getElementById("inlaySpecColorMode").textContent = colorMode;
+  document.getElementById("inlaySpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
+  document.getElementById("inlaySpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
+  document.getElementById("inlaySpecBleed").textContent = `${bleedMm}mm`;
 }
 
 export function initInlay(){
