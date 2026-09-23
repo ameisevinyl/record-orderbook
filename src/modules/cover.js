@@ -248,15 +248,18 @@ function populateCoverProducts(){
 }
 
 // Populates the Specifications disclosure from the selected product —
-// shows "—" in Spine/Paper weight/Center cut-out when "None" is
-// selected (they're not applicable to any product then). Allowed
-// filetypes/Colour mode/Data format/Bleed only mean anything for a
-// printed product (they describe the artwork FILE, and an unprinted
-// product has none) — hidden entirely for an unprinted or "None"
-// selection. End format/Shipping weight need trimMm too (End format IS
-// trimMm; weight is derived from its area) — hidden the same way for
-// any product (or non-selection) that doesn't have one, rather than
-// showing a dash for those two specifically.
+// shows "—" in Final size/Spine/Paper weight/Center cut-out when
+// "None" is selected (they're not applicable to any product then).
+// Allowed filetypes/Colour mode/Data format/Bleed only mean anything
+// for a printed product (they describe the artwork FILE, and an
+// unprinted product has none) — hidden entirely for an unprinted or
+// "None" selection. End format/Shipping weight need trimMm too (End
+// format IS trimMm; weight is derived from its area) — hidden the same
+// way for any product (or non-selection) that doesn't have one, rather
+// than showing a dash for those two specifically. Final size (finalMm)
+// stays unconditional on printed/unprinted, same as inner sleeve's —
+// it's the closed cover's footprint, the same physical size regardless
+// of which product it's made from (see config.js).
 function renderCoverSpecs(){
   const part = coverSpec();
   const printed = !!part && part.kind === "printed";
@@ -278,6 +281,7 @@ function renderCoverSpecs(){
     document.getElementById("coverSpecEndFormat").textContent = `${part.trimMm.w}×${part.trimMm.h}mm`;
     document.getElementById("coverSpecWeight").textContent = `${partWeightG(part)}g`;
   }
+  document.getElementById("coverSpecFinalSize").textContent = part ? `${part.finalMm.w}×${part.finalMm.h}mm` : "—";
   document.getElementById("coverSpecSpine").textContent = part ? `${part.spineMm}mm` : "—";
   document.getElementById("coverSpecPaperGsm").textContent = part ? `${part.paperGsm}gsm` : "—";
   document.getElementById("coverSpecCutout").textContent = part ? (part.cutoutDiameterMm ? `⌀${part.cutoutDiameterMm}mm` : "none") : "—";

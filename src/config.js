@@ -151,25 +151,32 @@ export const CONFIG = {
         // the spine (panel + spineMm + panel width-wise, spineMm added
         // top and bottom of panel height-wise — a "box"-style spine
         // wraps slightly around all three of those edges). Data size
-        // (trim + bleed) is derived, see above.
+        // (trim + bleed) is derived, see above. Printed-only. finalMm
+        // is the closed cover's front-panel footprint — (trimMm.w -
+        // spineMm)/2 by trimMm.h — the same physical size regardless of
+        // which product's paper/print it's made from, so every product
+        // in this category (including the unprinted ones, which have no
+        // trimMm to derive it from) carries the same finalMm value.
         outerCover: {
           products: [
             { id:"cover-printed", name:"printed", kind:"printed",
-              trimMm:{w:633,h:318}, spineMm:3, bleedMm:5, paperGsm:300 },
+              trimMm:{w:633,h:318}, finalMm:{w:315,h:318}, spineMm:3, bleedMm:5, paperGsm:300 },
             // Same artwork file and dimensions as "printed" — the name
             // alone carries the assembly instruction (faces inward once
             // folded); no separate insideOut flag, nothing reads one.
             { id:"cover-printed-inside-out", name:"printed (inside out)", kind:"printed",
-              trimMm:{w:633,h:318}, spineMm:3, bleedMm:5, paperGsm:300 },
+              trimMm:{w:633,h:318}, finalMm:{w:315,h:318}, spineMm:3, bleedMm:5, paperGsm:300 },
             { id:"cover-white-closed", name:"white, closed", kind:"unprinted",
-              spineMm:3, paperGsm:300, color:"white" },
+              finalMm:{w:315,h:318}, spineMm:3, paperGsm:300, color:"white" },
             { id:"cover-black-closed", name:"black, closed", kind:"unprinted",
-              spineMm:3, paperGsm:300, color:"black" },
+              finalMm:{w:315,h:318}, spineMm:3, paperGsm:300, color:"black" },
             { id:"cover-brown-closed", name:"brown, closed", kind:"unprinted",
-              spineMm:3, paperGsm:300, color:"brown" },
-            // Open-top bag, not a folded case — spineMm:0 (nothing folds in).
+              finalMm:{w:315,h:318}, spineMm:3, paperGsm:300, color:"brown" },
+            // Open-top bag, not a folded case — spineMm:0 (nothing folds
+            // in); reuses the same finalMm as an approximation until the
+            // plant supplies the bag's actual footprint.
             { id:"cover-red-paperbag-cutout", name:"red paperbag, center cut-out, heavy stock", kind:"unprinted",
-              spineMm:0, paperGsm:400, color:"red", cutoutDiameterMm:85 }
+              finalMm:{w:315,h:318}, spineMm:0, paperGsm:400, color:"red", cutoutDiameterMm:85 }
           ]
         },
         inlay: {
@@ -228,17 +235,17 @@ export const CONFIG = {
         outerCover: {
           products: [
             { id:"cover-printed", name:"printed", kind:"printed",
-              trimMm:{w:523,h:266}, spineMm:3, bleedMm:5, paperGsm:300 },
+              trimMm:{w:523,h:266}, finalMm:{w:260,h:266}, spineMm:3, bleedMm:5, paperGsm:300 },
             { id:"cover-printed-inside-out", name:"printed (inside out)", kind:"printed",
-              trimMm:{w:523,h:266}, spineMm:3, bleedMm:5, paperGsm:300 },
+              trimMm:{w:523,h:266}, finalMm:{w:260,h:266}, spineMm:3, bleedMm:5, paperGsm:300 },
             { id:"cover-white-closed", name:"white, closed", kind:"unprinted",
-              spineMm:3, paperGsm:300, color:"white" },
+              finalMm:{w:260,h:266}, spineMm:3, paperGsm:300, color:"white" },
             { id:"cover-black-closed", name:"black, closed", kind:"unprinted",
-              spineMm:3, paperGsm:300, color:"black" },
+              finalMm:{w:260,h:266}, spineMm:3, paperGsm:300, color:"black" },
             { id:"cover-brown-closed", name:"brown, closed", kind:"unprinted",
-              spineMm:3, paperGsm:300, color:"brown" },
+              finalMm:{w:260,h:266}, spineMm:3, paperGsm:300, color:"brown" },
             { id:"cover-red-paperbag-cutout", name:"red paperbag, center cut-out, heavy stock", kind:"unprinted",
-              spineMm:0, paperGsm:400, color:"red", cutoutDiameterMm:85 }
+              finalMm:{w:260,h:266}, spineMm:0, paperGsm:400, color:"red", cutoutDiameterMm:85 }
           ]
         },
         // Not supplied yet — guessed by interpolation, replace with the
@@ -300,17 +307,17 @@ export const CONFIG = {
         outerCover: {
           products: [
             { id:"cover-printed", name:"printed", kind:"printed",
-              trimMm:{w:373,h:191}, spineMm:3, bleedMm:5, paperGsm:300 },
+              trimMm:{w:373,h:191}, finalMm:{w:185,h:191}, spineMm:3, bleedMm:5, paperGsm:300 },
             { id:"cover-printed-inside-out", name:"printed (inside out)", kind:"printed",
-              trimMm:{w:373,h:191}, spineMm:3, bleedMm:5, paperGsm:300 },
+              trimMm:{w:373,h:191}, finalMm:{w:185,h:191}, spineMm:3, bleedMm:5, paperGsm:300 },
             { id:"cover-white-closed", name:"white, closed", kind:"unprinted",
-              spineMm:3, paperGsm:300, color:"white" },
+              finalMm:{w:185,h:191}, spineMm:3, paperGsm:300, color:"white" },
             { id:"cover-black-closed", name:"black, closed", kind:"unprinted",
-              spineMm:3, paperGsm:300, color:"black" },
+              finalMm:{w:185,h:191}, spineMm:3, paperGsm:300, color:"black" },
             { id:"cover-brown-closed", name:"brown, closed", kind:"unprinted",
-              spineMm:3, paperGsm:300, color:"brown" },
+              finalMm:{w:185,h:191}, spineMm:3, paperGsm:300, color:"brown" },
             { id:"cover-red-paperbag-cutout", name:"red paperbag, center cut-out, heavy stock", kind:"unprinted",
-              spineMm:0, paperGsm:400, color:"red", cutoutDiameterMm:55 }
+              finalMm:{w:185,h:191}, spineMm:0, paperGsm:400, color:"red", cutoutDiameterMm:55 }
           ]
         },
         inlay: {
