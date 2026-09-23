@@ -237,16 +237,27 @@ function populateInnerSleeveProducts(){
 
 // Populates the Specifications disclosure from the selected product —
 // never hand-typed, so it can't drift from the format's actual values.
+// Allowed filetypes/Colour mode/Data format/Bleed only mean anything
+// for a printed product (they describe the artwork FILE, and an
+// unprinted product has none) — hidden entirely for an unprinted
+// selection, not just left blank.
 function renderInnerSleeveSpecs(){
   const part = innerSleeveSpec();
-  const { trimMm, finalMm, bleedMm, paperGsm, cutoutDiameterMm, dataMm } = part;
-  const colorMode = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
-  document.getElementById("innersleeveSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
-  document.getElementById("innersleeveSpecColorMode").textContent = colorMode;
+  const { trimMm, finalMm, bleedMm, paperGsm, cutoutDiameterMm, dataMm, kind } = part;
+  const printed = kind === "printed";
+  document.getElementById("innersleeveSpecFiletypesRow").classList.toggle("hidden", !printed);
+  document.getElementById("innersleeveSpecColorModeRow").classList.toggle("hidden", !printed);
+  document.getElementById("innersleeveSpecDataFormatRow").classList.toggle("hidden", !printed);
+  document.getElementById("innersleeveSpecBleedRow").classList.toggle("hidden", !printed);
+  if(printed){
+    const colorMode = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
+    document.getElementById("innersleeveSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
+    document.getElementById("innersleeveSpecColorMode").textContent = colorMode;
+    document.getElementById("innersleeveSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
+    document.getElementById("innersleeveSpecBleed").textContent = `${bleedMm}mm`;
+  }
   document.getElementById("innersleeveSpecFinalSize").textContent = `${finalMm.w}×${finalMm.h}mm`;
   document.getElementById("innersleeveSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
-  document.getElementById("innersleeveSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
-  document.getElementById("innersleeveSpecBleed").textContent = `${bleedMm}mm`;
   document.getElementById("innersleeveSpecPaperGsm").textContent = `${paperGsm}gsm`;
   document.getElementById("innersleeveSpecCutout").textContent = cutoutDiameterMm ? `⌀${cutoutDiameterMm}mm` : "none";
   // Shipping weight — plant/?debug eyes only, not customer-facing yet.

@@ -246,27 +246,35 @@ function populateCoverProducts(){
 
 // Populates the Specifications disclosure from the selected product —
 // shows "—" in every field when "None" is selected, since there's no
-// product to read values from.
+// product to read values from. Allowed filetypes/Colour mode/Data
+// format/Bleed only mean anything for a printed product (they describe
+// the artwork FILE, and an unprinted product has none) — hidden
+// entirely, not just left blank, for an unprinted or "None" selection.
 function renderCoverSpecs(){
   const part = coverSpec();
-  const colorMode = getFormat(CONFIG, coverCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
-  document.getElementById("coverSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
-  document.getElementById("coverSpecColorMode").textContent = colorMode;
+  const printed = !!part && part.kind === "printed";
+  document.getElementById("coverSpecFiletypesRow").classList.toggle("hidden", !printed);
+  document.getElementById("coverSpecColorModeRow").classList.toggle("hidden", !printed);
+  document.getElementById("coverSpecDataFormatRow").classList.toggle("hidden", !printed);
+  document.getElementById("coverSpecBleedRow").classList.toggle("hidden", !printed);
   document.getElementById("coverSpecWeightRow").classList.toggle("hidden", !isDebugMode() || !part);
+  if(printed){
+    const colorMode = getFormat(CONFIG, coverCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
+    document.getElementById("coverSpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
+    document.getElementById("coverSpecColorMode").textContent = colorMode;
+    document.getElementById("coverSpecDataFormat").textContent = `${part.dataMm.w}×${part.dataMm.h}mm`;
+    document.getElementById("coverSpecBleed").textContent = `${part.bleedMm}mm`;
+  }
   if(!part){
     document.getElementById("coverSpecEndFormat").textContent = "—";
-    document.getElementById("coverSpecDataFormat").textContent = "—";
-    document.getElementById("coverSpecBleed").textContent = "—";
     document.getElementById("coverSpecSpine").textContent = "—";
     document.getElementById("coverSpecPaperGsm").textContent = "—";
     document.getElementById("coverSpecCutout").textContent = "—";
     document.getElementById("coverSpecWeight").textContent = "—";
     return;
   }
-  const { trimMm, spineMm, bleedMm, paperGsm, cutoutDiameterMm, dataMm } = part;
+  const { trimMm, spineMm, paperGsm, cutoutDiameterMm } = part;
   document.getElementById("coverSpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
-  document.getElementById("coverSpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
-  document.getElementById("coverSpecBleed").textContent = `${bleedMm}mm`;
   document.getElementById("coverSpecSpine").textContent = `${spineMm}mm`;
   document.getElementById("coverSpecPaperGsm").textContent = `${paperGsm}gsm`;
   document.getElementById("coverSpecCutout").textContent = cutoutDiameterMm ? `⌀${cutoutDiameterMm}mm` : "none";

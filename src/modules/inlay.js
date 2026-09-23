@@ -235,26 +235,34 @@ function populateInlayProducts(){
 }
 
 // Populates the Specifications disclosure from the selected product —
-// shows "—" in every field when "None" is selected.
+// shows "—" in every field when "None" is selected. Allowed filetypes/
+// Colour mode/Data format/Bleed only mean anything for a printed
+// product (they describe the artwork FILE) — hidden entirely, not just
+// left blank, for "None" (inlay never has an unprinted product, so
+// there's no other case where these would need hiding).
 function renderInlaySpecs(){
   const part = inlaySpec();
-  const colorMode = getFormat(CONFIG, inlayCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
-  document.getElementById("inlaySpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
-  document.getElementById("inlaySpecColorMode").textContent = colorMode;
+  const printed = !!part && part.kind === "printed";
+  document.getElementById("inlaySpecFiletypesRow").classList.toggle("hidden", !printed);
+  document.getElementById("inlaySpecColorModeRow").classList.toggle("hidden", !printed);
+  document.getElementById("inlaySpecDataFormatRow").classList.toggle("hidden", !printed);
+  document.getElementById("inlaySpecBleedRow").classList.toggle("hidden", !printed);
   document.getElementById("inlaySpecWeightRow").classList.toggle("hidden", !isDebugMode() || !part);
+  if(printed){
+    const colorMode = getFormat(CONFIG, inlayCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
+    document.getElementById("inlaySpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
+    document.getElementById("inlaySpecColorMode").textContent = colorMode;
+    document.getElementById("inlaySpecDataFormat").textContent = `${part.dataMm.w}×${part.dataMm.h}mm`;
+    document.getElementById("inlaySpecBleed").textContent = `${part.bleedMm}mm`;
+  }
   if(!part){
     document.getElementById("inlaySpecEndFormat").textContent = "—";
-    document.getElementById("inlaySpecDataFormat").textContent = "—";
-    document.getElementById("inlaySpecBleed").textContent = "—";
     document.getElementById("inlaySpecPaperGsm").textContent = "—";
     document.getElementById("inlaySpecWeight").textContent = "—";
     return;
   }
-  const { trimMm, bleedMm, paperGsm, dataMm } = part;
-  document.getElementById("inlaySpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
-  document.getElementById("inlaySpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
-  document.getElementById("inlaySpecBleed").textContent = `${bleedMm}mm`;
-  document.getElementById("inlaySpecPaperGsm").textContent = `${paperGsm}gsm`;
+  document.getElementById("inlaySpecEndFormat").textContent = `${part.trimMm.w}×${part.trimMm.h}mm`;
+  document.getElementById("inlaySpecPaperGsm").textContent = `${part.paperGsm}gsm`;
   // Shipping weight — plant/?debug eyes only, not customer-facing yet.
   document.getElementById("inlaySpecWeight").textContent = `${partWeightG(part)}g`;
 }
