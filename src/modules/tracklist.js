@@ -460,6 +460,19 @@ function updateChecklist(){
    Side template
    ============================================================ */
 
+// Audio Master Files spec box — sits at the top of Side A, directly
+// under its heading: it describes the per-side audio files the customer
+// is about to attach to the tracklist below it.
+const AUDIO_SPECS_HTML = `
+      <details class="specs no-print">
+        <summary>Specifications</summary>
+        <div class="specs-body">
+          <div><span>Allowed filetypes</span><span id="audioSpecFiletypes"></span></div>
+          <div><span>Bit depth</span><span id="audioSpecBitDepth"></span></div>
+          <div><span>Sample rate</span><span id="audioSpecSampleRate"></span></div>
+        </div>
+      </details>`;
+
 function sideTemplate(side){
   const isB = side === "B";
   return `
@@ -470,6 +483,7 @@ function sideTemplate(side){
     </div>
 
     <div id="body-${side}">
+      ${side === "A" ? AUDIO_SPECS_HTML : ""}
       <div class="row" style="align-items:center;">
         <label class="chk">RPM
           <select id="rpm-${side}" class="rpm-select">
@@ -609,9 +623,9 @@ function renderAudioSpecs(){
 
 export function initTracklist(){
   renderImprint();
-  renderAudioSpecs();
   populateFormatOptions();
   document.getElementById("sides").innerHTML = sideTemplate("A") + sideTemplate("B");
+  renderAudioSpecs();
   ["A","B"].forEach(side=>{
     addTrack(side);
     wireSideOptions(side);
