@@ -1,16 +1,20 @@
-// Inlay module — optional double-sided inlay (front + back), delivered
-// as two separate square pages (unlike cover.js/inner-sleeve.js's single
-// flat spread, since an inlay is printed on both sides of one physical
-// sheet). No page count/booklet support — explicitly deferred, see the
-// catalogue schema restructure design spec. Split out of the former
-// cover-sleeve.js along with cover.js and inner-sleeve.js (Decision 8) —
-// each owns its own copy of the artwork-slot scaffolding on purpose.
+// Inlay module — one product per selection from the plant's inlay
+// catalog (currently just "printed" — inlay never has an unprinted
+// kind, since printing is the entire point of an inlay) — see
+// CONFIG.formats[i].printableParts.inlay.products and the packaging
+// product catalog design spec. Delivered as two separate square pages
+// (unlike cover.js/inner-sleeve.js's single flat spread, since an inlay
+// is printed on both sides of one physical sheet). No page count/
+// booklet support — explicitly deferred, see the catalogue schema
+// restructure design spec. Split out of the former cover-sleeve.js
+// along with cover.js and inner-sleeve.js (Decision 8) — each owns its
+// own copy of the artwork-slot scaffolding on purpose.
 //
 // Parsing/validation is the same pure logic labels.js uses, from
 // ../lib/print-artwork.js.
 
 import { CONFIG } from "../config.js";
-import { getFormat, flatDataMm, partWeightG } from "../lib/format-catalogue.js";
+import { getFormat, flatDataMm, partWeightG, groupProductsByKind, productById } from "../lib/format-catalogue.js";
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -21,15 +25,23 @@ function inlayCurrentFormat(){
   return document.getElementById("format").value;
 }
 
-function inlayPrintableParts(){
-  return getFormat(CONFIG, inlayCurrentFormat()).printableParts;
+function inlayProducts(){
+  return getFormat(CONFIG, inlayCurrentFormat()).printableParts.inlay.products;
+}
+
+function selectedInlayProduct(){
+  return productById(inlayProducts(), document.getElementById("inlayProduct").value || null);
+}
+
+function inlayIncluded(){
+  return !!selectedInlayProduct();
 }
 
 // dataMm is derived (trim + bleed — a single flat sheet, no spine/
-// folding), not a stored field.
+// folding), not a stored field. undefined when "None" is selected.
 function inlaySpec(){
-  const part = inlayPrintableParts().inlay;
-  return { ...part, dataMm: flatDataMm(part) };
+  const part = selectedInlayProduct();
+  return part && { ...part, dataMm: flatDataMm(part) };
 }
 
 // row.detected/row.feature can echo untrusted text read out of the
@@ -65,8 +77,12 @@ function createInlayArtworkSlot(prefix){
   let file = null, url = null, originalFileName = null;
   let previewFile = null, previewUrl = null;
 
+  // No-op when nothing is selected ("None") — the upload block is
+  // hidden in that state regardless.
   function updateSizing(){
-    const { dataMm } = inlaySpec();
+    const spec = inlaySpec();
+    if(!spec) return;
+    const { dataMm } = spec;
     wrap.style.width = "100%";
     wrap.style.maxWidth = INLAY_PREVIEW_MAX_W+"px";
     wrap.style.aspectRatio = dataMm.w+" / "+dataMm.h;
@@ -145,9 +161,10 @@ function createInlayArtworkSlot(prefix){
     renderInlayFileMeta(f.name, origName, null);
   }
 
-  // A file picked for one format is sized for that format's dataMm —
-  // switching format invalidates it outright (see initInlay's format
-  // change listener), rather than leaving a now-wrong-size file attached.
+  // A file picked for one product is sized for that product's dataMm —
+  // switching product or format invalidates it outright (see
+  // initInlay's listeners), rather than leaving a now-wrong-size file
+  // attached.
   function clear(){
     if(url) URL.revokeObjectURL(url);
     file = null; url = null; originalFileName = null;
@@ -185,44 +202,86 @@ async function collectInlaySlotFile(slot, variant){
 let inlayFrontSlot, inlayBackSlot;
 
 function updateInlayVisibility(){
-  document.getElementById("inlayBody").classList.toggle("hidden", !document.getElementById("inlayInclude").checked);
+  document.getElementById("inlayBody").classList.toggle("hidden", !inlayIncluded());
 }
 
-// Populates the Specifications disclosure from CONFIG — front and back
-// share the same sheet spec, so one shared block sits under the "Inlay"
-// heading itself (outside #inlayBody, unlike front/back's own artwork
-// slots) — that also keeps it visible even before "include inlay" is
-// checked, matching every other printed part's specs link.
+// Rebuilds the product dropdown from CONFIG for the current format —
+// a plain "None" option first, then options grouped by kind (the
+// "Unprinted" group is always empty for inlay, so addGroup skips it).
+function populateInlayProducts(){
+  const select = document.getElementById("inlayProduct");
+  const products = inlayProducts();
+  const { printed, unprinted } = groupProductsByKind(products);
+  select.innerHTML = "";
+  const noneOpt = document.createElement("option");
+  noneOpt.value = "";
+  noneOpt.textContent = "None";
+  select.appendChild(noneOpt);
+  const addGroup = (label, list) => {
+    if(!list.length) return;
+    const group = document.createElement("optgroup");
+    group.label = label;
+    for(const p of list){
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      group.appendChild(opt);
+    }
+    select.appendChild(group);
+  };
+  addGroup("Printed", printed);
+  addGroup("Unprinted", unprinted);
+  select.value = "";
+}
+
+// Populates the Specifications disclosure from the selected product —
+// shows "—" in every field when "None" is selected.
 function renderInlaySpecs(){
   const part = inlaySpec();
-  const { trimMm, bleedMm, paperGsm, dataMm } = part;
   const colorMode = getFormat(CONFIG, inlayCurrentFormat()).printCheck.checks.colorMode.accepted.join("/");
   document.getElementById("inlaySpecFiletypes").textContent = CONFIG.artworkFileTypes.labels.join(", ");
   document.getElementById("inlaySpecColorMode").textContent = colorMode;
+  document.getElementById("inlaySpecWeightRow").classList.toggle("hidden", !isDebugMode() || !part);
+  if(!part){
+    document.getElementById("inlaySpecEndFormat").textContent = "—";
+    document.getElementById("inlaySpecDataFormat").textContent = "—";
+    document.getElementById("inlaySpecBleed").textContent = "—";
+    document.getElementById("inlaySpecPaperGsm").textContent = "—";
+    document.getElementById("inlaySpecWeight").textContent = "—";
+    return;
+  }
+  const { trimMm, bleedMm, paperGsm, dataMm } = part;
   document.getElementById("inlaySpecEndFormat").textContent = `${trimMm.w}×${trimMm.h}mm`;
   document.getElementById("inlaySpecDataFormat").textContent = `${dataMm.w}×${dataMm.h}mm`;
   document.getElementById("inlaySpecBleed").textContent = `${bleedMm}mm`;
   document.getElementById("inlaySpecPaperGsm").textContent = `${paperGsm}gsm`;
   // Shipping weight — plant/?debug eyes only, not customer-facing yet.
-  document.getElementById("inlaySpecWeightRow").classList.toggle("hidden", !isDebugMode());
   document.getElementById("inlaySpecWeight").textContent = `${partWeightG(part)}g`;
 }
 
 export function initInlay(){
   inlayFrontSlot = createInlayArtworkSlot("inlayfront");
   inlayBackSlot = createInlayArtworkSlot("inlayback");
+  populateInlayProducts();
   [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
   document.getElementById("inlayfrontinput").accept = CONFIG.artworkFileTypes.accept;
   document.getElementById("inlaybackinput").accept = CONFIG.artworkFileTypes.accept;
   renderInlaySpecs();
+  updateInlayVisibility();
 
   document.getElementById("format").addEventListener("change", ()=>{
-    [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.clear(); s.updateSizing(); });
+    [inlayFrontSlot, inlayBackSlot].forEach(s=> s.clear());
+    populateInlayProducts();
+    [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
     renderInlaySpecs();
+    updateInlayVisibility();
   });
 
-  document.getElementById("inlayInclude").addEventListener("change", updateInlayVisibility);
-  updateInlayVisibility();
+  document.getElementById("inlayProduct").addEventListener("change", ()=>{
+    [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.clear(); s.updateSizing(); });
+    renderInlaySpecs();
+    updateInlayVisibility();
+  });
 }
 
 function setInlayFileNamePlaceholder(prefix, name, originalName){
@@ -257,15 +316,15 @@ async function applyInlaySlotFile(slot, prefix, variant, fileName, originalFileN
 }
 
 export function collectInlay(){
-  const inlayInclude = document.getElementById("inlayInclude").checked;
+  const product = selectedInlayProduct();
   const nameFor = (slot, variant) => {
-    if(!inlayInclude) return null;
+    if(!product) return null;
     const file = slot.getFile();
     return file ? inlaySlotFileName(variant, file) : null;
   };
-  const originalNameFor = (slot) => inlayInclude && slot.getFile() ? slot.getOriginalFileName() : null;
+  const originalNameFor = (slot) => product && slot.getFile() ? slot.getOriginalFileName() : null;
   return {
-    include: inlayInclude,
+    productId: product ? product.id : null,
     front: {
       fileName: nameFor(inlayFrontSlot, "front"),
       originalFileName: originalNameFor(inlayFrontSlot)
@@ -279,16 +338,18 @@ export function collectInlay(){
 
 export async function applyInlay(data, fileMap){
   const inlay = data || {};
-  document.getElementById("inlayInclude").checked = !!inlay.include;
+  const match = productById(inlayProducts(), inlay.productId);
+  document.getElementById("inlayProduct").value = match ? match.id : "";
   await applyInlaySlotFile(inlayFrontSlot, "inlayfront", "front", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap);
   await applyInlaySlotFile(inlayBackSlot, "inlayback", "back", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap);
   updateInlayVisibility();
   [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
+  renderInlaySpecs();
 }
 
 export async function collectInlayFiles(){
   const files = [];
-  if(document.getElementById("inlayInclude").checked){
+  if(inlayIncluded()){
     const front = await collectInlaySlotFile(inlayFrontSlot, "front");
     if(front) files.push(front);
     const frontPreview = inlayFrontSlot.getPreviewFile();
