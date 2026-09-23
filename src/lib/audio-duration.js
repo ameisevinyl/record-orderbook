@@ -1,6 +1,9 @@
-// Duration reading — native <audio> metadata first; for WAV/AIFF files
-// the browser can't read (24/32-bit float PCM, odd chunk order, very
-// large files) fall back to a hand-rolled header parse. No library
+// Duration reading — for WAV/AIFF the hand-rolled header parse runs
+// first: it reads only the first ~1MB and is exact for PCM/float, where
+// a large file's native <audio> metadata load can make the browser read
+// or decode far more than the header before firing loadedmetadata.
+// Native <audio> stays the fallback for files the header parser can't
+// read (e.g. compressed WAV/AIFC, or any other container). No library
 // needed — both containers are simple enough to read directly, which
 // also avoids a CDN dependency.
 //
@@ -216,8 +219,8 @@ export function compressionWarning(file){
   return compressionWarningForName(file.name);
 }
 
-// "wav" | "aiff" | null — shared by fallbackDuration (below) and
-// readAudioSpec, so the extension dispatch lives in exactly one place.
+// "wav" | "aiff" | null — shared by headerDuration and readAudioSpec, so
+// the extension dispatch lives in exactly one place.
 function containerFromName(name){
   if(/\.wav$/i.test(name) || /\.wave$/i.test(name) || /\.bwf$/i.test(name)) return "wav";
   if(/\.aiff?$/i.test(name) || /\.aifc$/i.test(name)) return "aiff";
@@ -230,28 +233,9 @@ async function readHead(file){
   return file.slice(0, Math.min(file.size, 1_000_000)).arrayBuffer();
 }
 
-async function fallbackToWav(file){
-  try{ return parseWavDuration(await readHead(file)); }
-  catch(e){ return null; }
-}
-
-async function fallbackToAiff(file){
-  try{ return parseAiffDuration(await readHead(file)); }
-  catch(e){ return null; }
-}
-
-function fallbackDuration(file){
-  const container = containerFromName(file.name);
-  if(container === "wav") return fallbackToWav(file);
-  if(container === "aiff") return fallbackToAiff(file);
-  return Promise.resolve(null);
-}
-
-// Always attempts a header parse (unlike readAudioDuration below, which
-// only falls back to one when native <audio> metadata already failed) —
-// bit depth/sample rate aren't exposed by <audio> at all, so this is the
-// only way to get them. Returns null for a non-WAV/AIFF file or an
-// unparseable header.
+// Bit depth/sample rate aren't exposed by <audio> at all, so the header
+// parse is the only way to get them. Returns null for a non-WAV/AIFF
+// file or an unparseable header.
 export async function readAudioSpec(file){
   const container = containerFromName(file.name);
   if(!container) return null;
@@ -263,17 +247,39 @@ export async function readAudioSpec(file){
   }
 }
 
-export function readAudioDuration(file){
+// Header-parsed duration for WAV/AIFF, or null when the extension isn't
+// one of those or the header can't be read (compressed encodings, odd
+// chunk order, truncated files) — see nativeDuration below for the fallback.
+async function headerDuration(file){
+  const container = containerFromName(file.name);
+  if(container === "wav"){
+    try{ return parseWavDuration(await readHead(file)); }catch(e){ return null; }
+  }
+  if(container === "aiff"){
+    try{ return parseAiffDuration(await readHead(file)); }catch(e){ return null; }
+  }
+  return null;
+}
+
+// <audio> fallback — only reached when the header parser can't give a
+// duration. Blob URL revoked on every path so a large file's backing
+// store isn't kept alive after the read.
+function nativeDuration(file){
   return new Promise((resolve)=>{
     const audio = document.createElement("audio");
     audio.preload = "metadata";
     const url = URL.createObjectURL(file);
+    const done = dur => { URL.revokeObjectURL(url); resolve(dur); };
     audio.src = url;
-    const done = (dur)=>{ URL.revokeObjectURL(url); resolve(dur); };
     audio.addEventListener("loadedmetadata", ()=>{
-      if(isFinite(audio.duration) && audio.duration > 0) done(audio.duration);
-      else fallbackDuration(file).then(done);
+      done(isFinite(audio.duration) && audio.duration > 0 ? audio.duration : null);
     });
-    audio.addEventListener("error", ()=> fallbackDuration(file).then(done));
+    audio.addEventListener("error", ()=> done(null));
   });
+}
+
+export async function readAudioDuration(file){
+  const fromHeader = await headerDuration(file);
+  if(fromHeader != null) return fromHeader;
+  return nativeDuration(file);
 }

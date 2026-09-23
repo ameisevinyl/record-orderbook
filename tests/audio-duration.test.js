@@ -8,6 +8,7 @@ import {
   audioSpecWarning,
   compressionWarningForName,
   readAudioSpec,
+  readAudioDuration,
 } from "../src/lib/audio-duration.js";
 
 // ---- helpers to build synthetic headers for the tests below ----
@@ -192,6 +193,15 @@ test("readAudioSpec dispatches .bwf files through the WAV parser", async () => {
   const spec = await readAudioSpec(file);
   assert.equal(spec.sampleRate, 48000);
   assert.equal(spec.encoding, "PCM");
+});
+
+test("readAudioDuration reads a large 24-bit/96kHz WAV from its header, without native audio", async () => {
+  // Header only — the declared data chunk is ~690MB, but the reader must
+  // never touch it: native <audio> is what makes this case slow in a browser.
+  const buf = buildWavHeader({ sampleRate: 96000, channels: 2, bitsPerSample: 24, durationSeconds: 20 * 60 });
+  const blob = new Blob([buf]);
+  const file = { name: "side-a.wav", size: blob.size, slice: blob.slice.bind(blob) };
+  assert.equal(await readAudioDuration(file), 20 * 60);
 });
 
 test("parseAiffSpec returns null for a non-FORM buffer", () => {
