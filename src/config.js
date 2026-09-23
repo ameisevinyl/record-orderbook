@@ -40,6 +40,29 @@ export const CONFIG = {
     labels: ["PDF", "JPG", "TIFF"]
   },
 
+  // Audio master file requirements — format-agnostic (same regardless
+  // of 7"/10"/12"), shown in the Audio Master Files Specifications box
+  // and checked inline per track/continuous-side file the same way
+  // compressionWarning already flags a non-WAV/AIFF extension (see
+  // audioSpecWarning in lib/audio-duration.js). minBitDepth/
+  // minSampleRateHz are the only two auto-checkable fields — they're
+  // read straight from the WAV/AIFF header. `advisory` is shown as
+  // reference text only, never auto-checked: verifying peak level,
+  // mono-bass compatibility, or limiting needs real waveform/DSP
+  // analysis (true-peak detection, phase correlation), not just header
+  // metadata, which is out of scope for a hand-rolled header parser.
+  audioSpec: {
+    labels: ["WAV", "AIFF"],
+    minBitDepth: 16,
+    minSampleRateHz: 44100,
+    advisory: [
+      "no sub-bass junk (<15-20Hz)",
+      "mono-compatible bass (<150-250Hz)",
+      "avoid heavy limiting/brickwalling",
+      "use a de-esser on sharp transients (e.g. vocals)"
+    ]
+  },
+
   formats: [
     {
       id: "12",

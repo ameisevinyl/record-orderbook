@@ -8,7 +8,7 @@
 
 import { CONFIG } from "../config.js";
 import { formatTime, parseTime, trackGapSeconds } from "../lib/time.js";
-import { readAudioDuration, compressionWarning } from "../lib/audio-duration.js";
+import { readAudioDuration, readAudioSpec, compressionWarning, audioSpecWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
 import { getFormat, enabledFormats, firstEnabledFormat, productById } from "../lib/format-catalogue.js";
@@ -57,12 +57,13 @@ function attachTrackFile(row, f, originalFileName = f.name){
   renderFileMeta(meta, f.name, originalFileName, "reading duration…");
   meta.classList.remove("empty");
   meta.classList.remove("warn");
-  const warning = compressionWarning(f);
-  readAudioDuration(f).then(dur=>{
+  const compressionWarn = compressionWarning(f);
+  Promise.all([readAudioDuration(f), readAudioSpec(f)]).then(([dur, spec])=>{
     const durText = (isFinite(dur) && dur > 0)
       ? (()=>{ lengthInput.value = formatTime(dur); recompute();
                return formatTime(dur) + " (auto)"; })()
       : "could not read duration, enter length manually";
+    const warning = [compressionWarn, audioSpecWarning(spec, CONFIG.audioSpec)].filter(Boolean).join("  ");
     renderFileMeta(meta, f.name, originalFileName, durText + (warning ? "  " + warning : ""));
     meta.classList.toggle("warn", !!warning);
     recompute();
@@ -203,8 +204,8 @@ function attachContinuousFile(side, f, originalFileName = f.name){
   contWrap._originalFileName = originalFileName;
   renderFileMeta(contMeta, f.name, originalFileName, "reading duration…");
   contMeta.classList.remove("warn");
-  const warning = compressionWarning(f);
-  readAudioDuration(f).then(dur=>{
+  const compressionWarn = compressionWarning(f);
+  Promise.all([readAudioDuration(f), readAudioSpec(f)]).then(([dur, spec])=>{
     // The read length lands in the field itself (contoverride), not
     // restated here next to the filename — unlike attachTrackFile,
     // which has no separate always-visible length field of its own to
@@ -215,6 +216,7 @@ function attachContinuousFile(side, f, originalFileName = f.name){
     } else {
       statusText = "could not read duration, enter length manually";
     }
+    const warning = [compressionWarn, audioSpecWarning(spec, CONFIG.audioSpec)].filter(Boolean).join("  ");
     if(warning) statusText += (statusText ? "  " : "") + warning;
     renderFileMeta(contMeta, f.name, originalFileName, statusText);
     contMeta.classList.toggle("warn", !!warning);
@@ -543,8 +545,20 @@ function renderImprint(){
   document.getElementById("imprint").textContent = parts.join(" · ");
 }
 
+// Populates the Audio Master Files Specifications disclosure from
+// CONFIG.audioSpec — never hand-typed. Format-agnostic (same regardless
+// of 7"/10"/12"), so this only needs to run once, not on format change.
+function renderAudioSpecs(){
+  const a = CONFIG.audioSpec;
+  document.getElementById("audioSpecFiletypes").textContent = a.labels.join(", ");
+  document.getElementById("audioSpecBitDepth").textContent = `${a.minBitDepth}-bit min`;
+  document.getElementById("audioSpecSampleRate").textContent = `${a.minSampleRateHz/1000}kHz min`;
+  document.getElementById("audioSpecAdvisory").textContent = a.advisory.join(" · ");
+}
+
 export function initTracklist(){
   renderImprint();
+  renderAudioSpecs();
   populateFormatOptions();
   document.getElementById("sides").innerHTML = sideTemplate("A") + sideTemplate("B");
   ["A","B"].forEach(side=>{
