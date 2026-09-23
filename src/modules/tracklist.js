@@ -471,7 +471,7 @@ function sideTemplate(side){
 
       <div class="side-total">
         <div>
-          <div class="total-fig" id="total-${side}">0:00</div>
+          <div>total playing time: <span class="total-fig" id="total-${side}">0:00</span></div>
           <div class="limits-note" id="limitsnote-${side}"></div>
         </div>
         <span class="badge ok" id="badge-${side}">within recommendation</span>
