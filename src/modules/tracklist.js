@@ -658,9 +658,20 @@ async function buildProjectZip(forSend = false){
   return {blob, fileName: baseName + ".zip"};
 }
 
+// Local clock time, HH:MM — humanDate() (package-naming.js) already
+// gives the date half; this just adds hours/minutes for the header
+// stamp, which is the only place a save needs to show a time as well.
+function stampSaved(){
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  document.getElementById("stamp").textContent = `Saved ${humanDate(d)} ${hh}:${min}`;
+}
+
 async function saveProject(){
   const {blob, fileName} = await buildProjectZip();
   downloadBlob(blob, fileName);
+  stampSaved();
 }
 
 // Strips a zip entry's leading folder ("<project>/A1_..._v1.wav" ->
