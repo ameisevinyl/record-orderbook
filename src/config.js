@@ -10,6 +10,12 @@
 //
 // Currently only 12" and 7" are enabled — 10" is configured but off, for
 // testing.
+//
+// Section order below mirrors the order form's own top-to-bottom flow:
+// plant identity (used throughout) → Audio Master Files → the formats
+// block (Release Info/Sides/Labels/Inner Sleeve/Outer Cover/Inlay) →
+// print-file specs those reference → Send-gating → Vinyl Colour →
+// locale/info text.
 
 // The sample/default plant identity lives in the committed example
 // template; a real plant's data overrides it at build time — see
@@ -21,32 +27,6 @@ export const CONFIG = {
   // plant.config.local.example.js; build/build.js swaps in
   // plant.config.local.js (gitignored) when present.
   plant: PLANT_CONFIG,
-
-  // Hard-blocks "Send to Plant" (not Save Project, which always stays
-  // warning-only) when required artwork is missing or unreadable/
-  // unrecognized-format — see tracklist.js's confirmIncompleteSend.
-  // Set false to fall back to the old fully-dismissible behavior for
-  // every checklist item, including these two.
-  blockIncompleteArtworkOnSend: true,
-
-  // Accepted artwork file types — the single source both the file
-  // pickers' accept="" attribute and each printed part's "Allowed
-  // filetypes" spec line read from, so they can't drift apart. `accept`
-  // is the exact string every artwork <input type=file> uses; `labels`
-  // is the human-readable list shown in the specs panel (deliberately
-  // shorter — JPG/JPEG and TIFF/TIF collapse to one label each).
-  artworkFileTypes: {
-    accept: ".pdf,.jpg,.jpeg,.tiff,.tif",
-    labels: ["PDF", "JPG", "TIFF"]
-  },
-
-  // Print-file reference specs shown in the Specs document. Not
-  // auto-checked — the studio's backend preprocessor does the real
-  // validation; see each format's printCheck for the checks that run
-  // in-browser.
-  printSpec: {
-    colourProfile: "ISO ECI v2 300"
-  },
 
   // Audio master file requirements — format-agnostic (same regardless
   // of 7"/10"/12"), shown in the Specifications box under Notes to the
@@ -356,6 +336,32 @@ export const CONFIG = {
       }
     }
   ],
+
+  // Accepted artwork file types — the single source both the file
+  // pickers' accept="" attribute and each printed part's "Allowed
+  // filetypes" spec line read from, so they can't drift apart. `accept`
+  // is the exact string every artwork <input type=file> uses; `labels`
+  // is the human-readable list shown in the specs panel (deliberately
+  // shorter — JPG/JPEG and TIFF/TIF collapse to one label each).
+  artworkFileTypes: {
+    accept: ".pdf,.jpg,.jpeg,.tiff,.tif",
+    labels: ["PDF", "JPG", "TIFF"]
+  },
+
+  // Print-file reference specs shown in the Specs document. Not
+  // auto-checked — the studio's backend preprocessor does the real
+  // validation; see each format's printCheck for the checks that run
+  // in-browser.
+  printSpec: {
+    colourProfile: "ISO ECI v2 300"
+  },
+
+  // Hard-blocks "Send to Plant" (not Save Project, which always stays
+  // warning-only) when required artwork is missing or unreadable/
+  // unrecognized-format — see tracklist.js's confirmIncompleteSend.
+  // Set false to fall back to the old fully-dismissible behavior for
+  // every checklist item, including these two.
+  blockIncompleteArtworkOnSend: true,
 
   // Vinyl colour options. standardColor is the default (no surcharge,
   // no minimum). basicColors is the editable list of solid colour
