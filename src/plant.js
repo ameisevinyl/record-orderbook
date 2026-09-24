@@ -65,7 +65,12 @@ function plantInitGuards(){
 
 // Spec boxes as plain always-open rows; previews open full size on click.
 function plantInitLayout(){
-  document.querySelectorAll("details.specs").forEach(d => { d.open = true; });
+  // Open and not closable: the summary stays as a caption only.
+  document.querySelectorAll("details.specs").forEach(d => {
+    d.open = true;
+    d.querySelector("summary").tabIndex = -1;
+    d.addEventListener("toggle", ()=>{ d.open = true; });
+  });
   document.addEventListener("click", (e)=>{
     const preview = e.target.closest(".label-preview");
     const media = preview && preview.querySelector("img, iframe");
