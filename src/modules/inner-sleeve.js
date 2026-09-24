@@ -15,7 +15,7 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat, flatDataMm, partWeightG, groupProductsByKind, productById } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON, pdfPreviewSrc, pageOptionsHtml } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 import { requiredFileIssue } from "../lib/file-issues.js";
@@ -48,8 +48,8 @@ function innerSleeveSpec(){
 // uploaded file itself (e.g. an ICC profile's description tag) — built
 // as DOM nodes via textContent, never innerHTML, so a crafted file
 // can't inject markup/script into this page.
-function renderInnerSleeveChecklist(tableEl, parsed, kind, targetMm, trimMm, printCheck){
-  const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode());
+function renderInnerSleeveChecklist(tableEl, parsed, kind, targetMm, trimMm, printCheck, page){
+  const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode(), page);
   tableEl.innerHTML = "<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead>";
   const tbody = document.createElement("tbody");
   for(const row of rows){
@@ -76,7 +76,8 @@ function createInnerSleeveArtworkSlot(onStateChange){
   const state = {
     file: null, originalFileName: null, storedFileName: null,
     pending: false, rows: [], error: null, revision: 0,
-    url: null, previewFile: null, previewUrl: null
+    url: null, previewFile: null, previewUrl: null,
+    page: 1, pageCount: 1, parsed: null, kind: null
   };
 
   // No-op when there's no dataMm to size against — either nothing is
@@ -132,7 +133,40 @@ function createInnerSleeveArtworkSlot(onStateChange){
   // applyInnerSleeveSlotFile passes the name recorded before renaming, on
   // a project reload, so renderInnerSleeveFileMeta can show it as the
   // "was:" line.
-  async function handleFile(f, origName = f.name){
+  const pageWrap = document.getElementById("innersleevepagewrap");
+  const pageSelect = document.getElementById("innersleevepage");
+
+  // Checklist, preview and page picker for the attached file and its
+  // chosen page; rerun when the page changes.
+  function renderArtwork(){
+    const { dataMm, trimMm } = innerSleeveSpec();
+    const printCheck = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck;
+    state.rows = renderInnerSleeveChecklist(warningsList, state.parsed, state.kind, dataMm, trimMm, printCheck, state.page);
+    const {kind, parsed} = state;
+    if(kind === "pdf"){
+      // Fills via CSS (.label-preview iframe{width/height:100%}) — see
+      // cover.js's identical comment on Safari's PDF viewer margin.
+      preview.innerHTML = `<iframe src="${pdfPreviewSrc(state.url, state.page)}"></iframe>`;
+    } else if(kind === "jpeg"){
+      preview.innerHTML = `<img src="${state.url}" alt="artwork">`;
+    } else if(kind === "tiff"){
+      const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
+      preview.innerHTML = `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`;
+    } else{
+      preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
+    }
+    pageWrap.classList.toggle("hidden", state.pageCount < 2);
+    pageSelect.innerHTML = pageOptionsHtml(state.pageCount, state.page);
+    document.getElementById("innersleevepagecount").textContent = `of ${state.pageCount}`;
+  }
+
+  pageSelect.addEventListener("change", ()=>{
+    state.page = Number(pageSelect.value);
+    renderArtwork();
+    onStateChange();
+  });
+
+  async function handleFile(f, origName = f.name, page = 1){
     const revision = ++state.revision;
     meta.classList.remove("empty");
     renderInnerSleeveFileMeta(f.name, origName, "checking…");
@@ -141,7 +175,8 @@ function createInnerSleeveArtworkSlot(onStateChange){
     Object.assign(state, {
       file: f, originalFileName: origName, storedFileName: null,
       pending: true, rows: [], error: null,
-      url: null, previewFile: null, previewUrl: null
+      url: null, previewFile: null, previewUrl: null,
+      page: 1, pageCount: 1, parsed: null, kind: null
     });
     onStateChange();
 
@@ -156,25 +191,14 @@ function createInnerSleeveArtworkSlot(onStateChange){
       else if(kind === "tiff") parsed = parseTiffArtwork(buf);
       if(state.revision !== revision || state.file !== f) return false;
 
-      const { dataMm, trimMm } = innerSleeveSpec();
-      const printCheck = getFormat(CONFIG, innerSleeveCurrentFormat()).printCheck;
-      state.rows = renderInnerSleeveChecklist(warningsList, parsed, kind, dataMm, trimMm, printCheck);
+      state.parsed = parsed;
+      state.kind = kind;
+      state.pageCount = (parsed && parsed.pageCount) || 1;
+      state.page = Math.min(page, state.pageCount);
+      state.url = URL.createObjectURL(f);
+      renderArtwork();
       state.pending = false;
       state.error = null;
-
-      state.url = URL.createObjectURL(f);
-      if(kind === "pdf"){
-        // Fills via CSS (.label-preview iframe{width/height:100%}) — see
-        // cover.js's identical comment on Safari's PDF viewer margin.
-        preview.innerHTML = `<iframe src="${state.url}#toolbar=0&navpanes=0"></iframe>`;
-      } else if(kind === "jpeg"){
-        preview.innerHTML = `<img src="${state.url}" alt="artwork">`;
-      } else if(kind === "tiff"){
-        const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
-        preview.innerHTML = `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`;
-      } else{
-        preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
-      }
       renderInnerSleeveFileMeta(f.name, origName, null);
     } catch(error){
       if(state.revision !== revision || state.file !== f) return false;
@@ -201,13 +225,15 @@ function createInnerSleeveArtworkSlot(onStateChange){
     Object.assign(state, {
       file: null, originalFileName: null, storedFileName: null,
       pending: false, rows: [], error: null,
-      url: null, previewFile: null, previewUrl: null
+      url: null, previewFile: null, previewUrl: null,
+      page: 1, pageCount: 1, parsed: null, kind: null
     });
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
     preview.innerHTML = `<div class="label-placeholder">no artwork selected</div>`;
     warningsList.innerHTML = "";
+    pageWrap.classList.add("hidden");
   }
 
   document.getElementById("innersleevepick").addEventListener("click", ()=> input.click());
@@ -220,7 +246,7 @@ function createInnerSleeveArtworkSlot(onStateChange){
   return {
     updateSizing, clear, getFile: ()=> state.file, getOriginalFileName: ()=> state.originalFileName,
     setFile: handleFile, setPreviewImage: showPreviewImage, getPreviewFile: ()=> state.previewFile,
-    getState: ()=> state
+    getState: ()=> state, getPage: ()=> state.page
   };
 }
 
@@ -357,10 +383,10 @@ function setInnerSleeveFileNamePlaceholder(name, originalName){
   }
 }
 
-async function applyInnerSleeveSlotFile(fileName, originalFileName, fileMap){
+async function applyInnerSleeveSlotFile(fileName, originalFileName, fileMap, page){
   const file = fileMap && fileName && fileMap.get(fileName);
   if(file){
-    const current = await innerSleeveSlot.setFile(file, originalFileName || fileName);
+    const current = await innerSleeveSlot.setFile(file, originalFileName || fileName, page || 1);
     if(current){
       const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"innersleeve"});
       const previewImg = fileMap && fileMap.get(previewName);
@@ -380,7 +406,8 @@ export function collectInnerSleeve(){
   return {
     productId: product ? product.id : null,
     fileName: (printed && file) ? innerSleeveSlotFileName(file) : null,
-    originalFileName: (printed && file) ? innerSleeveSlot.getOriginalFileName() : null
+    originalFileName: (printed && file) ? innerSleeveSlot.getOriginalFileName() : null,
+    page: (printed && file) ? innerSleeveSlot.getPage() : 1
   };
 }
 
@@ -390,7 +417,7 @@ export async function applyInnerSleeve(data, fileMap){
   const match = productById(products, is.productId);
   const fallback = products.find(p => p.default) || products[0];
   document.getElementById("innersleeveProduct").value = (match || fallback).id;
-  await applyInnerSleeveSlotFile(is.fileName, is.originalFileName, fileMap);
+  await applyInnerSleeveSlotFile(is.fileName, is.originalFileName, fileMap, is.page);
   updateInnerSleeveMode();
   innerSleeveSlot.updateSizing();
   renderInnerSleeveSpecs();
