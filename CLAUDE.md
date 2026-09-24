@@ -110,40 +110,19 @@ configured on purpose — keep it that way unless asked.
 
 ## Architecture
 
-- `src/index.html` — page shell, loads `src/app.js` as an ES module.
-- `src/app.js` — DOM wiring / UI logic for the current module in view.
-- `src/config.js` — the `CONFIG` object; every plant-specific value.
-  `CONFIG.plant` (imprint/transfer) is imported from the example
-  template — see below.
-- `src/plant.config.local.example.js` — the committed sample plant
-  identity (`PLANT_CONFIG`: imprint + transfer), and the template to
-  copy to create a real one.
-- `src/plant.config.local.js` (gitignored, not committed) — a real
-  plant's actual identity data, bundled by `build/build.js` instead of
-  the example when present; without it (e.g. the public GitHub Pages
-  build, which never sees a gitignored file) the sample ships instead.
-  Copy `src/plant.config.local.example.js` to create it.
-- `src/lib/*.js` — mostly pure, DOM-free functions: time parsing/formatting,
-  the ZIP writer, WAV/AIFF header parsing, playing-time thresholds,
-  print-artwork checks (PDF/JPEG/TIFF header parsing), the dimension-true
-  PDF writer and part templates, project validation, order documents,
-  config validation, package/file naming, shipping, vinyl colour. Two
-  exceptions aren't pure: `debug-mode.js` reads `location`, and the
-  File/Blob/`<audio>` half of `audio-duration.js` is browser-only — the
-  header parsers beside it, and everything else here, are unit-testable
-  without a browser.
-- `src/modules/*.js` — one file per artifact type (tracklist, labels,
-  cover, inner-sleeve, inlay, vinyl-color, shipping-billing). Each module owns its own
-  DOM template and reads/writes fields on the shared release object; it
-  should not reach into another module's DOM. `tracklist.js` owns the
-  project JSON save/load and the zip package — other modules expose a
-  `collect*`/`apply*` pair for it to call.
-- `tests/*.test.js` — mirrors `src/lib/`. New pure logic needs a test.
-- `build/build.js` — concatenates `src/lib` + `src/modules` + `src/app.js`
-  into `src/index.html`'s `<script type="module">`, inlines CSS, and
-  writes the result to `dist/index.html`. No external tools. Aborts when
-  `CI` is set and a real `src/plant.config.local.js` is present, so a
-  plant's identity can never be baked into a public build.
+- `src/lib/*.js` — pure, DOM-free, unit-testable without a browser.
+  Exceptions: `debug-mode.js` reads `location`, and the
+  File/Blob/`<audio>` half of `audio-duration.js` is browser-only.
+- `src/modules/*.js` — one file per artifact type. Each module owns its
+  DOM template and must not reach into another module's DOM.
+  `tracklist.js` owns project save/load and the zip package — other
+  modules expose a `collect*`/`apply*` pair for it to call.
+- `tests/*.test.js` mirrors `src/lib/`. New pure logic needs a test.
+- `src/plant.config.local.js` (gitignored, copied from the committed
+  sample `src/plant.config.local.example.js`) holds a real plant's
+  identity; `build/build.js` bundles it instead of the sample when
+  present, and aborts when `CI` is set and it exists, so a plant's
+  identity never reaches a public build.
 
 ## Domain glossary (so you don't have to ask)
 
