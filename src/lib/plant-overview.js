@@ -3,10 +3,11 @@
 // page (src/plant/app.js) only assigns the string to innerHTML, so every
 // project value goes through escapeHtml here.
 
-import { formatTime } from "./time.js";
+import { formatTime, parseTime } from "./time.js";
 import { getFormat, productById } from "./format-catalogue.js";
 import { colorLabel } from "./vinyl-color.js";
 import { sideTiming, ADDRESS_FIELD_LABELS } from "./completeness.js";
+import { sideAudio } from "./audio-checks.js";
 
 export function escapeHtml(value){
   return String(value ?? "").replace(/[&<>"']/g, c =>
@@ -76,9 +77,78 @@ export function renderHeader(zipName, project){
     + `<p class="title">${escapeHtml(project.catalogue || "(no catalogue #)")} — ${escapeHtml(project.albumTitle || "(no title)")} — ${escapeHtml(project.albumArtist || "(no artist)")}</p>`;
 }
 
+function findingsHtml(findings){
+  return `<ul class="gaps">${findings.map(f => `<li><b>${escapeHtml(f.group)}</b> ${escapeHtml(f.text)}</li>`).join("")}</ul>`;
+}
+
 export function renderGaps(gaps){
   if(!gaps.length) return '<p class="complete">Complete — ready for checks</p>';
-  return `<ul class="gaps">${gaps.map(g => `<li><b>${escapeHtml(g.group)}</b> ${escapeHtml(g.text)}</li>`).join("")}</ul>`;
+  return findingsHtml(gaps);
+}
+
+// A line at `seconds` on a waveform `duration` long; kind "file" for
+// the file's own markers, "form" for the tracklist's track starts.
+function markHtml(seconds, duration, label, kind){
+  const left = Math.min(100, seconds / duration * 100).toFixed(3);
+  return `<i class="mark ${kind}" style="left:${left}%" title="${escapeHtml(formatTime(seconds))} ${escapeHtml(label)}">`
+    + `<span>${escapeHtml(label)}</span></i>`;
+}
+
+// Where the form puts each track after the first on a continuous side:
+// the sum of the lengths before it. No gaps — on a continuous side the
+// pauses are part of the file, the form disables the gap fields.
+function formTrackStarts(side, sideId){
+  const starts = [];
+  let at = 0;
+  side.tracks.forEach((track, i) => {
+    if(i) starts.push([at, `${sideId}${i + 1}`]);
+    at += parseTime(track.length) || 0;
+  });
+  return starts;
+}
+
+function audioFileHtml(file, name, label, formStarts, base){
+  return `<div class="audio-file"><p><b>${escapeHtml(label)}</b> <span class="ident">${escapeHtml(name)}</span></p>`
+    + audioFactsHtml(file, formStarts, base) + "</div>";
+}
+
+function audioFactsHtml(file, formStarts, base){
+  if(!file) return "";
+  if(file.error) return `<p class="missing">${escapeHtml(file.error)}</p>`;
+  const khz = file.sampleRate ? `${file.sampleRate / 1000} kHz` : "";
+  const facts = rows([
+    ["Format", escapeHtml([file.codec, khz, file.bitsPerSample && `${file.bitsPerSample} bit`,
+      file.channels && `${file.channels} ch`].filter(Boolean).join(", "))],
+    ["Duration", escapeHtml(formatTime(file.duration))],
+    ["Software", escapeHtml(file.software.join(" · "))],
+    ["Title", escapeHtml(file.title)],
+    ["Artist", escapeHtml(file.artist)],
+    ["Comment", escapeHtml(file.comment)]
+  ]);
+  if(!file.preview || !(file.duration > 0)) return facts;
+  const marks = file.markers.map(m => markHtml(m.seconds, file.duration, m.label, "file"))
+    .concat(formStarts.map(([seconds, pos]) => markHtml(seconds, file.duration, pos, "form")));
+  return facts
+    + `<p><button type="button" class="play">play</button></p>`
+    + `<div class="wave" data-src="${escapeHtml(base + encodeURIComponent(file.preview))}" data-duration="${file.duration}">`
+    + `<img src="${escapeHtml(base + encodeURIComponent(file.waveform))}" alt=""><div class="played"></div>${marks.join("")}</div>`;
+}
+
+// Audio facts, findings and prelisten per side. base: URL folder of the
+// check output (previews), e.g. "/work/<stem>.checks/".
+export function renderAudio(project, facts, findings, base){
+  let body = findings.length ? findingsHtml(findings) : '<p class="complete">No audio findings</p>';
+  if(!facts.error){
+    for(const sideId of ["A", "B"]){
+      const side = project.sides[sideId];
+      const audio = sideAudio(side, sideId);
+      if(!audio.length) continue;
+      const formStarts = side.continuous ? formTrackStarts(side, sideId) : [];
+      body += `<h3>Side ${sideId}</h3>`
+        + audio.map(({name, label}) => audioFileHtml(facts.files[name], name, label, formStarts, base)).join("");
+    }
+  }
+  return group("Audio", body);
 }
 
 export function renderOverview(project, config, files){

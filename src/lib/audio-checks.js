@@ -8,11 +8,15 @@ import { audioSpecWarning } from "./audio-duration.js";
 // Form lengths are whole seconds (m:ss), so allow the rounding and a bit.
 const LENGTH_TOLERANCE = 1;
 
-// The audio files a side references, each with the form length to match.
-export function sideAudio(side){
+// The audio files a side references, each with its position label and
+// the form length to match.
+export function sideAudio(side, sideId){
   if(side.blank) return [];
-  if(side.continuous) return side.continuousFileName ? [{name: side.continuousFileName, length: side.continuousLength}] : [];
-  return side.tracks.filter(track => track.fileName).map(track => ({name: track.fileName, length: track.length}));
+  if(side.continuous){
+    return side.continuousFileName ? [{name: side.continuousFileName, label: "Side file", length: side.continuousLength}] : [];
+  }
+  return side.tracks.map((track, i) => ({name: track.fileName, label: `${sideId}${i + 1}`, length: track.length}))
+    .filter(file => file.name);
 }
 
 export function audioFindings(project, facts, config){
@@ -28,7 +32,7 @@ export function audioFindings(project, facts, config){
     const side = project.sides[sideId];
     const group = `Side ${sideId}`;
     const rates = new Set(), bits = new Set();
-    for(const {name, length} of sideAudio(side)){
+    for(const {name, length} of sideAudio(side, sideId)){
       referenced.add(name);
       const file = facts.files[name];
       if(!file) continue; // a missing file is already a completeness gap

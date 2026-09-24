@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
 import { prepareProject } from "../src/lib/project.js";
-import { renderOverview, renderGaps, renderHeader, escapeHtml } from "../src/lib/plant-overview.js";
+import { renderOverview, renderGaps, renderHeader, renderAudio, escapeHtml } from "../src/lib/plant-overview.js";
 
 const project = prepareProject({
   projectVersion:1, format:"12", catalogue:"PNKRCK007", albumTitle:"<b>Loud</b>", albumArtist:"Band",
@@ -46,4 +46,41 @@ test("gaps list and header", () => {
     '<ul class="gaps"><li><b>Release</b> no &lt;x&gt;</li></ul>');
   assert.ok(renderHeader("260924_X.zip", project).includes("260924_X.zip"));
   assert.equal(escapeHtml(`a&"'`), "a&amp;&quot;&#39;");
+});
+
+function wavFacts(duration, more = {}){
+  return {codec:"pcm_s24le", sampleRate:44100, bitsPerSample:24, channels:2, duration,
+    software:["WaveLab 11"], title:"", artist:"", comment:"", markers:[],
+    preview:"A1 x.wav.mp3", waveform:"A1 x.wav.png", ...more};
+}
+
+test("audio: facts, findings and a waveform per file", () => {
+  const facts = {files:{"A1.wav": wavFacts(180, {title:"<One>"}), "A2.wav": {error:"Invalid data"}}};
+  const html = renderAudio(project, facts, [{group:"Side A", text:"A1.wav is 3:02"}], "/work/p.checks/");
+  assert.ok(html.startsWith("<section><h2>Audio"));
+  assert.ok(html.includes("<b>Side A</b> A1.wav is 3:02"));
+  assert.ok(html.includes("pcm_s24le, 44.1 kHz, 24 bit, 2 ch"));
+  assert.ok(html.includes("<dd>WaveLab 11</dd>"));
+  assert.ok(html.includes("&lt;One&gt;"));
+  assert.ok(html.includes('data-src="/work/p.checks/A1%20x.wav.mp3" data-duration="180"'));
+  assert.ok(html.includes('<img src="/work/p.checks/A1%20x.wav.png"'));
+  assert.match(html, /<b>A2<\/b>.*Invalid data/);
+});
+
+test("audio: continuous side shows file markers and the form's track starts", () => {
+  // gap "2" is ignored: a continuous side's pauses are in the file
+  const side = prepareProject({format:"12", sides:{A:{rpm:"33", continuous:true, continuousFileName:"A.wav",
+    tracks:[{title:"One", length:"1:00"}, {title:"Two", length:"1:00", gap:"2"}]}, B:{blank:true}}}, CONFIG);
+  const facts = {files:{"A.wav": wavFacts(200, {markers:[{seconds:50, label:"Two"}]})}};
+  const html = renderAudio(side, facts, [], "/work/p.checks/");
+  assert.ok(html.includes("No audio findings"));
+  assert.ok(html.includes("<b>Side file</b>"));
+  assert.ok(html.includes('class="mark file" style="left:25.000%"'));
+  assert.ok(html.includes('class="mark form" style="left:30.000%" title="1:00 A2"'));
+});
+
+test("audio: needs ffmpeg shows only the finding", () => {
+  const html = renderAudio(project, {error:"needs ffmpeg"}, [{group:"Audio", text:"needs ffmpeg"}], "/w/");
+  assert.ok(html.includes("needs ffmpeg"));
+  assert.ok(!html.includes("<h3>"));
 });
