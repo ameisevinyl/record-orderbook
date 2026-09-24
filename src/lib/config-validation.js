@@ -68,12 +68,12 @@ function validateTimeLimits(value, path){
   const limits = object(value, path);
   for(const mode of ["normal", "soundsystem"]){
     const cut = object(limits[mode], `${path}.${mode}`);
-    const ideal = object(cut.ideal, `${path}.${mode}.ideal`);
+    const recommended = object(cut.recommended, `${path}.${mode}.recommended`);
     const max = object(cut.max, `${path}.${mode}.max`);
     for(const rpm of [33, 45]){
-      number(ideal[rpm], `${path}.${mode}.ideal.${rpm}`);
+      number(recommended[rpm], `${path}.${mode}.recommended.${rpm}`);
       number(max[rpm], `${path}.${mode}.max.${rpm}`);
-      if(ideal[rpm] > max[rpm]) fail(`${path}.${mode}`, `ideal must not exceed max at ${rpm} RPM`);
+      if(recommended[rpm] > max[rpm]) fail(`${path}.${mode}`, `recommended must not exceed max at ${rpm} RPM`);
     }
   }
 }
@@ -189,6 +189,9 @@ export function validateConfig(config){
     if(typeof format.enabled !== "boolean") fail(`${path}.enabled`, "must be a boolean");
     if(format.enabled) enabled++;
     if(format.rpm !== 33 && format.rpm !== 45) fail(`${path}.rpm`, "must be 33 or 45");
+    if(format.recommendedRpm !== undefined && format.recommendedRpm !== 33 && format.recommendedRpm !== 45){
+      fail(`${path}.recommendedRpm`, "must be 33 or 45");
+    }
     const centerHole = object(format.centerHole, `${path}.centerHole`);
     number(centerHole.normal, `${path}.centerHole.normal`);
     if(centerHole.big !== undefined) number(centerHole.big, `${path}.centerHole.big`);

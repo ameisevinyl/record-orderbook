@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildSpecsHtml } from "../src/lib/specs-document.js";
+import { PLAYING_TIME_NOTE } from "../src/lib/playing-time.js";
 
 const config = {
   plant: { imprint: { recipientName: "Test & <Plant>" } },
@@ -17,8 +18,8 @@ const config = {
       id: "12", label: '12" LP', enabled: true, rpm: 33, recordWeightG: 140,
       centerHole: { normal: 7.4 },
       timeLimits: {
-        normal:      { ideal:{45:12,  33:20}, max:{45:15,  33:27} },
-        soundsystem: { ideal:{45:10,  33:15}, max:{45:10,  33:16} }
+        normal:      { recommended:{45:12,  33:20}, max:{45:15,  33:27} },
+        soundsystem: { recommended:{45:10,  33:15}, max:{45:10,  33:16} }
       },
       printCheck: {
         dpi: { min: 300, max: 1200 },
@@ -45,8 +46,8 @@ const config = {
       id: "10", label: '10" EP', enabled: false, rpm: 33, recordWeightG: 100,
       centerHole: { normal: 7.4 },
       timeLimits: {
-        normal:      { ideal:{45:8,  33:12}, max:{45:8,  33:14} },
-        soundsystem: { ideal:{45:4.5, 33:7}, max:{45:6, 33:9} }
+        normal:      { recommended:{45:8,  33:12}, max:{45:8,  33:14} },
+        soundsystem: { recommended:{45:4.5, 33:7}, max:{45:6, 33:9} }
       },
       printCheck: {
         dpi: { min: 300, max: 1200 },
@@ -139,4 +140,18 @@ test("buildSpecsHtml escapes the plant name (HTML-unsafe characters)", () => {
   const html = buildSpecsHtml(config);
   assert.match(html, /Test &amp; &lt;Plant&gt;/);
   assert.doesNotMatch(html, /Test & <Plant>/);
+});
+
+test("buildSpecsHtml shows playing times as recommended / max with the guide note", () => {
+  const html = buildSpecsHtml(config);
+  assert.ok(html.includes("normal, 33 RPM"));
+  assert.ok(html.includes("below 20 min / 27 min"));
+  assert.ok(html.includes(PLAYING_TIME_NOTE));
+  assert.ok(!html.includes("ideal"));
+});
+
+test("buildSpecsHtml shows a format's recommended speed", () => {
+  const withRpm = {...config, formats: config.formats.map(f => ({...f, recommendedRpm: 45}))};
+  assert.ok(buildSpecsHtml(withRpm).includes("45 RPM strongly recommended"));
+  assert.ok(!buildSpecsHtml(config).includes("strongly recommended"));
 });

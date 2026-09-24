@@ -23,10 +23,13 @@ test("validates format RPM, time limits, and center holes", () => {
   const rpm = copy();
   rpm.formats[0].rpm = 78;
   assert.throws(() => validateConfig(rpm), /rpm must be 33 or 45/);
+  const recommendedRpm = copy();
+  recommendedRpm.formats[0].recommendedRpm = 78;
+  assert.throws(() => validateConfig(recommendedRpm), /recommendedRpm must be 33 or 45/);
 
   const limits = copy();
-  limits.formats[0].timeLimits.normal.ideal[33] = 30;
-  assert.throws(() => validateConfig(limits), /ideal must not exceed max at 33 RPM/);
+  limits.formats[0].timeLimits.normal.recommended[33] = 30;
+  assert.throws(() => validateConfig(limits), /recommended must not exceed max at 33 RPM/);
 
   const hole = copy();
   hole.formats[0].centerHole.normal = 0;

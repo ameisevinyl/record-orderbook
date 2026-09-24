@@ -8,6 +8,7 @@ import { enabledFormats, labelDataSizeMm, flatDataMm, partWeightG } from "./form
 import { labelLayoutSvg, printedPartLayoutSvg } from "./layout-preview.js";
 import { labelTemplatePdf, partTemplatePdf, templateFileName } from "./part-template.js";
 import { bytesToBase64 } from "./pdf.js";
+import { timeLimitRows, rpmRecommendation, PLAYING_TIME_NOTE } from "./playing-time.js";
 
 function esc(str){
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -72,15 +73,11 @@ function productTable(title, products, partKey, formatId){
 }
 
 function timeLimitsTable(format){
-  const cutRow = (key, label) => {
-    const t = format.timeLimits[key];
-    return `<tr><td>${esc(label)}</td><td>${t.ideal[33]}min</td><td>${t.max[33]}min</td><td>${t.ideal[45]}min</td><td>${t.max[45]}min</td></tr>`;
-  };
-  return `<h3>Playing time limits</h3>
-    <table>
-      <thead><tr><th>Cut</th><th>33⅓ ideal</th><th>33⅓ max</th><th>45 ideal</th><th>45 max</th></tr></thead>
-      <tbody>${cutRow("normal","normal")}${cutRow("soundsystem","soundsystem")}</tbody>
-    </table>`;
+  const advice = rpmRecommendation(format);
+  return `<h3>Playing time per side</h3>
+    ${kvTable([["", "recommended / max"], ...timeLimitRows(format.timeLimits).map(row => [row.label, row.text])])}
+    <p>${esc(PLAYING_TIME_NOTE)}</p>
+    ${advice ? `<p><strong>${esc(advice)}</strong></p>` : ""}`;
 }
 
 function printFilesTable(format, artworkFileTypes, printSpec){

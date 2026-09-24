@@ -57,14 +57,15 @@ export const CONFIG = {
       // Spindle hole, in mm. "big" (jukebox-style 45s) is omitted for
       // formats that don't offer it.
       centerHole: { normal: 7.4 },
-      // Recommended playing time in minutes, per cut type and RPM.
-      // "ideal" — comfortably safe cutting level, no warning shown
-      // "max"   — hard ceiling; exceeding this shows a red warning
+      // Playing time per side in minutes, per cut type and RPM.
+      // "recommended" — stay below this for a full cutting level; above
+      //                 it the customer sees a warning
+      // "max"         — absolute ceiling; exceeding it shows a red warning
       // "normal"      — standard release
       // "soundsystem" — shorter, hotter cut (club/soundsystem pressings)
       timeLimits: {
-        normal:      { ideal:{45:12,  33:20}, max:{45:15,  33:27} },
-        soundsystem: { ideal:{45:10,  33:15}, max:{45:10,  33:16} }
+        normal:      { recommended:{45:12,  33:20}, max:{45:15,  33:27} },
+        soundsystem: { recommended:{45:10,  33:15}, max:{45:10,  33:16} }
       },
       // Bare vinyl disc only, no packaging — a reasonable default for
       // standard-weight pressing (industry figures for 180g "heavyweight"
@@ -205,8 +206,8 @@ export const CONFIG = {
       rpm: 33,
       centerHole: { normal: 7.4 },
       timeLimits: {
-        normal:      { ideal:{45:8,   33:12}, max:{45:8,   33:14} },
-        soundsystem: { ideal:{45:4.5, 33:7},  max:{45:6,   33:9} }
+        normal:      { recommended:{45:8,   33:12}, max:{45:8,   33:14} },
+        soundsystem: { recommended:{45:4.5, 33:7},  max:{45:6,   33:9} }
       },
       recordWeightG: 100,
       printCheck: {
@@ -274,10 +275,13 @@ export const CONFIG = {
       label: '7" SP',
       enabled: true,
       rpm: 45,
+      // Optional: a speed this format strongly recommends — shown in the
+      // specs, and warned about when a side is set to the other speed.
+      recommendedRpm: 45,
       centerHole: { normal: 7.4, big: 38 },
       timeLimits: {
-        normal:      { ideal:{45:4.5, 33:6.5}, max:{45:6.0, 33:8.0} },
-        soundsystem: { ideal:{45:3.5, 33:5.0}, max:{45:4.5, 33:6.0} }
+        normal:      { recommended:{45:4.5, 33:6.5}, max:{45:6.0, 33:8.0} },
+        soundsystem: { recommended:{45:3.5, 33:5.0}, max:{45:4.5, 33:6.0} }
       },
       recordWeightG: 40,
       printCheck: {
