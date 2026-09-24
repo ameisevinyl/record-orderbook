@@ -25,7 +25,7 @@ test("labelTemplatePdf dots the trim and both center holes and prints the specs 
   assert.doesNotMatch(pdf, /(^|\s)rg(\s|$)|\bRG\b/);
   assert.match(pdf, /\(data 106x106mm, bleed 3mm\) Tj/);
   assert.match(pdf, /\(end format ø100mm\) Tj/);
-  assert.match(pdf, /\(small center ø7\.4mm\) Tj/);
+  assert.match(pdf, /\(standard center ø7\.4mm\) Tj/);
   assert.match(pdf, /\(big center ø38mm\) Tj/);
   assert.match(pdf, /\/F1 11 Tf/);
   assert.equal((pdf.match(/ h S/g) || []).length, 3); // trim + normal + big circles
@@ -36,7 +36,7 @@ test("labelTemplatePdf omits the big hole for formats without one", () => {
     format:{ id:"10", centerHole:{ normal:7.4 } },
     label:{ diameterMm:100, bleedMm:3 }
   }));
-  assert.match(pdf, /\(small center ø7\.4mm\) Tj/);
+  assert.match(pdf, /\(standard center ø7\.4mm\) Tj/);
   assert.doesNotMatch(pdf, /big/);
   assert.equal((pdf.match(/ h S/g) || []).length, 2); // trim + normal circles
 });

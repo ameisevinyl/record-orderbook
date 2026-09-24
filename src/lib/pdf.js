@@ -64,7 +64,6 @@ export function buildPdf({ title, producer = "record-orderbook", pages }){
     const contentId = add(streamObject(page.content));
     const boxes = [
       `/MediaBox [0 0 ${fmt(widthPt)} ${fmt(heightPt)}]`,
-      `/CropBox [0 0 ${fmt(widthPt)} ${fmt(heightPt)}]`,
       `/BleedBox [0 0 ${fmt(widthPt)} ${fmt(heightPt)}]`
     ];
     if(page.trimBoxPt) boxes.push(`/TrimBox [${page.trimBoxPt.map(fmt).join(" ")}]`);

@@ -96,7 +96,8 @@ function printFilesTable(format, artworkFileTypes, printSpec){
 }
 
 function centerHoleLabel(centerHole){
-  return Object.entries(centerHole).map(([kind, mm]) => `${kind} ${mm}mm`).join(" · ");
+  const names = { normal:"standard", big:"big" };
+  return Object.entries(centerHole).map(([kind, mm]) => `${names[kind] || kind} ${mm}mm`).join(" · ");
 }
 
 function formatSection(format, artworkFileTypes, printSpec){

@@ -123,10 +123,10 @@ export function labelTemplatePdf({ format, label }){
   const c = contentBuilder(dataMm.w, dataMm.h);
   const cx = dataMm.w / 2, cy = dataMm.h / 2;
 
-  c.cutInk(); c.foldWidth(); c.solid();
+  c.cutInk(); c.cutWidth(); c.solid();
   drawCornerMarks(c, dataMm.w, dataMm.h, bleedMm);
 
-  c.cutWidth(); c.dash(...CUT_DASH);
+  c.dash(...CUT_DASH);
   c.circle(cx, cy, diameterMm / 2);
   c.circle(cx, cy, normal / 2);
   if(big) c.circle(cx, cy, big / 2);
@@ -134,12 +134,13 @@ export function labelTemplatePdf({ format, label }){
 
   // Short lines stacked under the center hole instead of one long line,
   // so the text stays inside the round trim at 11pt. Both center-hole
-  // variants are listed where the format offers them.
+  // variants are listed where the format offers them. "ø" (U+00F8) not
+  // the ⌀ diameter sign: Helvetica/WinAnsiEncoding can't encode U+2300.
   const holeR = Math.max(normal, big || 0) / 2;
   const y = cy + holeR + 4;
   c.textCentered(cx, y, `data ${dataMm.w}x${dataMm.h}mm, bleed ${bleedMm}mm`);
   c.textCentered(cx, y + LINE_HEIGHT_MM, `end format ø${diameterMm}mm`);
-  c.textCentered(cx, y + LINE_HEIGHT_MM * 2, `small center ø${normal}mm`);
+  c.textCentered(cx, y + LINE_HEIGHT_MM * 2, `standard center ø${normal}mm`);
   if(big) c.textCentered(cx, y + LINE_HEIGHT_MM * 3, `big center ø${big}mm`);
 
   return buildPdf({
@@ -183,10 +184,10 @@ export function partTemplatePdf({ formatId, part }){
   const { dataMm, trimMm, bleedMm, folds, trimOutline, cutout } = partGeometry(part);
   const c = contentBuilder(dataMm.w, dataMm.h);
 
-  c.cutInk(); c.foldWidth(); c.solid();
+  c.cutInk(); c.cutWidth(); c.solid();
   drawCornerMarks(c, dataMm.w, dataMm.h, bleedMm);
 
-  c.cutWidth(); c.dash(...CUT_DASH);
+  c.dash(...CUT_DASH);
   c.polygon(trimOutline);
 
   c.foldInk(); c.foldWidth(); c.dash(...FOLD_DASH);

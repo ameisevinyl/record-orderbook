@@ -39,7 +39,6 @@ test("buildPdf sets page boxes in points and the info title", () => {
   });
   const text = asText(bytes);
   assert.match(text, /\/MediaBox \[0 0 1822\.6772 929\.7638\]/);
-  assert.match(text, /\/CropBox \[0 0 1822\.6772 929\.7638\]/);
   assert.match(text, /\/BleedBox \[0 0 1822\.6772 929\.7638\]/);
   assert.match(text, /\/TrimBox \[5 5 638 323\]/);
   assert.match(text, /\/Title \(Cover template\)/);

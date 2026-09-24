@@ -81,7 +81,7 @@ test("buildSpecsHtml includes the print-file specs", () => {
   assert.match(html, /CMYK/);
   assert.match(html, /ISO ECI v2 300/);
   assert.match(html, /300–1200 dpi/);
-  assert.match(html, /normal 7\.4mm/);
+  assert.match(html, /standard 7\.4mm/);
 });
 
 test("buildSpecsHtml puts the print-file specs above the label section", () => {
