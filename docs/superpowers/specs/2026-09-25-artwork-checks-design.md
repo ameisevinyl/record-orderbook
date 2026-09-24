@@ -33,15 +33,15 @@ Python measures, JS judges.
 
 - **Page → server.** `POST /api/check` gets a JSON body
   `{artwork: {"<file name>": params}}`. The page derives `params` from
-  the project and `CONFIG` (`artworkParams`, below), so Python never
+  the project and `CONFIG` (`artworkSlots`, below), so Python never
   reads `CONFIG` or `project.json`.
 - **`plant/checks.py`** — `run(project_dir, out_dir, artwork)` returns
   `{files, artwork}`: `files` is the audio facts as before, `artwork`
   the facts per artwork file named in the request. Previews go to
   `plant/work/<stem>.checks/` like the audio previews.
 - **`src/lib/artwork-checks.js`** (new, pure):
-  - `artworkParams(project, config)` → params per referenced artwork
-    file.
+  - `artworkSlots(project, config)` → `[{title, name, params}]` per
+    referenced artwork file, in page order.
   - `artworkRows(facts, params, printCheck)` → checklist rows
     `{feature, severity, detected, expected}`:
     `buildChecklistRows(facts.parsed, facts.kind, params.targetMm,
@@ -52,8 +52,8 @@ Python measures, JS judges.
 - **`src/lib/print-artwork.js`** — one change: `buildChecklistRows`
   uses `parsed.effectiveDpi` when present, instead of deriving it from
   `imagePx` and page size. The browser parsers never set it.
-- **`src/lib/plant-overview.js`** — `renderArtwork(project, facts,
-  rowsByFile, base)`.
+- **`src/lib/plant-overview.js`** — `renderArtwork(slots, facts,
+  printCheck, base)`.
 - **`src/plant/app.js`** — sends the params with the check request,
   renders the Artwork section after Audio.
 
@@ -197,7 +197,7 @@ Plain and dense like the rest of the plant view.
   without the libraries.
 - `plant/test_server.py` — `/api/check` passes the artwork params
   through.
-- `tests/artwork-checks.test.js` — `artworkParams` per part and
+- `tests/artwork-checks.test.js` — `artworkSlots` per part and
   format, each new rule, `effectiveDpi` in `buildChecklistRows`,
   verdicts.
 - `tests/plant-overview.test.js` — `renderArtwork` markup (lines in

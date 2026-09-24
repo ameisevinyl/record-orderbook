@@ -16,9 +16,9 @@ dialog when opening a multi-page PDF.
   front/back): when the attached PDF has more than one page, a picker
   "Page [1 ▾] of N" appears next to the file. Default page 1.
 - **Pairs** — labels A/B, inlay front/back: when a multi-page PDF lands
-  in one slot of the pair and the other slot is empty (for labels: and
-  not whitelabel), a one-click offer "Use page 2 for side B" / "…for
-  back" attaches the same file there with page 2.
+  in the first slot (label A, inlay front) and the second is empty (for
+  labels: and not whitelabel), a one-click offer "Use page 2 for side
+  B" / "…for back" attaches the same file there with page 2.
 - **Preview:** the PDF preview iframe gets `&page=N`. Chrome and
   Firefox jump to the page; Safari's viewer ignores it and stays on
   page 1 (the choice still applies).
