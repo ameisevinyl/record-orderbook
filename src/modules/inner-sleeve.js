@@ -213,6 +213,7 @@ function createInnerSleeveArtworkSlot(onStateChange){
   document.getElementById("innersleevepick").addEventListener("click", ()=> input.click());
   input.addEventListener("change", ()=>{
     const f = input.files[0];
+    input.value = ""; // re-picking the same file must fire change again
     if(f) handleFile(f);
   });
 
@@ -284,6 +285,7 @@ function populateInnerSleeveProducts(){
 // customer receives, unrelated to whether there's an artwork file.
 function renderInnerSleeveSpecs(){
   const part = innerSleeveSpec();
+  if(!part) return; // a config with no inner-sleeve products — nothing to show
   const { finalMm, trimMm, bleedMm, paperGsm, cutoutDiameterMm, dataMm, kind } = part;
   const printed = kind === "printed";
   const hasSize = !!trimMm;

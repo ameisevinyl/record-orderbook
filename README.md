@@ -8,8 +8,8 @@ Currently included, all sharing one release record per catalogue number:
 
 - **Tracklist / Cutting Order Generator** — catalogue number, format/RPM,
   side A/B track listing with per-track audio file duration reading
-  (native `<audio>` + hand-rolled WAV/AIFF header fallback), playing-time
-  warnings, printable order sheet.
+  (hand-rolled WAV/AIFF header parse, native `<audio>` fallback),
+  playing-time warnings, printable order sheet.
 - **Labels** — per-side artwork upload with whitelabel (blank) toggle,
   best-effort physical size/resolution/colour-mode validation.
 - **Cover, inner sleeve, and inlay** — printed/unprinted modes, artwork

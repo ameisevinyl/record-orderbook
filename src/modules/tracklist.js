@@ -48,8 +48,11 @@ function renderFileMeta(el, currentName, originalName, statusText){
 // re-attach path, so both go through the same duration-reading/warning
 // logic. originalFileName defaults to the file's own name (a fresh
 // manual pick); loadProject passes the name recorded before renaming,
-// so renderFileMeta can show it as the "was:" line.
-function attachTrackFile(row, f, originalFileName = f.name){
+// so renderFileMeta can show it as the "was:" line. fillLength is false
+// only on a project reload that already restored a saved, possibly
+// manual, length — the read then only reports the file's duration
+// instead of overwriting the field.
+function attachTrackFile(row, f, originalFileName = f.name, fillLength = true){
   const revision = (row._analysisRevision || 0) + 1;
   row._analysisRevision = revision;
   row._file = f;
@@ -68,8 +71,8 @@ function attachTrackFile(row, f, originalFileName = f.name){
   row._analysisPromise = Promise.all([readAudioDuration(f), readAudioSpec(f)]).then(([dur, spec])=>{
     if(row._analysisRevision !== revision || row._file !== f) return;
     const durText = (isFinite(dur) && dur > 0)
-      ? (()=>{ lengthInput.value = formatTime(dur); recompute();
-               return formatTime(dur) + " (auto)"; })()
+      ? (()=>{ if(fillLength) lengthInput.value = formatTime(dur); recompute();
+               return formatTime(dur) + (fillLength ? " (auto)" : " (from file)"); })()
       : "could not read duration, enter length manually";
     const specWarn = audioSpecWarning(spec, CONFIG.audioSpec);
     const warning = [compressionWarn, specWarn].filter(Boolean).join("  ");
@@ -146,6 +149,9 @@ function createTrackRow(side){
   pickbtn.addEventListener("click", ()=> fileInput.click());
   fileInput.addEventListener("change", ()=>{
     const f = fileInput.files[0];
+    // Clear before the async read so re-picking the same file (e.g.
+    // after re-exporting it) fires "change" again.
+    fileInput.value = "";
     if(f) attachTrackFile(row, f);
   });
 
@@ -296,6 +302,7 @@ function wireSideOptions(side){
   document.getElementById("contpick-"+side).addEventListener("click", ()=> contFileInput.click());
   contFileInput.addEventListener("change", ()=>{
     const f = contFileInput.files[0];
+    contFileInput.value = ""; // re-picking the same file must fire change again
     if(f) attachContinuousFile(side, f);
   });
   contOverride.addEventListener("input", recompute);
@@ -950,7 +957,10 @@ async function loadProject(file){
       r.querySelector(".gap-wrap").classList.toggle("custom", (t.gap||"2")==="custom");
       const trackFile = t.fileName && fileMap.get(t.fileName);
       if(trackFile){
-        attachTrackFile(r, trackFile, t.originalFileName || t.fileName);
+        // A saved length is the source of truth (it may have been typed
+        // by hand); only derive one from the file when the project had
+        // none.
+        attachTrackFile(r, trackFile, t.originalFileName || t.fileName, !String(t.length || "").trim());
       } else if(t.fileName){
         const m = r.querySelector(".filemeta");
         m.classList.remove("empty");

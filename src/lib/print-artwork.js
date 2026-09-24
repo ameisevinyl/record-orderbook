@@ -828,29 +828,3 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
   return rows;
 }
 
-// ---- print-simulation geometry -------------------------------------------
-// Pure geometry only — actual canvas drawing (fillRect/arc/etc.) is DOM
-// work and lives in the module.
-
-// Labels: circular trim + centerhole. canvasSizePx is square, matching
-// the square data size every label format uses.
-export function computePrintSimGeometry(canvasSizePx, dataSizeMm, diameterMm, centerHoleMm){
-  const scale = canvasSizePx / dataSizeMm; // px per mm
-  return {
-    center: canvasSizePx / 2,
-    trimRadiusPx: (diameterMm/2) * scale,
-    centerHoleRadiusPx: (centerHoleMm/2) * scale
-  };
-}
-
-// Covers/sleeves/inlay: a plain rectangular trim inset within the flat
-// data sheet, centered (bleed is assumed even on every edge, which is
-// the standard convention and matches every figure supplied so far —
-// including the 7" cover's asymmetric "box" spine, since trim and data
-// are both given directly rather than derived from a bleed constant).
-export function computeSpreadInsetPx(canvasWidthPx, canvasHeightPx, dataMm, trimMm){
-  return {
-    x: (canvasWidthPx / dataMm.w) * (dataMm.w - trimMm.w) / 2,
-    y: (canvasHeightPx / dataMm.h) * (dataMm.h - trimMm.h) / 2
-  };
-}

@@ -123,9 +123,15 @@ configured on purpose — keep it that way unless asked.
   the example when present; without it (e.g. the public GitHub Pages
   build, which never sees a gitignored file) the sample ships instead.
   Copy `src/plant.config.local.example.js` to create it.
-- `src/lib/*.js` — pure, DOM-free functions: time parsing/formatting, the
-  ZIP writer, WAV/AIFF duration parsing, playing-time threshold logic.
-  Anything here should be unit-testable without a browser.
+- `src/lib/*.js` — mostly pure, DOM-free functions: time parsing/formatting,
+  the ZIP writer, WAV/AIFF header parsing, playing-time thresholds,
+  print-artwork checks (PDF/JPEG/TIFF header parsing), the dimension-true
+  PDF writer and part templates, project validation, order documents,
+  config validation, package/file naming, shipping, vinyl colour. Two
+  exceptions aren't pure: `debug-mode.js` reads `location`, and the
+  File/Blob/`<audio>` half of `audio-duration.js` is browser-only — the
+  header parsers beside it, and everything else here, are unit-testable
+  without a browser.
 - `src/modules/*.js` — one file per artifact type (tracklist, labels,
   cover, inner-sleeve, inlay, vinyl-color, shipping-billing). Each module owns its own
   DOM template and reads/writes fields on the shared release object; it

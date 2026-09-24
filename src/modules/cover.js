@@ -224,6 +224,7 @@ function createCoverArtworkSlot(onStateChange){
   document.getElementById("coverpick").addEventListener("click", ()=> input.click());
   input.addEventListener("change", ()=>{
     const f = input.files[0];
+    input.value = ""; // re-picking the same file must fire change again
     if(f) handleFile(f);
   });
 

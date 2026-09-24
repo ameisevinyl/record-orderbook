@@ -272,8 +272,3 @@ export const COUNTRIES = [
   ["ZW", "Zimbabwe"],
 ];
 
-export function countryName(code){
-  const c = String(code || "").trim().toUpperCase();
-  const hit = COUNTRIES.find(([cc]) => cc === c);
-  return hit ? hit[1] : null;
-}

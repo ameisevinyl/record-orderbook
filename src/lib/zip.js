@@ -339,7 +339,3 @@ export async function parseZipBytes(input){
   return files;
 }
 
-// Browser convenience wrapper -- same output, takes a File/Blob.
-export async function parseZip(blob){
-  return parseZipBytes(new Uint8Array(await blob.arrayBuffer()));
-}

@@ -100,3 +100,47 @@ test("validates plant imprint and transfer shape", () => {
   transfer.plant.transfer.uploadServiceUrl = "";
   assert.throws(() => validateConfig(transfer), /must provide uploadUrl or both uploadServiceUrl and uploadEmail/);
 });
+
+test("validates the audio master-file spec", () => {
+  const emptyLabels = copy();
+  emptyLabels.audioSpec.labels = [];
+  assert.throws(() => validateConfig(emptyLabels), /audioSpec\.labels must not be empty/);
+
+  const bitDepth = copy();
+  bitDepth.audioSpec.minBitDepth = 0;
+  assert.throws(() => validateConfig(bitDepth), /audioSpec\.minBitDepth must be a positive number/);
+
+  const belowMinimum = copy();
+  belowMinimum.audioSpec.recommendedBitDepth = 8;
+  assert.throws(() => validateConfig(belowMinimum), /recommendedBitDepth must not be below minBitDepth/);
+
+  const sampleRate = copy();
+  sampleRate.audioSpec.minSampleRateHz = 0;
+  assert.throws(() => validateConfig(sampleRate), /audioSpec\.minSampleRateHz must be a positive number/);
+});
+
+test("validates artwork file types, print spec, locale, and info text", () => {
+  const accept = copy();
+  accept.artworkFileTypes.accept = "";
+  assert.throws(() => validateConfig(accept), /artworkFileTypes\.accept must be a non-empty string/);
+
+  const labels = copy();
+  labels.artworkFileTypes.labels = [];
+  assert.throws(() => validateConfig(labels), /artworkFileTypes\.labels must not be empty/);
+
+  const profile = copy();
+  profile.printSpec.colourProfile = "";
+  assert.throws(() => validateConfig(profile), /printSpec\.colourProfile must be a non-empty string/);
+
+  const blocking = copy();
+  blocking.blockIncompleteArtworkOnSend = "yes";
+  assert.throws(() => validateConfig(blocking), /blockIncompleteArtworkOnSend must be a boolean/);
+
+  const locale = copy();
+  locale.locale = "";
+  assert.throws(() => validateConfig(locale), /CONFIG\.locale must be a non-empty string/);
+
+  const info = copy();
+  delete info.infoText.bigCenter.en;
+  assert.throws(() => validateConfig(info), /infoText\.bigCenter\.en must be a non-empty string/);
+});

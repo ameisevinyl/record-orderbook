@@ -7,8 +7,6 @@ import {
   parseTiffArtwork,
   parsePdfArtwork,
   buildChecklistRows,
-  computePrintSimGeometry,
-  computeSpreadInsetPx,
 } from "../src/lib/print-artwork.js";
 
 // A format's CONFIG.printCheck shape (see config.js) — reused across the
@@ -859,29 +857,3 @@ test("buildChecklistRows reports and fails the lower X-axis effective DPI", () =
   assert.equal(row.expected, "≥300dpi");
 });
 
-// ---- computePrintSimGeometry ----
-
-test("computePrintSimGeometry scales mm measurements into canvas pixels", () => {
-  const geo = computePrintSimGeometry(220, 98, 92, 7.4);
-  assert.equal(geo.center, 110);
-  // 220px / 98mm = ~2.2449 px/mm
-  assert.ok(Math.abs(geo.trimRadiusPx - (46 * (220/98))) < 1e-9);
-  assert.ok(Math.abs(geo.centerHoleRadiusPx - (3.7 * (220/98))) < 1e-9);
-});
-
-// ---- computeSpreadInsetPx ----
-
-test("computeSpreadInsetPx centers a square trim within a square data sheet", () => {
-  // 7" inlay: data 187x187, trim 181x181 -> 3mm bleed each side.
-  const inset = computeSpreadInsetPx(374, 374, { w: 187, h: 187 }, { w: 181, h: 181 });
-  assert.ok(Math.abs(inset.x - 6) < 1e-9); // 3mm * (374/187 px-per-mm = 2) = 6px
-  assert.ok(Math.abs(inset.y - 6) < 1e-9);
-});
-
-test("computeSpreadInsetPx handles a non-square flat spread (cover with spine)", () => {
-  // 7" cover: data 383x201, trim 185x185 (the "box" spine skews width vs height differently).
-  const dataMm = { w: 383, h: 201 }, trimMm = { w: 185, h: 185 };
-  const inset = computeSpreadInsetPx(383, 201, dataMm, trimMm); // 1 canvas px per mm, for easy arithmetic
-  assert.ok(Math.abs(inset.x - (383-185)/2) < 1e-9);
-  assert.ok(Math.abs(inset.y - (201-185)/2) < 1e-9);
-});

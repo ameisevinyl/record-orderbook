@@ -145,9 +145,37 @@ function validatePlant(value){
   }
 }
 
+function validateAudioSpec(value){
+  const audio = object(value, "CONFIG.audioSpec");
+  const labels = array(audio.labels, "CONFIG.audioSpec.labels");
+  if(!labels.length) fail("CONFIG.audioSpec.labels", "must not be empty");
+  labels.forEach((label, i) => string(label, `CONFIG.audioSpec.labels[${i}]`));
+  number(audio.minBitDepth, "CONFIG.audioSpec.minBitDepth");
+  number(audio.recommendedBitDepth, "CONFIG.audioSpec.recommendedBitDepth");
+  if(audio.recommendedBitDepth < audio.minBitDepth) fail("CONFIG.audioSpec.recommendedBitDepth", "must not be below minBitDepth");
+  number(audio.minSampleRateHz, "CONFIG.audioSpec.minSampleRateHz");
+}
+
+function validateArtworkFileTypes(value){
+  const types = object(value, "CONFIG.artworkFileTypes");
+  string(types.accept, "CONFIG.artworkFileTypes.accept");
+  const labels = array(types.labels, "CONFIG.artworkFileTypes.labels");
+  if(!labels.length) fail("CONFIG.artworkFileTypes.labels", "must not be empty");
+  labels.forEach((label, i) => string(label, `CONFIG.artworkFileTypes.labels[${i}]`));
+}
+
+function validateInfoText(value){
+  const entries = object(value, "CONFIG.infoText");
+  for(const [key, entry] of Object.entries(entries)){
+    object(entry, `CONFIG.infoText.${key}`);
+    string(entry.en, `CONFIG.infoText.${key}.en`);
+  }
+}
+
 export function validateConfig(config){
   object(config, "CONFIG");
   validatePlant(config.plant);
+  validateAudioSpec(config.audioSpec);
 
   const formats = array(config.formats, "CONFIG.formats");
   const ids = new Set();
@@ -170,6 +198,14 @@ export function validateConfig(config){
   });
   if(!enabled) fail("CONFIG.formats", "must contain at least one enabled format");
 
+  validateArtworkFileTypes(config.artworkFileTypes);
+  const printSpec = object(config.printSpec, "CONFIG.printSpec");
+  string(printSpec.colourProfile, "CONFIG.printSpec.colourProfile");
+  if(typeof config.blockIncompleteArtworkOnSend !== "boolean") fail("CONFIG.blockIncompleteArtworkOnSend", "must be a boolean");
+
   validateVinylColor(config.vinylColor);
+
+  string(config.locale, "CONFIG.locale");
+  validateInfoText(config.infoText);
   return config;
 }

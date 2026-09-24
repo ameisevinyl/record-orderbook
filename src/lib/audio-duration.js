@@ -97,7 +97,7 @@ export function parseWavSpec(arrayBuffer){
 
 // Reads an 80-bit IEEE-754 "extended" float (big-endian), as used for
 // the sample rate in an AIFF COMM chunk.
-export function readExtendedFloat80(dv, offset){
+function readExtendedFloat80(dv, offset){
   if(offset < 0 || offset + 10 > dv.byteLength) return null;
   const expSign = dv.getUint16(offset, false);
   const hi = dv.getUint32(offset+2, false);
@@ -174,7 +174,7 @@ export function parseAiffSpec(arrayBuffer){
 // Customer service should only be handing off WAV/AIFF/BWF to the
 // cutting engineer, never lossy or lossless-compressed containers.
 
-export const UNCOMPRESSED_EXT = new Set(["wav","wave","bwf","aif","aiff","aifc"]);
+const UNCOMPRESSED_EXT = new Set(["wav","wave","bwf","aif","aiff","aifc"]);
 
 export function compressionWarningForName(name){
   const m = name.match(/\.([a-z0-9]+)$/i);
@@ -263,13 +263,25 @@ async function headerDuration(file){
 
 // <audio> fallback — only reached when the header parser can't give a
 // duration. Blob URL revoked on every path so a large file's backing
-// store isn't kept alive after the read.
+// store isn't kept alive after the read. A file the element never
+// finishes loading (corrupt header, codec it can't probe) would
+// otherwise hang the read — and with it the pending-inspection gate on
+// Send to Plant — forever, so a timeout resolves null instead.
+const NATIVE_DURATION_TIMEOUT_MS = 15000;
 function nativeDuration(file){
   return new Promise((resolve)=>{
     const audio = document.createElement("audio");
     audio.preload = "metadata";
     const url = URL.createObjectURL(file);
-    const done = dur => { URL.revokeObjectURL(url); resolve(dur); };
+    let settled = false;
+    const done = dur => {
+      if(settled) return;
+      settled = true;
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      resolve(dur);
+    };
+    const timer = setTimeout(()=> done(null), NATIVE_DURATION_TIMEOUT_MS);
     audio.src = url;
     audio.addEventListener("loadedmetadata", ()=>{
       done(isFinite(audio.duration) && audio.duration > 0 ? audio.duration : null);
