@@ -10,7 +10,7 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat, labelDataSizeMm } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON, pdfPreviewSrc, pageOptionsHtml } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -24,7 +24,8 @@ function newLabelState(){
   return {
     file: null, originalFileName: null, storedFileName: null,
     pending: false, rows: [], error: null, revision: 0,
-    url: null, previewFile: null, previewUrl: null
+    url: null, previewFile: null, previewUrl: null,
+    page: 1, pageCount: 1, parsed: null, kind: null
   };
 }
 
@@ -62,6 +63,9 @@ function labelSideTemplate(side){
       <button type="button" class="pickbtn no-print" id="labelpick-${side}" title="Choose label artwork">↑</button>
       <label class="chk"><input type="checkbox" id="whitelabel-${side}"> whitelabel (blank)</label>
       <div class="filemeta empty" id="labelmeta-${side}" style="margin:0;"></div>
+      <label class="pagepick hidden no-print" id="labelpagewrap-${side}">page
+        <select id="labelpage-${side}"></select> <span id="labelpagecount-${side}"></span></label>
+      ${side === "A" ? `<button type="button" class="pairbtn hidden no-print" id="labelpair-A">Use page 2 for side B</button>` : ""}
       <span id="labelinfo-${side}" style="margin-left:auto;"></span>
     </div>
     <input type="file" id="labelinput-${side}" accept="${CONFIG.artworkFileTypes.accept}" class="hidden">
@@ -163,8 +167,8 @@ function renderLabelSpecs(){
 // uploaded file itself (e.g. an ICC profile's description tag) — built
 // as DOM nodes via textContent, never innerHTML, so a crafted file
 // can't inject markup/script into this page.
-function renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck){
-  const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode());
+function renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck, page){
+  const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode(), page);
   const table = document.getElementById("labelwarnings-"+side);
   table.innerHTML = "<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead>";
   const tbody = document.createElement("tbody");
@@ -182,7 +186,43 @@ function renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck){
   return rows;
 }
 
-async function handleFile(side, file, originalFileName = file.name){
+// Checklist, preview and page picker for the attached file and its
+// chosen page; rerun when the page changes.
+function renderLabelArtwork(side){
+  const state = labelStates[side];
+  const spec = formatSpec();
+  const dataSizeMm = labelDataSizeMm(spec);
+  const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
+  state.rows = renderChecklist(side, state.parsed, state.kind, {w:dataSizeMm, h:dataSizeMm},
+    {w:spec.diameterMm, h:spec.diameterMm}, printCheck, state.page);
+  const {kind, parsed} = state;
+  if(kind === "pdf"){
+    // Fills via CSS (.label-preview iframe{width/height:100%}) — see
+    // cover.js's identical comment on Safari's PDF viewer margin.
+    setPreview(side, `<iframe src="${pdfPreviewSrc(state.url, state.page)}"></iframe>`);
+  } else if(kind === "jpeg"){
+    setPreview(side, `<img src="${state.url}" alt="label ${side} artwork">`);
+  } else if(kind === "tiff"){
+    const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
+    setPreview(side, `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`);
+  } else{
+    setPreview(side, `<div class="label-placeholder">preview not available</div>`);
+  }
+  document.getElementById("labelpagewrap-"+side).classList.toggle("hidden", state.pageCount < 2);
+  document.getElementById("labelpage-"+side).innerHTML = pageOptionsHtml(state.pageCount, state.page);
+  document.getElementById("labelpagecount-"+side).textContent = `of ${state.pageCount}`;
+  updateLabelPairOffer();
+}
+
+// A multi-page PDF on side A while B is still open: offer its page 2 for B.
+function updateLabelPairOffer(){
+  const a = labelStates.A, b = labelStates.B;
+  const show = a.pageCount > 1 && !b.file && !b.storedFileName
+    && !document.getElementById("whitelabel-B").checked;
+  document.getElementById("labelpair-A").classList.toggle("hidden", !show);
+}
+
+async function handleFile(side, file, originalFileName = file.name, page = 1){
   const state = labelStates[side];
   const revision = ++state.revision;
   const meta = document.getElementById("labelmeta-"+side);
@@ -193,7 +233,8 @@ async function handleFile(side, file, originalFileName = file.name){
   if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
   Object.assign(state, {
     file, originalFileName, storedFileName: null, pending: true,
-    rows: [], error: null, url: null, previewFile: null, previewUrl: null
+    rows: [], error: null, url: null, previewFile: null, previewUrl: null,
+    page: 1, pageCount: 1, parsed: null, kind: null
   });
   labelsOnStateChange();
 
@@ -209,28 +250,14 @@ async function handleFile(side, file, originalFileName = file.name){
     else if(kind === "tiff") parsed = parseTiffArtwork(buf);
     if(state.revision !== revision || state.file !== file) return false;
 
-    const spec = formatSpec();
-    const printCheck = getFormat(CONFIG, currentFormat()).printCheck;
-    const dataSizeMm = labelDataSizeMm(spec);
-    const targetMm = {w:dataSizeMm, h:dataSizeMm};
-    const trimMm = {w:spec.diameterMm, h:spec.diameterMm};
-    state.rows = renderChecklist(side, parsed, kind, targetMm, trimMm, printCheck);
+    state.parsed = parsed;
+    state.kind = kind;
+    state.pageCount = (parsed && parsed.pageCount) || 1;
+    state.page = Math.min(page, state.pageCount);
+    state.url = URL.createObjectURL(file);
+    renderLabelArtwork(side);
     state.pending = false;
     state.error = null;
-
-    state.url = URL.createObjectURL(file);
-    if(kind === "pdf"){
-      // Fills via CSS (.label-preview iframe{width/height:100%}) — see
-      // cover.js's identical comment on Safari's PDF viewer margin.
-      setPreview(side, `<iframe src="${state.url}#toolbar=0&navpanes=0"></iframe>`);
-    } else if(kind === "jpeg"){
-      setPreview(side, `<img src="${state.url}" alt="label ${side} artwork">`);
-    } else if(kind === "tiff"){
-      const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
-      setPreview(side, `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`);
-    } else{
-      setPreview(side, `<div class="label-placeholder">preview not available</div>`);
-    }
     renderLabelFileMeta(side, file.name, originalFileName, null);
   } catch(error){
     if(state.revision !== revision || state.file !== file) return false;
@@ -258,7 +285,8 @@ function clearLabelArtwork(side){
   Object.assign(state, {
     file: null, originalFileName: null, storedFileName: null,
     pending: false, rows: [], error: null,
-    url: null, previewFile: null, previewUrl: null
+    url: null, previewFile: null, previewUrl: null,
+    page: 1, pageCount: 1, parsed: null, kind: null
   });
   document.getElementById("labelinput-"+side).value = "";
   const meta = document.getElementById("labelmeta-"+side);
@@ -266,6 +294,8 @@ function clearLabelArtwork(side){
   meta.textContent = "";
   setPreview(side, `<div class="label-placeholder">no artwork selected</div>`);
   document.getElementById("labelwarnings-"+side).innerHTML = "";
+  document.getElementById("labelpagewrap-"+side).classList.add("hidden");
+  updateLabelPairOffer();
 }
 
 function wireLabelSide(side){
@@ -275,6 +305,11 @@ function wireLabelSide(side){
     const f = input.files[0];
     input.value = ""; // re-picking the same file must fire change again
     if(f) handleFile(side, f);
+  });
+  document.getElementById("labelpage-"+side).addEventListener("change", e=>{
+    labelStates[side].page = Number(e.target.value);
+    renderLabelArtwork(side);
+    labelsOnStateChange();
   });
 
   document.getElementById("whitelabel-"+side).addEventListener("change", (e)=>{
@@ -286,6 +321,7 @@ function wireLabelSide(side){
     document.getElementById("labelpreview-"+side).classList.toggle("blanked", e.target.checked);
     document.getElementById("labelwarnings-"+side).classList.toggle("hidden", e.target.checked);
     document.getElementById("labelblanknote-"+side).classList.toggle("hidden", !e.target.checked);
+    updateLabelPairOffer();
     labelsOnStateChange();
   });
 }
@@ -298,6 +334,10 @@ export function initLabels(onStateChange = ()=>{}){
   updateLabelInfo();
   renderLabelSpecs();
   SIDES.forEach(wireLabelSide);
+  document.getElementById("labelpair-A").addEventListener("click", ()=>{
+    const a = labelStates.A;
+    handleFile("B", a.file, a.originalFileName, 2);
+  });
 
   const bigCenterWrap = document.getElementById("bigCenterWrap");
   bigCenterWrap.insertAdjacentHTML("beforeend",
@@ -349,7 +389,8 @@ export function collectLabels(forSend = false){
       return [side, {
         whitelabel,
         fileName: included ? labelFileName(side, file) : null,
-        originalFileName: included ? state.originalFileName : null
+        originalFileName: included ? state.originalFileName : null,
+        page: included ? state.page : 1
       }];
     }))
   };
@@ -376,7 +417,7 @@ export async function applyLabels(data, fileMap){
     const meta = document.getElementById("labelmeta-"+side);
     const file = fileMap && s.fileName && fileMap.get(s.fileName);
     if(file){
-      const current = await handleFile(side, file, s.originalFileName || s.fileName);
+      const current = await handleFile(side, file, s.originalFileName || s.fileName, s.page || 1);
       if(current){
         const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"labels", variant:side});
         const previewImg = fileMap && fileMap.get(previewName);
