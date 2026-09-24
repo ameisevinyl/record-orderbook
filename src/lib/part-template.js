@@ -11,7 +11,7 @@ import { mmToPt, buildPdf } from "./pdf.js";
 import { labelGeometry, partGeometry } from "./layout-preview.js";
 import { slug, sanitizeFileName } from "./package-naming.js";
 
-const FONT_PT = 12;
+const FONT_PT = 11;
 const LINE_HEIGHT_MM = FONT_PT * 1.35 / 72 * 25.4;
 const CUT_PT = 0.5;
 const FOLD_PT = 0.25;
@@ -98,6 +98,23 @@ export function templateFileName({ formatId, part, productName }){
   return parts.join("_") + "_template_v1.pdf";
 }
 
+// Short L-marks along the four page edges. They make the inked bounding
+// box fill the page, which is what Photoshop's default PDF import
+// ("Crop To: Bounding Box") uses — without them it crops to the drawn
+// artwork (the trim), not the data/bleed sheet.
+function drawCornerMarks(c, dataWmm, dataHmm, lenMm){
+  const corners = [
+    [0, 0, 1, 1],
+    [dataWmm, 0, -1, 1],
+    [0, dataHmm, 1, -1],
+    [dataWmm, dataHmm, -1, -1]
+  ];
+  for(const [x, y, sx, sy] of corners){
+    c.line(x, y, x + sx * lenMm, y);
+    c.line(x, y, x, y + sy * lenMm);
+  }
+}
+
 // Label: data square (page edge), dotted trim circle, both center-hole
 // variants, and the dimensions line kept clear inside the circle.
 export function labelTemplatePdf({ format, label }){
@@ -106,18 +123,24 @@ export function labelTemplatePdf({ format, label }){
   const c = contentBuilder(dataMm.w, dataMm.h);
   const cx = dataMm.w / 2, cy = dataMm.h / 2;
 
-  c.cutInk(); c.cutWidth(); c.dash(...CUT_DASH);
+  c.cutInk(); c.foldWidth(); c.solid();
+  drawCornerMarks(c, dataMm.w, dataMm.h, bleedMm);
+
+  c.cutWidth(); c.dash(...CUT_DASH);
   c.circle(cx, cy, diameterMm / 2);
   c.circle(cx, cy, normal / 2);
   if(big) c.circle(cx, cy, big / 2);
   c.solid();
 
-  // Two short lines under the center hole instead of one long line, so
-  // the text stays inside the round trim.
+  // Short lines stacked under the center hole instead of one long line,
+  // so the text stays inside the round trim at 11pt. Both center-hole
+  // variants are listed where the format offers them.
   const holeR = Math.max(normal, big || 0) / 2;
   const y = cy + holeR + 4;
   c.textCentered(cx, y, `data ${dataMm.w}x${dataMm.h}mm, bleed ${bleedMm}mm`);
-  c.textCentered(cx, y + LINE_HEIGHT_MM, `end dia ${diameterMm}mm`);
+  c.textCentered(cx, y + LINE_HEIGHT_MM, `end format ø${diameterMm}mm`);
+  c.textCentered(cx, y + LINE_HEIGHT_MM * 2, `small center ø${normal}mm`);
+  if(big) c.textCentered(cx, y + LINE_HEIGHT_MM * 3, `big center ø${big}mm`);
 
   return buildPdf({
     title: `${format.id} label template`,
@@ -160,7 +183,10 @@ export function partTemplatePdf({ formatId, part }){
   const { dataMm, trimMm, bleedMm, folds, trimOutline, cutout } = partGeometry(part);
   const c = contentBuilder(dataMm.w, dataMm.h);
 
-  c.cutInk(); c.cutWidth(); c.dash(...CUT_DASH);
+  c.cutInk(); c.foldWidth(); c.solid();
+  drawCornerMarks(c, dataMm.w, dataMm.h, bleedMm);
+
+  c.cutWidth(); c.dash(...CUT_DASH);
   c.polygon(trimOutline);
 
   c.foldInk(); c.foldWidth(); c.dash(...FOLD_DASH);
@@ -173,7 +199,7 @@ export function partTemplatePdf({ formatId, part }){
   c.solid();
 
   const spine = part.spineMm || 0;
-  const line = `data ${dataMm.w}x${dataMm.h}mm, end ${trimMm.w}x${trimMm.h}mm, bleed ${bleedMm}mm`
+  const line = `data ${dataMm.w}x${dataMm.h}mm, end format ${trimMm.w}x${trimMm.h}mm, bleed ${bleedMm}mm`
     + (spine > 0 ? `, spine ${spine}mm` : "");
   c.text(bleedMm + 3, bleedMm + spine + 6, line);
 

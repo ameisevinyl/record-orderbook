@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { labelTemplatePdf, partTemplatePdf, templateFileName } from "../src/lib/part-template.js";
 
-const decoder = new TextDecoder();
+// windows-1252 so the PDF's WinAnsi bytes (e.g. ø = 0xF8) decode 1:1.
+const decoder = new TextDecoder("windows-1252");
 const asText = bytes => decoder.decode(bytes);
 
 const format = { id:"12", centerHole:{ normal:7.4, big:38 } };
@@ -23,9 +24,11 @@ test("labelTemplatePdf dots the trim and both center holes and prints the specs 
   assert.match(pdf, /0 0 0 1 K/);
   assert.doesNotMatch(pdf, /(^|\s)rg(\s|$)|\bRG\b/);
   assert.match(pdf, /\(data 106x106mm, bleed 3mm\) Tj/);
-  assert.match(pdf, /\(end dia 100mm\) Tj/);
+  assert.match(pdf, /\(end format ø100mm\) Tj/);
+  assert.match(pdf, /\(small center ø7\.4mm\) Tj/);
+  assert.match(pdf, /\(big center ø38mm\) Tj/);
+  assert.match(pdf, /\/F1 11 Tf/);
   assert.equal((pdf.match(/ h S/g) || []).length, 3); // trim + normal + big circles
-  assert.doesNotMatch(pdf, /trim dia|center dia|big dia/);
 });
 
 test("labelTemplatePdf omits the big hole for formats without one", () => {
@@ -33,6 +36,7 @@ test("labelTemplatePdf omits the big hole for formats without one", () => {
     format:{ id:"10", centerHole:{ normal:7.4 } },
     label:{ diameterMm:100, bleedMm:3 }
   }));
+  assert.match(pdf, /\(small center ø7\.4mm\) Tj/);
   assert.doesNotMatch(pdf, /big/);
   assert.equal((pdf.match(/ h S/g) || []).length, 2); // trim + normal circles
 });
@@ -48,16 +52,16 @@ test("partTemplatePdf draws dotted cuts, lighter dotted folds, and the specs lin
   assert.match(pdf, /\[2 3\] 0 d/);      // cut lines
   assert.match(pdf, /\[1 3\] 0 d/);      // fold lines
   assert.match(pdf, /0 0 0 0\.5 K/);     // folds are lighter
-  assert.equal((pdf.match(/ l S/g) || []).length, 4);
-  assert.match(pdf, /\(data 643x328mm, end 633x318mm, bleed 5mm, spine 3mm\) Tj/);
+  assert.equal((pdf.match(/ l S/g) || []).length, 12); // 4 folds + 8 corner-mark segments
+  assert.match(pdf, /\(data 643x328mm, end format 633x318mm, bleed 5mm, spine 3mm\) Tj/);
   assert.doesNotMatch(pdf, /\(fold\) Tj|\(trim\) Tj|\(cut-out dia/);
 });
 
-test("partTemplatePdf carries no bleed tint and uses the readable 12pt line", () => {
+test("partTemplatePdf carries no bleed tint and uses the readable 11pt line", () => {
   const pdf = asText(partTemplatePdf({ formatId:"12", part:cover }));
   assert.doesNotMatch(pdf, /0 0 0 0\.1 k/);
   assert.doesNotMatch(pdf, /f\*/);
-  assert.match(pdf, /\/F1 12 Tf/);
+  assert.match(pdf, /\/F1 11 Tf/);
 });
 
 test("partTemplatePdf strokes the stepped back-half trim outline", () => {
@@ -76,8 +80,28 @@ test("partTemplatePdf dots and cuts a center cut-out without labelling it", () =
   };
   const pdf = asText(partTemplatePdf({ formatId:"12", part }));
   assert.equal((pdf.match(/ h S/g) || []).length, 2); // trim outline + cut-out circle
-  assert.equal((pdf.match(/ l S/g) || []).length, 1); // one center fold
+  assert.equal((pdf.match(/ l S/g) || []).length, 9); // one center fold + 8 corner-mark segments
   assert.doesNotMatch(pdf, /cut-out dia/);
+});
+
+// Inked extents of the m/l path coordinates — what Photoshop's default
+// "Crop To: Bounding Box" import uses.
+function contentBounds(pdf){
+  const body = pdf.slice(pdf.indexOf("stream\n") + 7, pdf.indexOf("endstream"));
+  const xs = [], ys = [];
+  for(const m of body.matchAll(/([\d.]+) ([\d.]+) (?:m|l)\b/g)){
+    xs.push(Number(m[1]));
+    ys.push(Number(m[2]));
+  }
+  return { minX:Math.min(...xs), maxX:Math.max(...xs), minY:Math.min(...ys), maxY:Math.max(...ys) };
+}
+
+test("corner marks make the inked content fill the page for Photoshop", () => {
+  const coverBounds = contentBounds(asText(partTemplatePdf({ formatId:"12", part:cover })));
+  assert.deepEqual(coverBounds, { minX:0, maxX:1822.6772, minY:0, maxY:929.7638 });
+
+  const labelBounds = contentBounds(asText(labelTemplatePdf({ format, label:{ diameterMm:100, bleedMm:3 } })));
+  assert.deepEqual(labelBounds, { minX:0, maxX:300.4724, minY:0, maxY:300.4724 });
 });
 
 test("spread templates mark BACK and FRONT in big light grey letters", () => {
