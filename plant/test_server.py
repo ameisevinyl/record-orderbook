@@ -1,5 +1,8 @@
 import http.client
 import io
+import json
+import shutil
+import subprocess
 import stat
 import tempfile
 import threading
@@ -9,6 +12,7 @@ import zipfile
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
+import server
 from server import Handler, OpenError, ROOT, static_target, unpack, zip_stem
 
 
@@ -48,6 +52,12 @@ class UnpackTest(unittest.TestCase):
         (self.dest / "stale.txt").write_text("old")
         unpack(make_zip([("project.json", b"{}")]), self.dest)
         self.assertFalse((self.dest / "stale.txt").exists())
+
+    def test_removes_stale_check_output(self):
+        stale = self.dest.with_name("p.checks")
+        stale.mkdir(parents=True)
+        unpack(make_zip([("project.json", b"{}")]), self.dest)
+        self.assertFalse(stale.exists())
 
     def test_rejects_unsafe_and_invalid_zips(self):
         link = zipfile.ZipInfo("p/link")
@@ -102,9 +112,9 @@ class HttpTest(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
 
-    def post(self, headers, body=b""):
-        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
-        conn.putrequest("POST", "/api/open")
+    def post(self, headers, body=b"", path="/api/open"):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=30)
+        conn.putrequest("POST", path)
         for key, value in headers.items():
             conn.putheader(key, value)
         conn.endheaders(body)
@@ -122,6 +132,29 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(status, 500)
         self.assertTrue(text)
 
+    def test_check_before_open_is_refused(self):
+        status, text = self.post({"X-Filename": "never-opened-xyz.zip"}, path="/api/check")
+        self.assertEqual((status, text), (400, "project not open"))
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "needs ffmpeg")
+    def test_open_then_check_serves_previews(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            saved, server.WORK = server.WORK, Path(tmp)
+            try:
+                wav = Path(tmp) / "A1.wav"
+                subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=d=1", "-c:a", "pcm_s16le",
+                                str(wav)], check=True)
+                body = make_zip([("p/project.json", b"{}"), ("p/A1.wav", wav.read_bytes())]).getvalue()
+                self.assertEqual(self.post({"X-Filename": "p.zip", "Content-Length": str(len(body))}, body)[0], 200)
+                status, text = self.post({"X-Filename": "p.zip"}, path="/api/check")
+                self.assertEqual(status, 200)
+                facts = json.loads(text)["files"]["A1.wav"]
+                self.assertEqual(static_target(f"/work/p.checks/{facts['preview']}"),
+                                 (Path(tmp) / "p.checks" / facts["preview"]).resolve())
+            finally:
+                server.WORK = saved
+
+
 class HelpersTest(unittest.TestCase):
     def test_static_target_stays_inside_src(self):
         self.assertEqual(static_target("/"), ROOT / "src" / "plant" / "index.html")
@@ -130,6 +163,20 @@ class HelpersTest(unittest.TestCase):
         self.assertIsNone(static_target("/src/%2e%2e/plant/server.py"))
         self.assertIsNone(static_target("/plant/server.py"))
         self.assertIsNone(static_target("/src/nope.js"))
+
+    def test_static_target_serves_only_check_output_from_work(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            saved, server.WORK = server.WORK, Path(tmp)
+            try:
+                for folder in ("p.checks", "p/p"):
+                    (Path(tmp) / folder).mkdir(parents=True)
+                    (Path(tmp) / folder / "a.mp3").write_bytes(b"1")
+                self.assertEqual(static_target("/work/p.checks/a.mp3"), (Path(tmp) / "p.checks" / "a.mp3").resolve())
+                self.assertIsNone(static_target("/work/p/p/a.mp3"))
+                self.assertIsNone(static_target("/work/p.checks/../p/p/a.mp3"))
+                self.assertIsNone(static_target("/work/p.checks/nope.mp3"))
+            finally:
+                server.WORK = saved
 
     def test_zip_stem_decodes_and_strips_folders(self):
         self.assertEqual(zip_stem("260924_X_a%40b%C3%B6.de.zip"), "260924_X_a@bö.de")

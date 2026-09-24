@@ -1,5 +1,6 @@
 """Plant view server: serves src/plant/ (and the src/ modules it imports,
-unbuilt) and unpacks posted project zips into plant/work/<zip stem>/.
+unbuilt), unpacks posted project zips into plant/work/<zip stem>/ and
+runs the audio checks (checks.py) into plant/work/<zip stem>.checks/.
 
 Standard library only; binds 127.0.0.1. Run: python3 plant/server.py
 """
@@ -15,6 +16,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
+import checks
+
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 WORK = ROOT / "plant" / "work"
@@ -23,11 +26,19 @@ TYPES = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8",
+    ".mp3": "audio/mpeg",
+    ".png": "image/png",
 }
 CHUNK = 1 << 20
 # ThreadingHTTPServer: two opens of the same zip would otherwise wipe
 # and fill the same work folder at once.
 UNPACK_LOCK = threading.Lock()
+
+
+def checks_dir(dest):
+    """Check output sits beside the unpacked zip, never inside it, so it
+    can't show up in the zip's file list."""
+    return dest.with_name(dest.name + ".checks")
 
 
 class OpenError(Exception):
@@ -70,8 +81,9 @@ def unpack(zip_file, dest):
         except ValueError:
             raise OpenError("project.json is not valid JSON") from None
         with UNPACK_LOCK:
-            if dest.exists():
-                shutil.rmtree(dest)
+            for stale in (dest, checks_dir(dest)):
+                if stale.exists():
+                    shutil.rmtree(stale)
             dest.mkdir(parents=True)
             try:
                 zf.extractall(dest)
@@ -84,10 +96,26 @@ def unpack(zip_file, dest):
 
 
 def static_target(url_path):
-    """File under src/ for a GET path, or None."""
+    """File under src/, or check output (/work/<stem>.checks/<file>), for a
+    GET path, or None."""
     path = unquote(urlsplit(url_path).path)
-    target = INDEX if path in ("/", "/index.html") else (ROOT / path.lstrip("/")).resolve()
-    return target if target.is_relative_to(SRC) and target.is_file() else None
+    if path in ("/", "/index.html"):
+        return INDEX
+    if path.startswith("/work/"):
+        target = (WORK / path.removeprefix("/work/")).resolve()
+        allowed = target.parent.parent == WORK.resolve() and target.parent.name.endswith(".checks")
+    else:
+        target = (ROOT / path.lstrip("/")).resolve()
+        allowed = target.is_relative_to(SRC)
+    return target if allowed and target.is_file() else None
+
+
+def run_checks(stem):
+    dest = WORK / stem
+    found = list(dest.rglob("project.json")) if dest.is_dir() else []
+    if len(found) != 1:
+        raise OpenError("project not open")
+    return checks.run(found[0].parent, checks_dir(dest))
 
 
 def zip_stem(header_value):
@@ -115,6 +143,14 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, target.read_bytes(), TYPES.get(target.suffix, "application/octet-stream"))
 
     def do_POST(self):
+        if self.path == "/api/check":
+            try:
+                result = run_checks(zip_stem(self.headers.get("X-Filename", "")))
+            except OpenError as error:
+                return self.reply(400, str(error), "text/plain; charset=utf-8")
+            except OSError as error:
+                return self.reply(500, f"couldn't check: {error}", "text/plain; charset=utf-8")
+            return self.reply(200, json.dumps(result), "application/json; charset=utf-8")
         if self.path != "/api/open":
             return self.reply(404, "not found", "text/plain; charset=utf-8")
         try:
