@@ -52,6 +52,12 @@ function fileName(value, path){
   return value;
 }
 
+function pageNumber(value, path){
+  if(value === undefined) return 1;
+  if(!Number.isInteger(value) || value < 1) throw new TypeError(`${path} must be a positive integer`);
+  return value;
+}
+
 function validateProduct(id, products, label, formatId){
   if(id == null) return;
   if(typeof id !== "string" || !products.some(product => product.id === id)){
@@ -118,6 +124,7 @@ export function prepareProject(raw, config){
     label.whitelabel = bool(label.whitelabel, `${path}.whitelabel`);
     label.fileName = fileName(label.fileName, `${path}.fileName`);
     label.originalFileName = fileName(label.originalFileName, `${path}.originalFileName`);
+    label.page = pageNumber(label.page, `${path}.page`);
     project.labels.sides[side] = label;
   }
 
@@ -137,12 +144,14 @@ export function prepareProject(raw, config){
   ]){
     part.fileName = fileName(part.fileName, `${path}.fileName`);
     part.originalFileName = fileName(part.originalFileName, `${path}.originalFileName`);
+    part.page = pageNumber(part.page, `${path}.page`);
   }
   for(const side of ["front", "back"]){
     const path = `project.coverSleeve.inlay.${side}`;
     const part = project.coverSleeve.inlay[side];
     part.fileName = fileName(part.fileName, `${path}.fileName`);
     part.originalFileName = fileName(part.originalFileName, `${path}.originalFileName`);
+    part.page = pageNumber(part.page, `${path}.page`);
   }
 
   project.vinylColor = arrayOrEmpty(project.vinylColor, "project.vinylColor");

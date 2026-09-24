@@ -168,3 +168,19 @@ test("historyEntry stamps a trimmed plant note", () => {
   const entry = historyEntry("  qty 300 → 500 ", new Date("2026-09-24T12:00:00Z"));
   assert.deepEqual(entry, {savedAt:"2026-09-24T12:00:00.000Z", by:"plant", note:"qty 300 → 500"});
 });
+
+test("prepareProject defaults artwork page to 1 and keeps a valid page", () => {
+  const project = prepareProject({format:"12", labels:{sides:{B:{fileName:"CAT_labels_B_v1.pdf", page:2}}}}, config);
+  assert.equal(project.labels.sides.A.page, 1);
+  assert.equal(project.labels.sides.B.page, 2);
+  assert.equal(project.coverSleeve.cover.page, 1);
+  assert.equal(project.coverSleeve.innerSleeve.page, 1);
+  assert.equal(project.coverSleeve.inlay.front.page, 1);
+  assert.equal(project.coverSleeve.inlay.back.page, 1);
+});
+
+test("prepareProject rejects a page that isn't a positive integer", () => {
+  for(const page of [0, -1, 2.5, "2", null]){
+    assert.throws(() => prepareProject({format:"12", coverSleeve:{cover:{page}}}, config), /page must be a positive integer/);
+  }
+});
