@@ -195,13 +195,20 @@ function shippingBillingSection(project){
   return out;
 }
 
+function historySection(project){
+  const history = project.history || [];
+  if(!history.length) return "";
+  return "\nHISTORY:\n" + history.map(h => `  ${h.savedAt} ${h.by}: ${h.note}\n`).join("");
+}
+
 export function buildOrderSummaryText(project, config, date){
   return documentHeader(project, "ORDER SUMMARY", date)
     + filesManifestSection(project)
     + packagingSection(project, config)
     + tracklistBody(project)
     + notesSection(project)
-    + "\n" + shippingBillingSection(project);
+    + "\n" + shippingBillingSection(project)
+    + historySection(project);
 }
 
 export function buildTracklistText(project, config, date){

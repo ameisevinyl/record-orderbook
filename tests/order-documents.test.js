@@ -161,3 +161,17 @@ test("summary marks invalid quantities instead of treating them as production to
   assert.match(summary, /pressed: INVALID qty "1\.5" Black/);
   assert.match(summary, /INVALID qty "1e2" black/);
 });
+
+test("order summary ends with the edit history when present", () => {
+  const text = buildOrderSummaryText(project({history:[
+    {savedAt:"2026-09-24T12:00:00.000Z", by:"plant", note:"qty 300 → 500"}
+  ]}), config, date);
+  assert.ok(text.endsWith("\nHISTORY:\n  2026-09-24T12:00:00.000Z plant: qty 300 → 500\n"));
+});
+
+test("order summary and tracklist have no history block without history", () => {
+  assert.ok(!buildOrderSummaryText(project(), config, date).includes("HISTORY:"));
+  assert.ok(!buildTracklistText(project({history:[
+    {savedAt:"2026-09-24T12:00:00.000Z", by:"plant", note:"x"}
+  ]}), config, date).includes("HISTORY:"));
+});
