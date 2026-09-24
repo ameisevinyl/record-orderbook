@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeStatus, timeLimitRows, rpmRecommendation, PLAYING_TIME_NOTE } from "../src/lib/playing-time.js";
+import { computeStatus, timeLimitRows, rpmRecommendation, rpmWarning, PLAYING_TIME_NOTE } from "../src/lib/playing-time.js";
 
 const timeLimits = {
   normal: { recommended: { 33: 18, 45: 10 }, max: { 33: 24, 45: 14 } },
@@ -42,4 +42,10 @@ test("rpmRecommendation names a format's recommended speed, if any", () => {
 test("the playing-time note says the values depend on the music", () => {
   assert.match(PLAYING_TIME_NOTE, /Guide values only/);
   assert.match(PLAYING_TIME_NOTE, /the more bass, the shorter the side/);
+});
+
+test("rpmWarning only when a side runs at the other speed", () => {
+  assert.equal(rpmWarning({recommendedRpm: 45}, 33), "45 RPM strongly recommended");
+  assert.equal(rpmWarning({recommendedRpm: 45}, 45), "");
+  assert.equal(rpmWarning({}, 33), "");
 });

@@ -10,7 +10,7 @@ import { CONFIG } from "../config.js";
 import { formatTime, parseTime, trackGapSeconds } from "../lib/time.js";
 import { readAudioDuration, readAudioSpec, compressionWarning, audioSpecWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
-import { computeStatus, timeLimitRows, rpmRecommendation, PLAYING_TIME_NOTE } from "../lib/playing-time.js";
+import { computeStatus, timeLimitRows, rpmRecommendation, rpmWarning, PLAYING_TIME_NOTE } from "../lib/playing-time.js";
 import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-catalogue.js";
 import { trackFileName, continuousSideFileName, tracklistFileName, projectFileName, fileExt, mimeType, humanDate, slug } from "../lib/package-naming.js";
 import { defaultMatrix } from "../lib/matrix.js";
@@ -429,6 +429,9 @@ function recompute(){
     badge.textContent = level === "ok" ? "within recommendation"
                        : level === "warn" ? "above recommendation"
                        : "over the maximum";
+    const {format, rpm} = sideMeta(side);
+    const blank = side === "B" && document.getElementById("blankB").checked;
+    document.getElementById("rpmadvice-"+side).textContent = blank ? "" : rpmWarning(getFormat(CONFIG, format), rpm);
   });
   updateChecklist();
 }
@@ -598,6 +601,7 @@ function sideTemplate(side){
       <div class="side-total">
         <div>total playing time: <span class="total-fig" id="total-${side}">0:00</span></div>
         <span class="badge ok" id="badge-${side}">within recommendation</span>
+        <span class="badge warn" id="rpmadvice-${side}"></span>
       </div>
 
       <div class="field" style="max-width:260px; margin-top:12px;">

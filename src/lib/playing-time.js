@@ -36,3 +36,8 @@ export const PLAYING_TIME_NOTE = "Guide values only. How much fits on a side var
 export function rpmRecommendation(format){
   return format.recommendedRpm ? `${format.recommendedRpm} RPM strongly recommended` : "";
 }
+
+// Non-blocking warning for a side set to the speed its format advises against.
+export function rpmWarning(format, rpm){
+  return format.recommendedRpm && Number(rpm) !== format.recommendedRpm ? rpmRecommendation(format) : "";
+}
