@@ -67,6 +67,7 @@ Per artwork file:
   trimMm: {w, h},     // finished size
   bleedMm,
   round,              // true for labels
+  page,               // chosen PDF page, 1-based (pdf-page-choice spec)
   inkLimitPct,        // part's coverage limit
   black: {kMinPct, cmyMaxPct} }
 ```
@@ -92,10 +93,11 @@ Per artwork file:
   error }
 ```
 
-- **PDF (PyMuPDF), page 1:**
+- **PDF (PyMuPDF), the chosen `page`:**
   - boxes: BleedBox → TrimBox → MediaBox for `pageSizeMm`, same
     priority as the browser parser; TrimBox read raw from the page
     object (PyMuPDF falls back to the MediaBox when it is absent)
+  - `pageCount`; a `page` beyond it is an `error`
   - `pdfVersion`, `encrypted`, fonts (`page.get_fonts`, not embedded
     = no font file), spot colours (Separation/DeviceN names), ICC name
     (output intent, else first ICCBased)
