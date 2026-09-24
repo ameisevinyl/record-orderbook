@@ -74,15 +74,18 @@ follow-up.
 Group → gap:
 
 - Release: no catalogue number.
-- Side A/B (B skipped when blank): no tracks and no continuous file;
-  a track or side length missing or unparseable (`parseTime`); total
-  over the format's max for its rpm and cut (`computeStatus` level
-  `danger`).
+- Side A/B (B skipped when blank): continuous side without its audio
+  file, or with an unparseable length (an empty continuous length is
+  fine — the deep check measures it); otherwise no tracks, a track
+  without an audio file, a track length missing or unparseable
+  (`parseTime`); total over the format's max for its rpm and cut
+  (`computeStatus` level `danger`).
 - Files: a file named in `project.json` that the production choices need (same rule as
   `includeSideFile` with `forSend: true`, plus artwork below) that is
   not among `files` (chosen by the customer but missing from the zip —
   distinct from the "no file" gaps below).
-- Labels: a side that isn't whitelabel (and isn't blank) has no file.
+- Labels: a side that isn't whitelabel has no file (a blank side B
+  still gets a physical label — same rule as the customer tool).
 - Inner sleeve / Cover / Inlay: a printed product selected without its
   artwork file(s) (inlay: front and back).
 - Quantity: no vinyl colour row with a quantity; an invalid quantity;
@@ -90,8 +93,9 @@ Group → gap:
 - Billing: `missingAddressFields`; malformed email
   (`emailFormatValid`).
 - Shipping: no address; per address `missingAddressFields`; shipped
-  quantities per colour don't add up to the pressed quantity
-  (`allocateQuantities` over-allocation or a remainder).
+  quantities per colour exceed the pressed quantity or are invalid
+  (`allocateQuantities`; the first address takes the remainder by
+  design, so a remainder is not a gap).
 
 ## Errors
 
