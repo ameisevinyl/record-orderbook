@@ -128,6 +128,14 @@ test("validates artwork file types, print spec, locale, and info text", () => {
   labels.artworkFileTypes.labels = [];
   assert.throws(() => validateConfig(labels), /artworkFileTypes\.labels must not be empty/);
 
+  const tracklistAccept = copy();
+  tracklistAccept.tracklistFileTypes.accept = "";
+  assert.throws(() => validateConfig(tracklistAccept), /tracklistFileTypes\.accept must be a non-empty string/);
+
+  const tracklistLabels = copy();
+  tracklistLabels.tracklistFileTypes.labels = [];
+  assert.throws(() => validateConfig(tracklistLabels), /tracklistFileTypes\.labels must not be empty/);
+
   const profile = copy();
   profile.printSpec.colourProfile = "";
   assert.throws(() => validateConfig(profile), /printSpec\.colourProfile must be a non-empty string/);

@@ -43,7 +43,8 @@ const MIME_BY_EXT = {
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
   ".tif": "image/tiff", ".tiff": "image/tiff",
   ".wav": "audio/wav", ".wave": "audio/wav",
-  ".aif": "audio/aiff", ".aiff": "audio/aiff", ".aifc": "audio/aiff"
+  ".aif": "audio/aiff", ".aiff": "audio/aiff", ".aifc": "audio/aiff",
+  ".txt": "text/plain"
 };
 export function mimeType(ext){
   return MIME_BY_EXT[(ext || "").toLowerCase()] || "";
@@ -62,6 +63,13 @@ export function trackFileName({catalogue, side, index, title, artist, ext}){
 // PNKRCK007_A_side_v1.wav — a whole side delivered as one continuous file.
 export function continuousSideFileName({catalogue, side, ext}){
   return sanitizeFileName(catalogue) + "_" + side + "_side_v1" + ext;
+}
+
+// PNKRCK007_tracklist_A_v1.txt — the customer's own tracklist/cuesheet
+// for a side delivered as one continuous audio file, uploaded instead of
+// (or alongside) manually entering the track rows.
+export function tracklistFileName({catalogue, side, ext}){
+  return sanitizeFileName(catalogue) + "_tracklist_" + side + "_v1" + ext;
 }
 
 // PNKRCK007_labels_A_v1.pdf / PNKRCK007_cover_v1.pdf

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   slug, fileExt, sanitizeFileName, mimeType, trackFileName, continuousSideFileName,
-  printedPartFileName, previewFileName, dateStamp, humanDate, projectFileName
+  tracklistFileName, printedPartFileName, previewFileName, dateStamp, humanDate, projectFileName
 } from "../src/lib/package-naming.js";
 
 test("slug lowercases and collapses non-alnum runs to single underscores", () => {
@@ -34,6 +34,7 @@ test("mimeType maps known extensions case-insensitively, else empty", () => {
   assert.equal(mimeType(".PDF"), "application/pdf");
   assert.equal(mimeType(".jpg"), "image/jpeg");
   assert.equal(mimeType(".wav"), "audio/wav");
+  assert.equal(mimeType(".txt"), "text/plain");
   assert.equal(mimeType(".xyz"), "");
   assert.equal(mimeType(""), "");
 });
@@ -53,6 +54,17 @@ test("continuousSideFileName", () => {
   assert.equal(
     continuousSideFileName({catalogue:"PNKRCK007", side:"A", ext:".wav"}),
     "PNKRCK007_A_side_v1.wav"
+  );
+});
+
+test("tracklistFileName builds catalogue/tracklist/side/version", () => {
+  assert.equal(
+    tracklistFileName({catalogue:"PNKRCK007", side:"A", ext:".txt"}),
+    "PNKRCK007_tracklist_A_v1.txt"
+  );
+  assert.equal(
+    tracklistFileName({catalogue:"PNKRCK007", side:"B", ext:".pdf"}),
+    "PNKRCK007_tracklist_B_v1.pdf"
   );
 });
 

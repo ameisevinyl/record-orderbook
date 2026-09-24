@@ -352,6 +352,15 @@ export const CONFIG = {
     labels: ["PDF", "JPG", "TIFF"]
   },
 
+  // A preview-only text PDF is no help, but a PDF tracklist is: a
+  // customer delivering one audio file per side often has their cuesheet
+  // as a PDF (from their DAW) or a plain .txt. Only the accept string and
+  // the human label list — never parsed, just attached to the package.
+  tracklistFileTypes: {
+    accept: ".txt,.pdf,text/plain,application/pdf",
+    labels: ["TXT", "PDF"]
+  },
+
   // Print-file reference specs shown in the Specs document. Not
   // auto-checked — the studio's backend preprocessor does the real
   // validation; see each format's printCheck for the checks that run

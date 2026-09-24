@@ -12,7 +12,7 @@ import { readAudioDuration, readAudioSpec, compressionWarning, audioSpecWarning 
 import { buildZip, parseZipBytes } from "../lib/zip.js";
 import { computeStatus } from "../lib/playing-time.js";
 import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-catalogue.js";
-import { trackFileName, continuousSideFileName, projectFileName, fileExt, mimeType, humanDate, slug } from "../lib/package-naming.js";
+import { trackFileName, continuousSideFileName, tracklistFileName, projectFileName, fileExt, mimeType, humanDate, slug } from "../lib/package-naming.js";
 import { defaultMatrix } from "../lib/matrix.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { transferLink, transferInstructions } from "../lib/transfer.js";
@@ -279,23 +279,80 @@ function clearContinuousFile(side){
   meta.innerHTML = `file: <span class="filemeta-placeholder">please select</span>`;
 }
 
+/* ============================================================
+   Per-side tracklist / cuesheet upload
+   Offered only in continuous ("all tracks in one file per side") mode —
+   see #tracklistfile-<side> in sideTemplate. The file is attached to the
+   package verbatim; never parsed. State lives on the wrapper element,
+   same as the continuous audio file's.
+   ============================================================ */
+
+function renderTracklistMeta(side, currentName, originalName){
+  const meta = document.getElementById("tracklistmeta-"+side);
+  meta.textContent = "";
+  meta.append(`file: ${currentName}`);
+  if(originalName && originalName !== currentName){
+    meta.append(document.createElement("br"));
+    const orig = document.createElement("span");
+    orig.className = "filemeta-orig";
+    orig.textContent = "was: " + originalName;
+    meta.append(orig);
+  }
+  meta.classList.remove("empty");
+}
+
+function attachTracklistFile(side, f, originalFileName = f.name){
+  const wrap = document.getElementById("tracklistfile-"+side);
+  wrap._file = f;
+  wrap._originalFileName = originalFileName;
+  document.getElementById("tracklistremove-"+side).classList.remove("hidden");
+  renderTracklistMeta(side, f.name, originalFileName);
+}
+
+function clearTracklistFile(side){
+  const wrap = document.getElementById("tracklistfile-"+side);
+  wrap._file = null;
+  wrap._originalFileName = null;
+  document.getElementById("tracklistinput-"+side).value = "";
+  document.getElementById("tracklistremove-"+side).classList.add("hidden");
+  const meta = document.getElementById("tracklistmeta-"+side);
+  meta.textContent = "";
+  meta.classList.add("empty");
+}
+
+// Visual side-effects of the "all tracks in one file per side" mode:
+// reveal the continuous-file block and disable the now-irrelevant
+// per-track file/gap controls. Kept separate from the change handler so
+// loadProject can apply a saved state without triggering a cross-side
+// sync.
+function applyContinuousState(side, on){
+  document.getElementById("contfile-"+side).classList.toggle("hidden", !on);
+  const tracksWrap = document.getElementById("trackswrap-"+side);
+  tracksWrap.querySelectorAll(".gap-wrap select, .pickbtn").forEach(el=>{
+    el.disabled = on;
+  });
+  tracksWrap.querySelectorAll(".gap-wrap").forEach(el=> el.style.opacity = on ? .4 : 1);
+}
+
+// One "all tracks in one file per side" mode for the whole release: the
+// two sides' checkboxes mirror each other. Set directly, not via a
+// dispatched change, so the two change handlers can't ping-pong.
+function setContinuous(side, on){
+  const other = side === "A" ? "B" : "A";
+  document.getElementById("cont-"+side).checked = on;
+  document.getElementById("cont-"+other).checked = on;
+  applyContinuousState(side, on);
+  applyContinuousState(other, on);
+  recompute();
+}
+
 function wireSideOptions(side){
   const contChk = document.getElementById("cont-"+side);
-  const contWrap = document.getElementById("contfile-"+side);
-  const tracksWrap = document.getElementById("trackswrap-"+side);
   const addBtn = document.getElementById("addbtn-"+side);
   const blankChk = side === "B" ? document.getElementById("blankB") : null;
   const sideBody = document.getElementById("body-"+side);
 
-  contChk.addEventListener("change", ()=>{
-    const on = contChk.checked;
-    contWrap.classList.toggle("hidden", !on);
-    tracksWrap.querySelectorAll(".gap-wrap select, .pickbtn").forEach(el=>{
-      el.disabled = on;
-    });
-    tracksWrap.querySelectorAll(".gap-wrap").forEach(el=> el.style.opacity = on ? .4 : 1);
-    recompute();
-  });
+  contChk.addEventListener("change", ()=> setContinuous(side, contChk.checked));
 
   const contFileInput = document.getElementById("contfileinput-"+side);
   const contOverride = document.getElementById("contoverride-"+side);
@@ -306,6 +363,15 @@ function wireSideOptions(side){
     if(f) attachContinuousFile(side, f);
   });
   contOverride.addEventListener("input", recompute);
+
+  const tracklistInput = document.getElementById("tracklistinput-"+side);
+  document.getElementById("tracklistpick-"+side).addEventListener("click", ()=> tracklistInput.click());
+  tracklistInput.addEventListener("change", ()=>{
+    const f = tracklistInput.files[0];
+    tracklistInput.value = ""; // re-picking the same file must fire change again
+    if(f) attachTracklistFile(side, f);
+  });
+  document.getElementById("tracklistremove-"+side).addEventListener("click", ()=> clearTracklistFile(side));
 
   if(blankChk){
     blankChk.addEventListener("change", ()=>{
@@ -510,6 +576,16 @@ function sideTemplate(side){
           </div>
         </div>
         <input type="file" id="contfileinput-${side}" accept="audio/*" class="hidden">
+
+        <div class="field" id="tracklistfile-${side}" style="margin:10px 0 0;">
+          <label class="hint">Create tracklist below, or upload as file (.txt/.pdf)</label>
+          <div class="row" style="align-items:center; flex-wrap:nowrap;">
+            <button type="button" class="pickbtn no-print" id="tracklistpick-${side}" title="Choose tracklist / cuesheet file">↑</button>
+            <div class="filemeta empty" id="tracklistmeta-${side}" style="margin:0; font-size:13.5px;"></div>
+            <button type="button" class="rmbtn no-print hidden" id="tracklistremove-${side}" title="Remove tracklist file">x</button>
+          </div>
+          <input type="file" id="tracklistinput-${side}" accept="${CONFIG.tracklistFileTypes.accept}" class="hidden">
+        </div>
       </div>
 
       <div id="trackswrap-${side}">
@@ -700,6 +776,9 @@ function serializeSide(side, forSend = false){
   const contWrap = document.getElementById("contfile-"+side);
   const contFile = contWrap._file;
   const includeContinuous = contFile && includeSideFile({forSend, blank, continuous:cont, kind:"continuous"});
+  const tracklistWrap = document.getElementById("tracklistfile-"+side);
+  const tracklistFile = tracklistWrap._file;
+  const includeTracklist = tracklistFile && includeSideFile({forSend, blank, continuous:cont, kind:"continuous"});
   const matrixInput = document.getElementById("matrix-"+side);
   const data = {
     blank,
@@ -710,6 +789,8 @@ function serializeSide(side, forSend = false){
     continuousLength: document.getElementById("contoverride-"+side).value,
     continuousFileName: includeContinuous ? continuousSideFileName({catalogue, side, ext: fileExt(contFile.name)}) : null,
     continuousOriginalFileName: includeContinuous ? (contWrap._originalFileName || contFile.name) : null,
+    tracklistFileName: includeTracklist ? tracklistFileName({catalogue, side, ext: fileExt(tracklistFile.name)}) : null,
+    tracklistOriginalFileName: includeTracklist ? (tracklistWrap._originalFileName || tracklistFile.name) : null,
     tracks: []
   };
   document.querySelectorAll("#tracks-"+side+" .track-row").forEach((row, i)=>{
@@ -940,6 +1021,7 @@ async function loadProject(file){
   ["A","B"].forEach(side=>{
     const s = (p.sides && p.sides[side]) || {tracks:[]};
     clearContinuousFile(side);
+    clearTracklistFile(side);
     document.getElementById("tracks-"+side).innerHTML = "";
     (s.tracks || []).forEach(t=>{
       addTrack(side);
@@ -983,8 +1065,9 @@ async function loadProject(file){
     } else {
       matrixInput._auto = true;
     }
-    document.getElementById("cont-"+side).checked = !!s.continuous;
-    document.getElementById("cont-"+side).dispatchEvent(new Event("change"));
+    const contOn = !!s.continuous;
+    document.getElementById("cont-"+side).checked = contOn;
+    applyContinuousState(side, contOn);
     document.getElementById("contoverride-"+side).value = s.continuousLength || "";
     const contFile = s.continuousFileName && fileMap.get(s.continuousFileName);
     if(contFile){
@@ -992,6 +1075,14 @@ async function loadProject(file){
     } else if(s.continuousFileName){
       document.getElementById("contfilemeta-"+side).textContent =
         "file: " + s.continuousFileName + " — please re-select this file (not stored in the order file)";
+    }
+    const tracklistFile = s.tracklistFileName && fileMap.get(s.tracklistFileName);
+    if(tracklistFile){
+      attachTracklistFile(side, tracklistFile, s.tracklistOriginalFileName || s.tracklistFileName);
+    } else if(s.tracklistFileName){
+      const meta = document.getElementById("tracklistmeta-"+side);
+      meta.classList.remove("empty");
+      meta.textContent = "file: " + s.tracklistFileName + " — please re-select this file (not stored in the order file)";
     }
     if(side === "B"){
       document.getElementById("blankB").checked = !!s.blank;
@@ -1018,6 +1109,13 @@ function collectPackageFiles(forSend = false){
       files.push({
         name: continuousSideFileName({catalogue, side, ext: fileExt(sideFile.name)}),
         data: sideFile
+      });
+    }
+    const tracklistFile = document.getElementById("tracklistfile-"+side)._file;
+    if(tracklistFile && includeSideFile({forSend, blank, continuous, kind:"continuous"})){
+      files.push({
+        name: tracklistFileName({catalogue, side, ext: fileExt(tracklistFile.name)}),
+        data: tracklistFile
       });
     }
     const rows = document.querySelectorAll("#tracks-"+side+" .track-row");

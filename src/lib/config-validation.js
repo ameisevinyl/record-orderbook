@@ -156,12 +156,12 @@ function validateAudioSpec(value){
   number(audio.minSampleRateHz, "CONFIG.audioSpec.minSampleRateHz");
 }
 
-function validateArtworkFileTypes(value){
-  const types = object(value, "CONFIG.artworkFileTypes");
-  string(types.accept, "CONFIG.artworkFileTypes.accept");
-  const labels = array(types.labels, "CONFIG.artworkFileTypes.labels");
-  if(!labels.length) fail("CONFIG.artworkFileTypes.labels", "must not be empty");
-  labels.forEach((label, i) => string(label, `CONFIG.artworkFileTypes.labels[${i}]`));
+function validateFileTypes(value, path){
+  const types = object(value, path);
+  string(types.accept, `${path}.accept`);
+  const labels = array(types.labels, `${path}.labels`);
+  if(!labels.length) fail(`${path}.labels`, "must not be empty");
+  labels.forEach((label, i) => string(label, `${path}.labels[${i}]`));
 }
 
 function validateInfoText(value){
@@ -198,7 +198,8 @@ export function validateConfig(config){
   });
   if(!enabled) fail("CONFIG.formats", "must contain at least one enabled format");
 
-  validateArtworkFileTypes(config.artworkFileTypes);
+  validateFileTypes(config.artworkFileTypes, "CONFIG.artworkFileTypes");
+  validateFileTypes(config.tracklistFileTypes, "CONFIG.tracklistFileTypes");
   const printSpec = object(config.printSpec, "CONFIG.printSpec");
   string(printSpec.colourProfile, "CONFIG.printSpec.colourProfile");
   if(typeof config.blockIncompleteArtworkOnSend !== "boolean") fail("CONFIG.blockIncompleteArtworkOnSend", "must be a boolean");

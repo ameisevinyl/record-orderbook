@@ -89,6 +89,8 @@ export function prepareProject(raw, config){
     data.continuousLength = text(data.continuousLength, `project.sides.${side}.continuousLength`);
     data.continuousFileName = fileName(data.continuousFileName, `project.sides.${side}.continuousFileName`);
     data.continuousOriginalFileName = fileName(data.continuousOriginalFileName, `project.sides.${side}.continuousOriginalFileName`);
+    data.tracklistFileName = fileName(data.tracklistFileName, `project.sides.${side}.tracklistFileName`);
+    data.tracklistOriginalFileName = fileName(data.tracklistOriginalFileName, `project.sides.${side}.tracklistOriginalFileName`);
     data.tracks = arrayOrEmpty(data.tracks, `project.sides.${side}.tracks`);
     data.tracks = data.tracks.map((track, i) => {
       const path = `project.sides.${side}.tracks[${i}]`;
@@ -198,6 +200,7 @@ export function referencedProjectFiles(project){
     const data = project.sides && project.sides[side];
     if(!data) continue;
     add(data.continuousFileName);
+    add(data.tracklistFileName);
     for(const track of data.tracks || []) add(track && track.fileName);
   }
   for(const side of ["A", "B"]){

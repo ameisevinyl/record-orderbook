@@ -41,6 +41,8 @@ test("prepareProject accepts and normalizes a current project", () => {
   assert.deepEqual(project.sides.A.tracks, []);
   assert.equal(project.sides.A.rpm, "33");
   assert.equal(project.sides.B.blank, false);
+  assert.equal(project.sides.A.continuousFileName, null);
+  assert.equal(project.sides.A.tracklistFileName, null);
   assert.equal(project.labels.bigCenter, false);
   assert.equal(project.labels.sides.A.whitelabel, false);
   assert.equal(project.coverSleeve.cover.fileName, null);
@@ -112,7 +114,7 @@ test("prepareProject clears a big-center choice for formats that do not offer on
 test("referencedProjectFiles lists canonical audio and artwork names", () => {
   const project = prepareProject({
     projectVersion:1, format:"12",
-    sides:{A:{continuousFileName:"side.wav", tracks:[{fileName:"track.wav"}]}},
+    sides:{A:{continuousFileName:"side.wav", tracklistFileName:"cues.txt", tracks:[{fileName:"track.wav"}]}},
     labels:{sides:{A:{fileName:"label.pdf"}}},
     coverSleeve:{
       cover:{productId:"cover-print", fileName:"cover.pdf"},
@@ -121,7 +123,7 @@ test("referencedProjectFiles lists canonical audio and artwork names", () => {
     }
   }, config);
   assert.deepEqual(referencedProjectFiles(project), [
-    "side.wav", "track.wav", "label.pdf", "cover.pdf", "sleeve.pdf", "front.pdf", "back.pdf"
+    "side.wav", "cues.txt", "track.wav", "label.pdf", "cover.pdf", "sleeve.pdf", "front.pdf", "back.pdf"
   ]);
 });
 

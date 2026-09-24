@@ -75,6 +75,7 @@ test("continuous side file is authoritative and saved rows form a cue list witho
   const p = project({sides:{
     A:side({
       continuous:true, continuousLength:"7:05", continuousFileName:"TEST001_A_side_v1.wav",
+      tracklistFileName:"TEST001_tracklist_A_v1.txt", tracklistOriginalFileName:"cues.txt",
       tracks:[
         {title:"Opening", artist:"Test Artist", length:"3:00", gap:"2", fileName:"inactive-a1.wav"},
         {title:"Finale", artist:"Guest", length:"4:03", gap:"2", fileName:"inactive-a2.wav"}
@@ -86,10 +87,12 @@ test("continuous side file is authoritative and saved rows form a cue list witho
   for(const text of [buildOrderSummaryText(p, config, date), buildTracklistText(p, config, date)]){
     assert.match(text, /SIDE A — 45 RPM — total 7:05/);
     assert.match(text, /continuous file \(authoritative\): TEST001_A_side_v1\.wav/);
+    assert.match(text, /tracklist\/cuesheet: TEST001_tracklist_A_v1\.txt \(was: cues\.txt\)/);
     assert.match(text, /saved cue\/sequence list:/);
     assert.match(text, /│ A2   │ 0:02   │ 3:02  │ 4:03   │ Finale  │ Guest/);
     assert.doesNotMatch(text, /inactive-a[12]\.wav|filename/);
   }
+  assert.match(buildOrderSummaryText(p, config, date), /Files:\n  TEST001_tracklist_A_v1\.txt\n/);
 });
 
 test("summary includes packaging manifest and complete billing/shipping details", () => {

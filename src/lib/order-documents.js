@@ -54,6 +54,7 @@ function tracklistBody(project){
       out += `SIDE ${side} — ${s.rpm || "?"} RPM — total ${formatTime(total)}\n`;
       out += `  matrix: ${s.matrixInscription || "(none)"}\n`;
       out += `  continuous file (authoritative): ${s.continuousFileName || "(none selected)"}\n`;
+      if(s.tracklistFileName) out += `  tracklist/cuesheet: ${withOriginal(s.tracklistFileName, s.tracklistOriginalFileName)}\n`;
       if(tracks.length){
         const headers = ["Pos.", "Pregap", "Start", "Length", "Title"];
         if(showArtist) headers.push("Artist");
@@ -90,7 +91,9 @@ function filesManifestSection(project){
   const inlay = coverSleeve.inlay || {};
   const front = inlay.front || {};
   const back = inlay.back || {};
+  const sides = project.sides || {};
   const packageFiles = [
+    (sides.A || {}).tracklistFileName, (sides.B || {}).tracklistFileName,
     (labelSides.A || {}).fileName, (labelSides.B || {}).fileName,
     innerSleeve.fileName, cover.fileName, front.fileName, back.fileName
   ].filter(Boolean);
