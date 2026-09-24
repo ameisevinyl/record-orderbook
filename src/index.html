@@ -295,6 +295,11 @@
   /* A block of rows inside the box, not one row itself. */
   details.specs .specs-body .specs-rows{ display:block; }
   details.specs .specs-body p{ margin:6px 0 0; color:var(--ink-dim); }
+  /* The playing-time table needs more room than the key/value rows. */
+  details.specs .specs-body:has(#timeLimitSpecs){ max-width:520px; }
+  details.specs .specs-body table{ border-collapse:collapse; margin-top:2px; }
+  details.specs .specs-body th, details.specs .specs-body td{ text-align:left; padding:1px 12px 1px 0; font-weight:400; }
+  details.specs .specs-body th{ color:var(--ink-dim); }
 
   /* cover / inner sleeve flat spreads reuse the .label-preview-wrap /
      .label-preview / .labelwarnings rules above — only the back/front

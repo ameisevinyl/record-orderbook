@@ -18,19 +18,20 @@ export function computeStatus(timeLimits, rpm, mode, seconds){
   return {level, maxMin, recommendedMin, minutes};
 }
 
-// Reference rows for the Specifications box: every cut and rpm of one
-// format's table, independent of what the customer chose.
-export function timeLimitRows(timeLimits){
-  return Object.entries(timeLimits).flatMap(([cut, limits]) =>
-    Object.keys(limits.max).sort((a, b) => a - b).map(rpm => ({
-      label: `${cut}, ${rpm} RPM`,
-      text: `below ${limits.recommended[rpm]} min / ${limits.max[rpm]} min`
-    })));
+// Reference table for the Specifications box and the Specs document:
+// every cut and rpm of one format, independent of what the customer chose.
+export function timeLimitTable(timeLimits){
+  const rpms = Object.keys(Object.values(timeLimits)[0].max).sort((a, b) => a - b);
+  return {
+    head: ["Cut", ...rpms.flatMap(rpm => [`${rpm} RPM recommended`, `${rpm} RPM max`])],
+    rows: Object.entries(timeLimits).map(([cut, limits]) =>
+      [cut, ...rpms.flatMap(rpm => [`< ${limits.recommended[rpm]} min`, `${limits.max[rpm]} min`])])
+  };
 }
 
-// Shown under the playing-time rows wherever they appear (Specifications
+// Shown under the playing-time table wherever it appears (Specifications
 // box, Specs document): the figures are a rough guide, not a promise.
-export const PLAYING_TIME_NOTE = "Guide values only. How much fits on a side varies a lot with musical style and content: bass and loudness need wider grooves, so the more bass, the shorter the side.";
+export const PLAYING_TIME_NOTE = "Varies by style: more bass = less space";
 
 // A format may strongly recommend one speed (e.g. 7" at 45 RPM).
 export function rpmRecommendation(format){

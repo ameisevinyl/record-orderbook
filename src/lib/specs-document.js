@@ -8,7 +8,7 @@ import { enabledFormats, labelDataSizeMm, flatDataMm, partWeightG } from "./form
 import { labelLayoutSvg, printedPartLayoutSvg } from "./layout-preview.js";
 import { labelTemplatePdf, partTemplatePdf, templateFileName } from "./part-template.js";
 import { bytesToBase64 } from "./pdf.js";
-import { timeLimitRows, rpmRecommendation, PLAYING_TIME_NOTE } from "./playing-time.js";
+import { timeLimitTable, rpmRecommendation, PLAYING_TIME_NOTE } from "./playing-time.js";
 
 function esc(str){
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -73,9 +73,13 @@ function productTable(title, products, partKey, formatId){
 }
 
 function timeLimitsTable(format){
+  const {head, rows} = timeLimitTable(format.timeLimits);
   const advice = rpmRecommendation(format);
   return `<h3>Playing time per side</h3>
-    ${kvTable([["", "recommended / max"], ...timeLimitRows(format.timeLimits).map(row => [row.label, row.text])])}
+    <table>
+      <thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>
     <p>${esc(PLAYING_TIME_NOTE)}</p>
     ${advice ? `<p><strong>${esc(advice)}</strong></p>` : ""}`;
 }

@@ -10,7 +10,7 @@ import { CONFIG } from "../config.js";
 import { formatTime, parseTime, trackGapSeconds } from "../lib/time.js";
 import { readAudioDuration, readAudioSpec, compressionWarning, audioSpecWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
-import { computeStatus, timeLimitRows, rpmRecommendation, rpmWarning, PLAYING_TIME_NOTE } from "../lib/playing-time.js";
+import { computeStatus, timeLimitTable, rpmRecommendation, rpmWarning, PLAYING_TIME_NOTE } from "../lib/playing-time.js";
 import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-catalogue.js";
 import { trackFileName, continuousSideFileName, tracklistFileName, projectFileName, fileExt, mimeType, humanDate, slug } from "../lib/package-naming.js";
 import { defaultMatrix } from "../lib/matrix.js";
@@ -543,7 +543,7 @@ const AUDIO_SPECS_HTML = `
           <div><span>Allowed filetypes</span><span id="audioSpecFiletypes"></span></div>
           <div><span>Bit depth</span><span id="audioSpecBitDepth"></span></div>
           <div><span>Sample rate</span><span id="audioSpecSampleRate"></span></div>
-          <div><span>Playing time per side</span><span>recommended / max</span></div>
+          <div><span>Playing time per side</span><span></span></div>
           <div class="specs-rows" id="timeLimitSpecs"></div>
         </div>
       </details>`;
@@ -706,13 +706,26 @@ function renderAudioSpecs(){
 
 // The selected format's playing-time limits for every cut and rpm — a
 // reference, deliberately apart from the cut the customer picks below.
+// Built as DOM nodes: the cells contain "<".
 function renderTimeLimitSpecs(){
   const format = getFormat(CONFIG, document.getElementById("format").value);
+  const {head, rows} = timeLimitTable(format.timeLimits);
+  const table = document.createElement("table");
+  for(const [cells, tag] of [[head, "th"], ...rows.map(row => [row, "td"])]){
+    const tr = table.insertRow();
+    for(const text of cells){
+      const cell = document.createElement(tag);
+      cell.textContent = text;
+      tr.appendChild(cell);
+    }
+  }
   const advice = rpmRecommendation(format);
-  document.getElementById("timeLimitSpecs").innerHTML =
-    timeLimitRows(format.timeLimits).map(row => `<div><span>${row.label}</span><span>${row.text}</span></div>`).join("")
-    + (advice ? `<p><strong>${advice}</strong></p>` : "")
-    + `<p>${PLAYING_TIME_NOTE}</p>`;
+  const notes = [advice, PLAYING_TIME_NOTE].filter(Boolean).map(text => {
+    const p = document.createElement("p");
+    p.textContent = text;
+    return p;
+  });
+  document.getElementById("timeLimitSpecs").replaceChildren(table, ...notes);
 }
 
 export function initTracklist(){

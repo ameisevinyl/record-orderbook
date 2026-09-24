@@ -142,10 +142,10 @@ test("buildSpecsHtml escapes the plant name (HTML-unsafe characters)", () => {
   assert.doesNotMatch(html, /Test & <Plant>/);
 });
 
-test("buildSpecsHtml shows playing times as recommended / max with the guide note", () => {
+test("buildSpecsHtml shows playing times as a recommended / max table with the note", () => {
   const html = buildSpecsHtml(config);
-  assert.ok(html.includes("normal, 33 RPM"));
-  assert.ok(html.includes("below 20 min / 27 min"));
+  assert.ok(html.includes("<th>33 RPM recommended</th>"));
+  assert.ok(html.includes("<td>normal</td><td>&lt; 20 min</td><td>27 min</td>"));
   assert.ok(html.includes(PLAYING_TIME_NOTE));
   assert.ok(!html.includes("ideal"));
 });
