@@ -36,7 +36,7 @@ test("timeLimitTable: one row per cut, recommended/max per rpm, 33 before 45", (
 });
 
 test("rpmRecommendation names a format's recommended speed, if any", () => {
-  assert.equal(rpmRecommendation({recommendedRpm: 45}), "45 RPM strongly recommended");
+  assert.equal(rpmRecommendation({id: "7", recommendedRpm: 45}), '45 RPM is strongly recommended for the 7" format');
   assert.equal(rpmRecommendation({}), "");
 });
 
@@ -45,7 +45,7 @@ test("the playing-time note says the values depend on the music", () => {
 });
 
 test("rpmWarning only when a side runs at the other speed", () => {
-  assert.equal(rpmWarning({recommendedRpm: 45}, 33), "45 RPM strongly recommended");
+  assert.equal(rpmWarning({id: "7", recommendedRpm: 45}, 33), '45 RPM is strongly recommended for the 7" format');
   assert.equal(rpmWarning({recommendedRpm: 45}, 45), "");
   assert.equal(rpmWarning({}, 33), "");
 });

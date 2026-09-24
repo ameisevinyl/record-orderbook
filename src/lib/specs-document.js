@@ -80,8 +80,8 @@ function timeLimitsTable(format){
       <thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>
       <tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
     </table>
-    <p>${esc(PLAYING_TIME_NOTE)}</p>
-    ${advice ? `<p><strong>${esc(advice)}</strong></p>` : ""}`;
+    <p class="note">${esc(PLAYING_TIME_NOTE)}</p>
+    ${advice ? `<p class="note"><strong>${esc(advice)}</strong></p>` : ""}`;
 }
 
 function printFilesTable(format, artworkFileTypes, printSpec){
@@ -157,6 +157,7 @@ const SPECS_CSS = `
   .layout .fold{stroke:#b3b3b0;stroke-dasharray:3 2;}
   .layout .cutout{fill:none;stroke:#161616;stroke-dasharray:2 2;}
   ul{font-size:12px;padding-left:18px;}
+  .note{font-size:12px;margin:6px 0 0;}
   @page{ margin:12mm; }
   /* Each format starts on its own page — but not the audio section, so
      page 1 isn't just the title (an h2-wide break-before did exactly

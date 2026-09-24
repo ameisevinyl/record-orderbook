@@ -35,7 +35,7 @@ export const PLAYING_TIME_NOTE = "Varies by style: more bass = less space";
 
 // A format may strongly recommend one speed (e.g. 7" at 45 RPM).
 export function rpmRecommendation(format){
-  return format.recommendedRpm ? `${format.recommendedRpm} RPM strongly recommended` : "";
+  return format.recommendedRpm ? `${format.recommendedRpm} RPM is strongly recommended for the ${format.id}" format` : "";
 }
 
 // Non-blocking warning for a side set to the speed its format advises against.

@@ -152,6 +152,8 @@ test("buildSpecsHtml shows playing times as a recommended / max table with the n
 
 test("buildSpecsHtml shows a format's recommended speed", () => {
   const withRpm = {...config, formats: config.formats.map(f => ({...f, recommendedRpm: 45}))};
-  assert.ok(buildSpecsHtml(withRpm).includes("45 RPM strongly recommended"));
+  const html = buildSpecsHtml(withRpm);
+  assert.ok(html.includes('<p class="note"><strong>45 RPM is strongly recommended for the 12&quot; format</strong></p>'));
+  assert.ok(html.includes('<p class="note">Varies by style: more bass = less space</p>'));
   assert.ok(!buildSpecsHtml(config).includes("strongly recommended"));
 });
