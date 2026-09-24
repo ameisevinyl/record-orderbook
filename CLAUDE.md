@@ -102,7 +102,7 @@ now; revisit if/when the plant needs to tell file revisions apart.
 
 ```
 node --test tests/            # run all unit tests
-node build/build.js           # build dist/index.html from src/
+node build/build.js           # build dist/index.html + dist/plant.html from src/
 ```
 
 Run tests before considering any change done. There is no linter/formatter
@@ -118,6 +118,11 @@ configured on purpose — keep it that way unless asked.
   `tracklist.js` owns project save/load and the zip package — other
   modules expose a `collect*`/`apply*` pair for it to call.
 - `tests/*.test.js` mirrors `src/lib/`. New pure logic needs a test.
+- `src/plant.js` + `src/plant.css` — only in `dist/plant.html` (plant
+  staff): same form, locked in a `<fieldset id="orderForm">` until
+  "Edit (god mode)"; edits require a note, saved to `project.json`
+  `history`. The build sets `globalThis.PLANT_VIEW`, which forces
+  `isDebugMode()` on.
 - `src/plant.config.local.js` (gitignored, copied from the committed
   sample `src/plant.config.local.example.js`) holds a real plant's
   identity; `build/build.js` bundles it instead of the sample when
