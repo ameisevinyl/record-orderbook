@@ -92,3 +92,10 @@ test("audio: needs ffmpeg shows only the finding", () => {
   assert.ok(html.includes("needs ffmpeg"));
   assert.ok(!html.includes("<h3>"));
 });
+
+test("artwork files show their page when it isn't 1", () => {
+  const p = prepareProject({format:"12", labels:{sides:{A:{fileName:"L.pdf"}, B:{fileName:"L2.pdf", page:2}}}}, CONFIG);
+  const html = renderOverview(p, CONFIG, [{name:"L.pdf", size:1024}, {name:"L2.pdf", size:1024}]);
+  assert.ok(html.includes("L2.pdf (1 KB), page 2"));
+  assert.ok(!html.includes("L.pdf (1 KB), page"));
+});

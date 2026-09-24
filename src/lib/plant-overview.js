@@ -37,6 +37,11 @@ function fileHtml(name, sizes){
     : `${escapeHtml(name)} <span class="missing">missing</span>`;
 }
 
+function artworkHtml(slot, sizes){
+  const file = fileHtml(slot.fileName, sizes);
+  return file && slot.page > 1 ? `${file}, page ${slot.page}` : file;
+}
+
 function sideHtml(project, format, sideId, sizes){
   const side = project.sides[sideId];
   if(side.blank) return group(`Side ${sideId}`, "<p>Blank</p>");
@@ -174,20 +179,20 @@ export function renderOverview(project, config, files){
     sideHtml(project, format, "B", sizes),
     group("Notes", project.notes.trim() ? `<pre>${escapeHtml(project.notes)}</pre>` : "<p>—</p>"),
     group("Labels", rows(["A", "B"].map(side => [
-      `Side ${side}`, labels.sides[side].whitelabel ? "whitelabel" : (fileHtml(labels.sides[side].fileName, sizes) || "none")
+      `Side ${side}`, labels.sides[side].whitelabel ? "whitelabel" : (artworkHtml(labels.sides[side], sizes) || "none")
     ]))),
     group("Inner sleeve", rows([
       ["Product", productName(parts, "innerSleeve", sleeve.innerSleeve.productId)],
-      ["Artwork", fileHtml(sleeve.innerSleeve.fileName, sizes)]
+      ["Artwork", artworkHtml(sleeve.innerSleeve, sizes)]
     ])),
     group("Cover", rows([
       ["Product", productName(parts, "outerCover", sleeve.cover.productId)],
-      ["Artwork", fileHtml(sleeve.cover.fileName, sizes)]
+      ["Artwork", artworkHtml(sleeve.cover, sizes)]
     ])),
     group("Inlay", rows([
       ["Product", productName(parts, "inlay", sleeve.inlay.productId)],
-      ["Front", fileHtml(sleeve.inlay.front.fileName, sizes)],
-      ["Back", fileHtml(sleeve.inlay.back.fileName, sizes)]
+      ["Front", artworkHtml(sleeve.inlay.front, sizes)],
+      ["Back", artworkHtml(sleeve.inlay.back, sizes)]
     ])),
     group("Vinyl colour & quantity", rows(project.vinylColor.map(row => [colorLabel(row.color), escapeHtml(row.qty)]))),
     group("Billing", addressHtml(project.shippingBilling.billing)),
