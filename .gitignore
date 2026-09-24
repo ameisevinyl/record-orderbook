@@ -14,3 +14,6 @@
 # OS/editor noise
 .DS_Store
 *.swp
+
+# Personal Claude Code settings — per-user, not shared.
+/.claude/settings.local.json
