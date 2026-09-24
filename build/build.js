@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Builds dist/index.html: a single, self-contained file with no external
-// requests, from the ES-module sources under src/.
+// Builds dist/index.html (customer) and dist/plant.html (plant staff):
+// each a single, self-contained file with no external requests, from the
+// ES-module sources under src/.
 //
 // This is deliberately not a real bundler — no dependency resolution,
 // no scope isolation. It concatenates a fixed, manually-maintained file
@@ -78,6 +79,9 @@ const FILES = [
   "src/app.js",
 ];
 
+// The plant view is the same app plus plant.js on top.
+const PLANT_FILES = [...FILES, "src/plant.js"];
+
 const IMPORT_STATEMENT = /^import\s[\s\S]*?;\s*$/gm;
 
 function importsIn(source, filePath){
@@ -89,11 +93,11 @@ function importsIn(source, filePath){
   });
 }
 
-function validateFileOrder(sources){
-  if(new Set(FILES).size !== FILES.length) throw new Error("build.js: FILES contains a duplicate path");
-  const positions = new Map(FILES.map((file, i) => [file, i]));
-  for(let i=0;i<FILES.length;i++){
-    const file = FILES[i];
+function validateFileOrder(files, sources){
+  if(new Set(files).size !== files.length) throw new Error("build.js: FILES contains a duplicate path");
+  const positions = new Map(files.map((file, i) => [file, i]));
+  for(let i=0;i<files.length;i++){
+    const file = files[i];
     for(const specifier of importsIn(sources.get(file), file)){
       if(!specifier.startsWith(".")) throw new Error(`${file}: unlisted non-local import ${JSON.stringify(specifier)}`);
       let dependency = relative(ROOT, resolve(dirname(join(ROOT, file)), specifier)).split(sep).join("/");
@@ -127,15 +131,15 @@ function stripModuleSyntax(source, filePath){
 // (see app.js's initDebugMode, ?debug on the URL).
 const BUILD_STAMP_MARKER = 'const BUILD_STAMP = "dev";';
 
-function buildBundle(){
-  const sources = new Map(FILES.map(rel => [rel, readFileSync(join(ROOT, rel), "utf8")]));
-  validateFileOrder(sources);
-  const sections = FILES.map(rel => {
+function buildBundle(files, prefix = ""){
+  const sources = new Map(files.map(rel => [rel, readFileSync(join(ROOT, rel), "utf8")]));
+  validateFileOrder(files, sources);
+  const sections = files.map(rel => {
     const raw = sources.get(rel);
     const stripped = stripModuleSyntax(raw, rel);
     return `// ---- ${rel} ----\n${stripped}`;
   });
-  const bundle = sections.join("\n");
+  const bundle = prefix + sections.join("\n");
   if(bundle.split(BUILD_STAMP_MARKER).length !== 2) throw new Error(`build.js: expected exactly one BUILD_STAMP marker in app.js`);
   // Europe/Berlin, not UTC or the build machine's own zone — the plant
   // is in Hamburg, so a stamp they read should match their wall clock.
@@ -153,24 +157,35 @@ function buildBundle(){
   return stamped;
 }
 
-function buildHtml(bundleJs){
+function buildHtml(bundleJs, extraCss = ""){
   const shellPath = join(ROOT, "src/index.html");
   const shell = readFileSync(shellPath, "utf8");
   const marker = /<script type="module" src="app\.js"><\/script>/;
   const matches = shell.match(new RegExp(marker.source, "g")) || [];
   if(matches.length !== 1) throw new Error(`src/index.html: expected exactly one app.js module script tag to replace, found ${matches.length}`);
-  return shell.replace(marker, `<script>\n${bundleJs}\n</script>`);
+  // CSS goes into the shell before the script does: the bundle itself
+  // contains "</head>" (generated documents), the shell only once.
+  let html = shell;
+  if(extraCss){
+    if(html.split("</head>").length !== 2) throw new Error("src/index.html: expected exactly one </head>");
+    html = html.replace("</head>", `<style>\n${extraCss}</style>\n</head>`);
+  }
+  return html.replace(marker, `<script>\n${bundleJs}\n</script>`);
 }
 
-function main(){
-  const bundleJs = buildBundle();
-  const html = buildHtml(bundleJs);
+function writeOutput(name, html){
   const outDir = join(ROOT, "dist");
   mkdirSync(outDir, { recursive: true });
-  const outPath = join(outDir, "index.html");
+  const outPath = join(outDir, name);
   writeFileSync(outPath, html, "utf8");
   const kb = (Buffer.byteLength(html, "utf8") / 1024).toFixed(1);
   console.log(`built ${outPath} (${kb} KB)`);
+}
+
+function main(){
+  writeOutput("index.html", buildHtml(buildBundle(FILES)));
+  const plantCss = readFileSync(join(ROOT, "src/plant.css"), "utf8");
+  writeOutput("plant.html", buildHtml(buildBundle(PLANT_FILES, "globalThis.PLANT_VIEW = true;\n"), plantCss));
 }
 
 main();
