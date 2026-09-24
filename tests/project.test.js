@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROJECT_VERSION, includeSideFile, prepareProject, referencedProjectFiles, assertProjectFiles } from "../src/lib/project.js";
+import { PROJECT_VERSION, includeSideFile, prepareProject, referencedProjectFiles, assertProjectFiles, historyEntry } from "../src/lib/project.js";
 
 const config = {
   formats: [
@@ -148,4 +148,23 @@ test("assertProjectFiles rejects duplicate canonical entry names", () => {
     () => assertProjectFiles(project, [{name:"one/audio.wav"}, {name:"two/audio.wav"}]),
     /Duplicate project entry name: audio\.wav/
   );
+});
+
+test("prepareProject defaults history to an empty array", () => {
+  const project = prepareProject({projectVersion:1, format:"12"}, config);
+  assert.deepEqual(project.history, []);
+});
+
+test("prepareProject keeps history entries and rejects malformed ones", () => {
+  const history = [{savedAt:"2026-09-24T12:00:00.000Z", by:"plant", note:"qty 300 → 500"}];
+  const project = prepareProject({projectVersion:1, format:"12", history}, config);
+  assert.deepEqual(project.history, history);
+  assert.throws(() => prepareProject({projectVersion:1, format:"12", history:{}}, config), /project\.history must be an array/);
+  assert.throws(() => prepareProject({projectVersion:1, format:"12", history:["x"]}, config), /project\.history\[0\] must be an object/);
+  assert.throws(() => prepareProject({projectVersion:1, format:"12", history:[{note:true}]}, config), /project\.history\[0\]\.note must be text/);
+});
+
+test("historyEntry stamps a trimmed plant note", () => {
+  const entry = historyEntry("  qty 300 → 500 ", new Date("2026-09-24T12:00:00Z"));
+  assert.deepEqual(entry, {savedAt:"2026-09-24T12:00:00.000Z", by:"plant", note:"qty 300 → 500"});
 });

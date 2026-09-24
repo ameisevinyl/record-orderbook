@@ -185,12 +185,28 @@ export function prepareProject(raw, config){
     address.isResidential = bool(address.isResidential, `${path}.isResidential`);
   }
 
+  // Plant edit notes (see src/plant.js); no form field shows them, the
+  // tool just carries them through load/save.
+  project.history = arrayOrEmpty(project.history, "project.history").map((entry, i) => {
+    const path = `project.history[${i}]`;
+    entry = objectOrEmpty(entry, path);
+    return {
+      savedAt: text(entry.savedAt, `${path}.savedAt`),
+      by: text(entry.by, `${path}.by`),
+      note: text(entry.note, `${path}.note`)
+    };
+  });
+
   for(const name of referencedProjectFiles(project)){
     if(typeof name !== "string" || !name || name.includes("/") || name.includes("\\")){
       throw new Error(`Invalid canonical project filename: ${String(name)}`);
     }
   }
   return project;
+}
+
+export function historyEntry(note, date){
+  return {savedAt: date.toISOString(), by: "plant", note: note.trim()};
 }
 
 export function referencedProjectFiles(project){
