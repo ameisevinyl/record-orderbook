@@ -82,6 +82,11 @@ function withOriginal(fileName, originalFileName){
   return name + (fileName && originalFileName && originalFileName !== fileName ? ` (was: ${originalFileName})` : "");
 }
 
+// An artwork slot's file, plus its page when a multi-page PDF isn't on page 1.
+function artworkFile(slot){
+  return withOriginal(slot.fileName, slot.originalFileName) + (slot.fileName && slot.page > 1 ? `, page ${slot.page}` : "");
+}
+
 function filesManifestSection(project){
   const labels = project.labels || {};
   const labelSides = labels.sides || {};
@@ -123,27 +128,27 @@ function packagingSection(project, config){
     const label = labelSides[side] || {};
     out += label.whitelabel
       ? `  Label ${side}: whitelabel\n`
-      : `  Label ${side}: printed — ${withOriginal(label.fileName, label.originalFileName)}\n`;
+      : `  Label ${side}: printed — ${artworkFile(label)}\n`;
   }
 
   const coverProduct = productById((parts.outerCover && parts.outerCover.products) || [], cover.productId);
   out += !coverProduct
     ? "  Cover: none\n"
     : coverProduct.kind === "printed"
-      ? `  Cover: ${coverProduct.name} — ${withOriginal(cover.fileName, cover.originalFileName)}\n`
+      ? `  Cover: ${coverProduct.name} — ${artworkFile(cover)}\n`
       : `  Cover: ${coverProduct.name}\n`;
 
   const sleeveProduct = productById((parts.innerSleeve && parts.innerSleeve.products) || [], innerSleeve.productId);
   out += !sleeveProduct
     ? "  Inner sleeve: (unrecognized product)\n"
     : sleeveProduct.kind === "printed"
-      ? `  Inner sleeve: ${sleeveProduct.name} — ${withOriginal(innerSleeve.fileName, innerSleeve.originalFileName)}\n`
+      ? `  Inner sleeve: ${sleeveProduct.name} — ${artworkFile(innerSleeve)}\n`
       : `  Inner sleeve: ${sleeveProduct.name}\n`;
 
   const inlayProduct = productById((parts.inlay && parts.inlay.products) || [], inlay.productId);
   out += inlayProduct
-    ? `  Inlay: front — ${withOriginal(front.fileName, front.originalFileName)}\n`
-      + `         back  — ${withOriginal(back.fileName, back.originalFileName)}\n`
+    ? `  Inlay: front — ${artworkFile(front)}\n`
+      + `         back  — ${artworkFile(back)}\n`
     : "  Inlay: none\n";
 
   return out + "\n";

@@ -162,6 +162,10 @@ function createInnerSleeveArtworkSlot(onStateChange){
 
   pageSelect.addEventListener("change", ()=>{
     state.page = Number(pageSelect.value);
+    // A plant preview shows the old page; it must not be saved for the new one.
+    if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    state.previewFile = state.previewUrl = null;
+    renderInnerSleeveFileMeta(state.file.name, state.originalFileName, null);
     renderArtwork();
     onStateChange();
   });

@@ -307,7 +307,12 @@ function wireLabelSide(side){
     if(f) handleFile(side, f);
   });
   document.getElementById("labelpage-"+side).addEventListener("change", e=>{
-    labelStates[side].page = Number(e.target.value);
+    const state = labelStates[side];
+    state.page = Number(e.target.value);
+    // A plant preview shows the old page; it must not be saved for the new one.
+    if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    state.previewFile = state.previewUrl = null;
+    renderLabelFileMeta(side, state.file.name, state.originalFileName, null);
     renderLabelArtwork(side);
     labelsOnStateChange();
   });

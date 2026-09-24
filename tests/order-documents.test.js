@@ -175,3 +175,13 @@ test("order summary and tracklist have no history block without history", () => 
     {savedAt:"2026-09-24T12:00:00.000Z", by:"plant", note:"x"}
   ]}), config, date).includes("HISTORY:"));
 });
+
+test("summary names the page of a multi-page artwork file", () => {
+  const p = project({labels:{bigCenter:false, sides:{
+    A:{whitelabel:false, fileName:"TEST001_labels_A_v1.pdf", originalFileName:"labels.pdf", page:1},
+    B:{whitelabel:false, fileName:"TEST001_labels_B_v1.pdf", originalFileName:"labels.pdf", page:2}
+  }}});
+  const summary = buildOrderSummaryText(p, config, date);
+  assert.match(summary, /Label A: printed — TEST001_labels_A_v1\.pdf \(was: labels\.pdf\)\n/);
+  assert.match(summary, /Label B: printed — TEST001_labels_B_v1\.pdf \(was: labels\.pdf\), page 2\n/);
+});

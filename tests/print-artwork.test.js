@@ -910,3 +910,34 @@ test("pdfPreviewSrc and pageOptionsHtml", () => {
   assert.equal(pdfPreviewSrc("blob:x", 2), "blob:x#toolbar=0&navpanes=0&page=2");
   assert.equal(pageOptionsHtml(3, 2), '<option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>');
 });
+
+test("parsePdfArtwork takes the last root page tree after an incremental save", async () => {
+  // Original 2-page tree, then an appended update with page 2 deleted.
+  const pdf = pdfBuffer(`%PDF-1.4
+1 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 1 0 R /MediaBox [0 0 283.46 283.46] >>
+endobj
+1 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+`);
+  assert.equal((await parsePdfArtwork(pdf)).pageCount, 1);
+});
+
+test("parsePdfArtwork reads /Count past inline resources and ignores inner tree nodes", async () => {
+  const pdf = pdfBuffer(`%PDF-1.4
+1 0 obj
+<< /Type /Pages /Resources << /ProcSet [/PDF] >> /Kids [2 0 R] /Count 3 >>
+endobj
+2 0 obj
+<< /Type /Pages /Parent 1 0 R /Kids [5 0 R 6 0 R] /Count 2 >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 283.46 283.46] >>
+endobj
+`);
+  assert.equal((await parsePdfArtwork(pdf)).pageCount, 3);
+});

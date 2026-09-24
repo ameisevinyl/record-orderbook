@@ -470,27 +470,54 @@ async function detectIccProfileName(text, bytes){
   return null;
 }
 
-// The root page tree's /Count is the largest /Count of any /Type /Pages
-// dict (inner nodes count only their subtree; an outline's /Count sits
-// in a /Type /Outlines dict and never matches). [^<>] keeps a match
-// inside one dict.
-const PAGES_COUNT = /\/Type\s*\/Pages\b[^<>]*?\/Count\s+(\d+)|\/Count\s+(\d+)[^<>]*?\/Type\s*\/Pages\b/g;
-
-function pdfPageCount(structText){
-  let count = 0;
-  for(const m of structText.matchAll(PAGES_COUNT)) count = Math.max(count, Number(m[1] ?? m[2]));
-  return count || 1;
+// Index of the "<<" opening the dict that contains textIndex, or null.
+// Looks back at most 64 KB: page-tree dicts are small.
+function dictStart(text, textIndex){
+  const from = Math.max(0, textIndex - 65536);
+  const tokens = [...text.slice(from, textIndex).matchAll(/<<|>>/g)];
+  let depth = 0;
+  for(let i = tokens.length - 1; i >= 0; i--){
+    if(tokens[i][0] === ">>") depth++;
+    else if(depth === 0) return from + tokens[i].index;
+    else depth--;
+  }
+  return null;
 }
 
-// The file's own text plus every inflated object stream: PDF 1.5+
-// exports keep page dicts (boxes, /Count) in those.
-async function withObjectStreams(text, bytes){
-  const texts = [text];
-  for(const {start, end} of flateStreams(text, dict => /\/Type\s*\/ObjStm\b/.test(dict))){
-    try{ texts.push(await inflateFlateDecodeText(bytes.slice(start, end))); }
-    catch{ /* unreadable stream: use what's readable */ }
+// The last root page tree (/Type /Pages without /Parent) in text, as
+// {at, count}. Inner tree nodes count only their subtree; nested dicts
+// (inline /Resources) are dropped before reading the top-level keys.
+function lastRootPageCount(text){
+  let found = null;
+  for(const m of text.matchAll(/\/Type\s*\/Pages\b/g)){
+    const start = dictStart(text, m.index);
+    const dict = start === null ? null : dictAround(text, start);
+    if(!dict) continue;
+    let top = dict.slice(2, -2);
+    while(/<<[^<>]*>>/.test(top)) top = top.replace(/<<[^<>]*>>/g, "");
+    const count = top.match(/\/Count\s+(\d+)/);
+    if(count && !/\/Parent\b/.test(top)) found = {at: m.index, count: Number(count[1])};
   }
-  return texts.join("\n");
+  return found;
+}
+
+// The file's own text plus every inflated object stream (PDF 1.5+
+// exports keep page dicts, boxes and /Count in those), and the page
+// count. An incremental save appends a new page-tree root and leaves
+// the old one behind, so the root latest in the file wins; an object
+// stream's contents sit at the stream's position.
+async function pdfStructure(text, bytes){
+  const texts = [text];
+  let root = lastRootPageCount(text);
+  for(const {start, end} of flateStreams(text, dict => /\/Type\s*\/ObjStm\b/.test(dict))){
+    let inflated;
+    try{ inflated = await inflateFlateDecodeText(bytes.slice(start, end)); }
+    catch{ continue; } // unreadable stream: use what's readable
+    texts.push(inflated);
+    const inner = lastRootPageCount(inflated);
+    if(inner && (!root || start > root.at)) root = {at: start, count: inner.count};
+  }
+  return { structText: texts.join("\n"), pageCount: root ? root.count : 1 };
 }
 
 export async function parsePdfArtwork(arrayBuffer){
@@ -518,7 +545,7 @@ export async function parsePdfArtwork(arrayBuffer){
   // /TrimBox only outranks /MediaBox as a fallback for files that omit
   // /BleedBox — a closer approximation than the full marked-up sheet,
   // even though it'll still read a bit undersized against the target.
-  const structText = await withObjectStreams(text, bytes);
+  const { structText, pageCount } = await pdfStructure(text, bytes);
   const boxMatch = key => structText.match(new RegExp(`\\/${key}\\s*\\[\\s*([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s*\\]`));
   const pageBoxMatch = boxMatch("BleedBox") || boxMatch("TrimBox") || boxMatch("MediaBox");
   let pageSizeMm = null;
@@ -624,8 +651,6 @@ export async function parsePdfArtwork(arrayBuffer){
   // no ambiguity, no indirect reference to resolve.
   const versionMatch = text.match(/%PDF-(\d\.\d)/);
   const pdfVersion = versionMatch ? versionMatch[1] : null;
-
-  const pageCount = pdfPageCount(structText);
 
   return {
     pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors, iccProfileName,
