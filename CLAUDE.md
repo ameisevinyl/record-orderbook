@@ -103,6 +103,8 @@ now; revisit if/when the plant needs to tell file revisions apart.
 ```
 node --test tests/            # run all unit tests
 node build/build.js           # build dist/index.html from src/
+python3 plant/server.py       # plant view on http://127.0.0.1:8765/
+python3 -m unittest discover plant   # plant server tests
 ```
 
 Run tests before considering any change done. There is no linter/formatter
@@ -118,6 +120,12 @@ configured on purpose — keep it that way unless asked.
   `tracklist.js` owns project save/load and the zip package — other
   modules expose a `collect*`/`apply*` pair for it to call.
 - `tests/*.test.js` mirrors `src/lib/`. New pure logic needs a test.
+- `plant/server.py` + `src/plant/` — the plant (staff) view: a stdlib
+  Python server on 127.0.0.1 that serves `src/plant/` and `src/`
+  unbuilt and unpacks opened project zips into `plant/work/`
+  (gitignored). The page renders `project.json` itself
+  (`src/lib/plant-overview.js`, `src/lib/completeness.js`), not the
+  customer form (god-mode editing may reuse the form later).
 - `src/plant.config.local.js` (gitignored, copied from the committed
   sample `src/plant.config.local.example.js`) holds a real plant's
   identity; `build/build.js` bundles it instead of the sample when
