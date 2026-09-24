@@ -1105,6 +1105,8 @@ async function loadProject(file){
   syncAlbumArtistToLinkedTracks();
   document.getElementById("stamp").textContent = document.getElementById("catalogue").value || "— unsaved —";
   recompute();
+  // Fired only on success — plant.js must not treat a rejected zip as opened.
+  document.dispatchEvent(new CustomEvent("projectloaded", {detail: p}));
 }
 
 function collectPackageFiles(forSend = false){

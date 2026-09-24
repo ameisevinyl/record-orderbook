@@ -3,6 +3,7 @@
 
 import { addHistoryEntry } from "./modules/tracklist.js";
 import { historyEntry } from "./lib/project.js";
+import { isPlantEdit, plantIdentity } from "./lib/plant-view.js";
 
 const plantForm = document.getElementById("orderForm");
 let plantDirty = false;
@@ -45,17 +46,19 @@ function plantInitGuards(){
       plantDirty = false;
     }
   }, true);
+  // tracklist.js clears the input right after reading it; capture the
+  // name first, apply it only once loadProject reports success.
+  let pendingZipName = "";
   document.addEventListener("change", (e)=>{
-    if(e.target.id !== "openProjectInput" || !e.target.files[0]) return;
-    // The zip's own name is <YYMMDD>_<catalogue#>_<customer-email>.zip.
-    document.getElementById("plantIdentity").textContent = e.target.files[0].name.replace(/\.zip$/i, "");
+    if(e.target.id === "openProjectInput" && e.target.files[0]) pendingZipName = e.target.files[0].name;
+  }, true);
+  document.addEventListener("projectloaded", (e)=>{
+    document.getElementById("plantIdentity").textContent = plantIdentity(e.detail, pendingZipName);
     plantDirty = false;
     plantSetLocked(true);
-  }, true);
-  // Only real user input counts — loadProject dispatches synthetic change
-  // events while filling the form.
-  for(const type of ["input", "change"]){
-    plantForm.addEventListener(type, (e)=>{ if(e.isTrusted && !plantForm.disabled) plantDirty = true; });
+  });
+  for(const type of ["input", "change", "click"]){
+    plantForm.addEventListener(type, (e)=>{ if(isPlantEdit(e, plantForm.disabled)) plantDirty = true; });
   }
   addEventListener("beforeunload", (e)=>{ if(plantDirty){ e.preventDefault(); e.returnValue = ""; } });
 }

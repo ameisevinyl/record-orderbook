@@ -80,7 +80,7 @@ const FILES = [
 ];
 
 // The plant view is the same app plus plant.js on top.
-const PLANT_FILES = [...FILES, "src/plant.js"];
+const PLANT_FILES = [...FILES, "src/lib/plant-view.js", "src/plant.js"];
 
 const IMPORT_STATEMENT = /^import\s[\s\S]*?;\s*$/gm;
 
