@@ -60,7 +60,9 @@ const FILES = [
   "src/lib/matrix.js",
   "src/lib/format-catalogue.js",
   "src/lib/transfer.js",
+  "src/lib/pdf.js",
   "src/lib/layout-preview.js",
+  "src/lib/part-template.js",
   "src/lib/specs-document.js",
   "src/lib/project.js",
   "src/lib/order-documents.js",
@@ -144,6 +146,10 @@ function buildBundle(){
   }catch(error){
     throw new Error(`build.js: flattened script does not compile: ${error.message}`);
   }
+  // A literal </script> in the bundle would close the inline script tag in
+  // dist/index.html early and spill the rest of the code onto the page —
+  // escape it as <\/script> at the source.
+  if(/<\/script/i.test(stamped)) throw new Error("build.js: bundle contains a literal </script>, which would close the inline script tag early");
   return stamped;
 }
 

@@ -756,22 +756,28 @@ function downloadBlob(blob, fileName){
 // "Specs" button — a standalone reference document (every enabled
 // format's label/printed-part/audio specs), independent of the current
 // order (works with no catalogue number entered at all). Opens in a new
-// tab: buildSpecsHtml is synchronous, so window.open() still runs inside
+// tab: all of this is synchronous, so window.open() still runs inside
 // the click's user gesture and isn't popup-blocked (unlike sendToPlant's
 // async zip build). A browser that blocks it anyway falls back to a
 // download.
+//
+// The tab is opened at a blob URL instead of an about:blank document
+// written into: that gives it a real same-origin URL, which Safari needs
+// to treat its template PDF links as same-origin downloads rather than
+// navigating the tab away.
 function openSpecs(){
   const html = buildSpecsHtml(CONFIG);
-  const w = window.open("", "_blank");
+  const url = URL.createObjectURL(new Blob([html], {type:"text/html"}));
+  const w = window.open(url, "_blank");
   if(!w){
+    URL.revokeObjectURL(url);
     const name = slug(CONFIG.plant.imprint.recipientName) || "specifications";
     downloadBlob(new Blob([html], {type:"text/html"}), `${name}_specifications.html`);
     return;
   }
-  w.opener = null;
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  // Deliberately not revoked: the tab may be reloaded or bookmarked, and
+  // the document is a few tens of KB.
+  try{ w.opener = null; }catch(e){ /* opener already unreachable — fine */ }
 }
 
 // The project's canonical file name, used both as the zip's own file

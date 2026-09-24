@@ -6,6 +6,8 @@
 
 import { enabledFormats, labelDataSizeMm, flatDataMm, partWeightG } from "./format-catalogue.js";
 import { labelLayoutSvg, printedPartLayoutSvg } from "./layout-preview.js";
+import { labelTemplatePdf, partTemplatePdf, templateFileName } from "./part-template.js";
+import { bytesToBase64 } from "./pdf.js";
 
 function esc(str){
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -17,12 +19,18 @@ function kvTable(rows){
 
 // Schematic layout previews sit as figures directly under a category's
 // heading, one per printed product, captioned with the product name —
-// not as a table column, which kept them too small to read.
+// not as a table column, which kept them too small to read. Each figure
+// also offers its dimension-true PDF template, inline as a data URL so
+// the reference page stays a single self-contained file.
 function layoutFigures(figures){
   const shown = figures.filter(([, svg]) => svg);
   if(!shown.length) return "";
-  return `<div class="layouts">${shown.map(([caption, svg]) =>
-    `<figure class="layout-figure">${svg}<figcaption>${esc(caption)}</figcaption></figure>`).join("")}</div>`;
+  return `<div class="layouts">${shown.map(([caption, svg, template]) =>
+    `<figure class="layout-figure">${svg}<figcaption>${esc(caption)}</figcaption>`
+    + (template
+      ? `<a class="template-link no-print" download="${esc(template.fileName)}" target="_blank" rel="noopener" href="data:application/pdf;base64,${bytesToBase64(template.bytes)}">PDF template</a>`
+      : "")
+    + `</figure>`).join("")}</div>`;
 }
 
 // One row per PRINTED product — unprinted stock has no artwork file, so
@@ -31,7 +39,7 @@ function layoutFigures(figures){
 // inner sleeve, Final size on inlay) are dropped rather than shown as a
 // full column of "—", same "only what applies" rule the live
 // Specifications box follows for a selected product.
-function productTable(title, products){
+function productTable(title, products, partKey, formatId){
   const printed = products.filter(p => p.kind === "printed");
   if(!printed.length) return "";
 
@@ -51,7 +59,12 @@ function productTable(title, products){
   const head = columns.map(([h]) => `<th>${esc(h)}</th>`).join("");
   const body = printed.map(p => `<tr>${columns.map(([, valueOf]) => `<td>${valueOf(p)}</td>`).join("")}</tr>`).join("");
   return `<h3>${esc(title)}</h3>
-    ${layoutFigures(printed.map(p => [p.name, p.trimMm ? printedPartLayoutSvg(p) : null]))}
+    ${layoutFigures(printed.map(p => p.trimMm
+      ? [p.name, printedPartLayoutSvg(p), {
+          fileName: templateFileName({formatId, part: partKey, productName: p.name}),
+          bytes: partTemplatePdf({formatId, part: p})
+        }]
+      : [p.name, null]))}
     <table>
       <thead><tr>${head}</tr></thead>
       <tbody>${body}</tbody>
@@ -99,14 +112,17 @@ function formatSection(format, artworkFileTypes, printSpec){
     ${timeLimitsTable(format)}
     ${printFilesTable(format, artworkFileTypes, printSpec)}
     <h3>Label</h3>
-    ${layoutFigures([[`⌀${label.diameterMm}mm`, labelLayoutSvg(label)]])}
+    ${layoutFigures([[`⌀${label.diameterMm}mm`, labelLayoutSvg(label), {
+      fileName: templateFileName({formatId: format.id, part: "labels"}),
+      bytes: labelTemplatePdf({format, label})
+    }]])}
     <table>
       <thead><tr><th>End format</th><th>Bleed</th><th>Data format</th></tr></thead>
       <tbody><tr><td>⌀${label.diameterMm}mm</td><td>${label.bleedMm}mm</td><td>${labelDataSizeMm(label)}×${labelDataSizeMm(label)}mm</td></tr></tbody>
     </table>
-    ${productTable("Inner Sleeve", parts.innerSleeve.products)}
-    ${productTable("Outer Cover", parts.outerCover.products)}
-    ${productTable("Inlay", parts.inlay.products)}
+    ${productTable("Inner Sleeve", parts.innerSleeve.products, "innersleeve", format.id)}
+    ${productTable("Outer Cover", parts.outerCover.products, "cover", format.id)}
+    ${productTable("Inlay", parts.inlay.products, "inlay", format.id)}
   </section>`;
 }
 
@@ -132,6 +148,7 @@ const SPECS_CSS = `
   .layouts{display:flex;flex-wrap:wrap;gap:18px;margin-top:10px;}
   .layout-figure{margin:0;display:flex;flex-direction:column;align-items:center;break-inside:avoid;}
   .layout-figure figcaption{font-size:11px;color:#5c5c59;margin-top:3px;}
+  .template-link{font-size:11px;color:#161616;margin-top:2px;}
   .layout{display:block;}
   .layout .bleed{fill:none;stroke:#b3b3b0;stroke-dasharray:3 2;}
   .layout .trim{fill:none;stroke:#161616;}
@@ -142,8 +159,37 @@ const SPECS_CSS = `
   /* Each format starts on its own page — but not the audio section, so
      page 1 isn't just the title (an h2-wide break-before did exactly
      that). */
-  @media print{ body{margin:0;max-width:none;padding:0;} .format{break-before:page;} }
+  @media print{ body{margin:0;max-width:none;padding:0;} .format{break-before:page;} .no-print{display:none;} }
 `;
+
+// Safari ignores the download attribute on data: URLs and can navigate
+// this page away instead of saving the file. Convert the inline template
+// data URL to a blob URL on click: Safari downloads that properly and
+// the page stays open. Chrome/Firefox take the same path harmlessly. The
+// target="_blank" on both the links and this generated anchor is a last
+// resort: if a browser still refuses to download, it opens a new tab
+// rather than replacing this page.
+const TEMPLATE_DOWNLOAD_SCRIPT = `
+<script>
+document.addEventListener("click", event => {
+  const link = event.target.closest && event.target.closest("a.template-link");
+  if(!link) return;
+  event.preventDefault();
+  const binary = atob(link.href.slice(link.href.indexOf(",") + 1));
+  const bytes = new Uint8Array(binary.length);
+  for(let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = link.download;
+  anchor.target = "_blank";
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+});
+<\/script>`;
 
 export function buildSpecsHtml(CONFIG){
   const formats = enabledFormats(CONFIG);
@@ -157,5 +203,6 @@ export function buildSpecsHtml(CONFIG){
   <p class="meta">Generated ${esc(generated)}</p>
   ${audioSection(CONFIG.audioSpec)}
   ${formats.map(f => formatSection(f, CONFIG.artworkFileTypes, CONFIG.printSpec)).join("")}
+  ${TEMPLATE_DOWNLOAD_SCRIPT}
 </body></html>`;
 }

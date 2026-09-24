@@ -101,14 +101,26 @@ test("buildSpecsHtml includes each printed product's derived data size", () => {
   assert.match(html, /614×315mm/); // inner sleeve: trim 608x309 + 2*3mm bleed
 });
 
-test("buildSpecsHtml shows a layout preview figure under each heading, captioned per printed product", () => {
+test("buildSpecsHtml shows a layout preview figure with a PDF template link under each heading", () => {
   const html = buildSpecsHtml(config);
   // one label preview plus one per printed product (sleeve, cover, inlay)
   assert.equal((html.match(/class="layout"/g) || []).length, 4);
   assert.equal((html.match(/class="layouts"/g) || []).length, 4);
-  assert.match(html, /<figcaption>⌀100mm<\/figcaption>/);
+  assert.equal((html.match(/class="template-link/g) || []).length, 4);
+  assert.equal((html.match(/data:application\/pdf;base64,/g) || []).length, 4);
+  assert.match(html, /download="12_labels_template_v1\.pdf"/);
+  assert.match(html, /download="12_cover_printed_template_v1\.pdf"/);
   assert.match(html, /<figcaption>printed<\/figcaption>/);
   assert.match(html, /\.layout \.bleed\{/);
+});
+
+test("buildSpecsHtml downloads templates via a blob URL so Safari keeps the page open", () => {
+  const html = buildSpecsHtml(config);
+  assert.match(html, /class="template-link no-print"/);
+  assert.match(html, /target="_blank" rel="noopener"/);
+  assert.match(html, /URL\.createObjectURL\(new Blob\(\[bytes\], \{ type: "application\/pdf" \}\)\)/);
+  assert.match(html, /anchor\.download = link\.download/);
+  assert.match(html, /anchor\.target = "_blank"/);
 });
 
 test("buildSpecsHtml shows the label's data format as a square, not a diameter", () => {
