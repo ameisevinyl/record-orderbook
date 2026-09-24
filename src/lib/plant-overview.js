@@ -39,7 +39,6 @@ function fileHtml(name, sizes){
 function sideHtml(project, format, sideId, sizes){
   const side = project.sides[sideId];
   if(side.blank) return group(`Side ${sideId}`, "<p>Blank</p>");
-  const mode = project.soundsystem ? "soundsystem" : "normal";
   const {seconds} = sideTiming(side);
   let body = rows([
     ["RPM", escapeHtml(side.rpm)],
@@ -56,7 +55,8 @@ function sideHtml(project, format, sideId, sizes){
       }).join("")
       + `</table>`;
   }
-  body += `<p>Total ${formatTime(seconds)} — ${escapeHtml(side.rpm)} rpm, ${mode} cut</p>`;
+  // Normal is the default, so only the soundsystem cut gets named.
+  body += `<p>Total ${formatTime(seconds)} — ${escapeHtml(side.rpm)} rpm${project.soundsystem ? ", soundsystem cut" : ""}</p>`;
   return group(`Side ${sideId}`, body);
 }
 
