@@ -15,7 +15,7 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat, flatDataMm, partWeightG, groupProductsByKind, productById } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON, pdfPreviewSrc, pageOptionsHtml } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 import { requiredFileIssue } from "../lib/file-issues.js";
@@ -51,8 +51,8 @@ function inlaySpec(){
 // uploaded file itself (e.g. an ICC profile's description tag) — built
 // as DOM nodes via textContent, never innerHTML, so a crafted file
 // can't inject markup/script into this page.
-function renderInlayChecklist(tableEl, parsed, kind, targetMm, trimMm, printCheck){
-  const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode());
+function renderInlayChecklist(tableEl, parsed, kind, targetMm, trimMm, printCheck, page){
+  const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode(), page);
   tableEl.innerHTML = "<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead>";
   const tbody = document.createElement("tbody");
   for(const row of rows){
@@ -81,7 +81,8 @@ function createInlayArtworkSlot(prefix, onStateChange){
   const state = {
     file: null, originalFileName: null, storedFileName: null,
     pending: false, rows: [], error: null, revision: 0,
-    url: null, previewFile: null, previewUrl: null
+    url: null, previewFile: null, previewUrl: null,
+    page: 1, pageCount: 1, parsed: null, kind: null
   };
 
   // No-op when there's no dataMm to size against ("None" selected) —
@@ -114,6 +115,39 @@ function createInlayArtworkSlot(prefix, onStateChange){
     }
   }
 
+  const pageWrap = document.getElementById(prefix+"pagewrap");
+  const pageSelect = document.getElementById(prefix+"page");
+
+  // Checklist, preview and page picker for the attached file and its
+  // chosen page; rerun when the page changes.
+  function renderArtwork(){
+    const { dataMm, trimMm } = inlaySpec();
+    const printCheck = getFormat(CONFIG, inlayCurrentFormat()).printCheck;
+    state.rows = renderInlayChecklist(warningsList, state.parsed, state.kind, dataMm, trimMm, printCheck, state.page);
+    const {kind, parsed} = state;
+    if(kind === "pdf"){
+      // Fills via CSS (.label-preview iframe{width/height:100%}) — see
+      // cover.js's identical comment on Safari's PDF viewer margin.
+      preview.innerHTML = `<iframe src="${pdfPreviewSrc(state.url, state.page)}"></iframe>`;
+    } else if(kind === "jpeg"){
+      preview.innerHTML = `<img src="${state.url}" alt="artwork">`;
+    } else if(kind === "tiff"){
+      const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
+      preview.innerHTML = `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`;
+    } else{
+      preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
+    }
+    pageWrap.classList.toggle("hidden", state.pageCount < 2);
+    pageSelect.innerHTML = pageOptionsHtml(state.pageCount, state.page);
+    document.getElementById(prefix+"pagecount").textContent = `of ${state.pageCount}`;
+  }
+
+  pageSelect.addEventListener("change", ()=>{
+    state.page = Number(pageSelect.value);
+    renderArtwork();
+    onStateChange();
+  });
+
   // Swaps the preview box to a plant-generated preview image, taking
   // priority over the live-rendered original — see applyInlaySlotFile
   // below, the only caller (a fresh manual pick never has one to show
@@ -132,7 +166,7 @@ function createInlayArtworkSlot(prefix, onStateChange){
   // origName defaults to the file's own name (a fresh manual pick);
   // applyInlaySlotFile passes the name recorded before renaming, on a
   // project reload, so renderInlayFileMeta can show it as the "was:" line.
-  async function handleFile(f, origName = f.name){
+  async function handleFile(f, origName = f.name, page = 1){
     const revision = ++state.revision;
     meta.classList.remove("empty");
     renderInlayFileMeta(f.name, origName, "checking…");
@@ -141,7 +175,8 @@ function createInlayArtworkSlot(prefix, onStateChange){
     Object.assign(state, {
       file: f, originalFileName: origName, storedFileName: null,
       pending: true, rows: [], error: null,
-      url: null, previewFile: null, previewUrl: null
+      url: null, previewFile: null, previewUrl: null,
+      page: 1, pageCount: 1, parsed: null, kind: null
     });
     onStateChange();
 
@@ -156,25 +191,14 @@ function createInlayArtworkSlot(prefix, onStateChange){
       else if(kind === "tiff") parsed = parseTiffArtwork(buf);
       if(state.revision !== revision || state.file !== f) return false;
 
-      const { dataMm, trimMm } = inlaySpec();
-      const printCheck = getFormat(CONFIG, inlayCurrentFormat()).printCheck;
-      state.rows = renderInlayChecklist(warningsList, parsed, kind, dataMm, trimMm, printCheck);
+      state.parsed = parsed;
+      state.kind = kind;
+      state.pageCount = (parsed && parsed.pageCount) || 1;
+      state.page = Math.min(page, state.pageCount);
+      state.url = URL.createObjectURL(f);
+      renderArtwork();
       state.pending = false;
       state.error = null;
-
-      state.url = URL.createObjectURL(f);
-      if(kind === "pdf"){
-        // Fills via CSS (.label-preview iframe{width/height:100%}) — see
-        // cover.js's identical comment on Safari's PDF viewer margin.
-        preview.innerHTML = `<iframe src="${state.url}#toolbar=0&navpanes=0"></iframe>`;
-      } else if(kind === "jpeg"){
-        preview.innerHTML = `<img src="${state.url}" alt="artwork">`;
-      } else if(kind === "tiff"){
-        const dims = parsed && parsed.imagePx ? `${parsed.imagePx.w}×${parsed.imagePx.h}px` : "unreadable header";
-        preview.innerHTML = `<div class="label-placeholder">TIFF — ${dims}<br>no in-browser preview</div>`;
-      } else{
-        preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
-      }
       renderInlayFileMeta(f.name, origName, null);
     } catch(error){
       if(state.revision !== revision || state.file !== f) return false;
@@ -201,13 +225,15 @@ function createInlayArtworkSlot(prefix, onStateChange){
     Object.assign(state, {
       file: null, originalFileName: null, storedFileName: null,
       pending: false, rows: [], error: null,
-      url: null, previewFile: null, previewUrl: null
+      url: null, previewFile: null, previewUrl: null,
+      page: 1, pageCount: 1, parsed: null, kind: null
     });
     input.value = "";
     meta.classList.add("empty");
     meta.textContent = "";
     preview.innerHTML = `<div class="label-placeholder">no artwork selected</div>`;
     warningsList.innerHTML = "";
+    pageWrap.classList.add("hidden");
   }
 
   document.getElementById(prefix+"pick").addEventListener("click", ()=> input.click());
@@ -220,8 +246,16 @@ function createInlayArtworkSlot(prefix, onStateChange){
   return {
     updateSizing, clear, getFile: ()=> state.file, getOriginalFileName: ()=> state.originalFileName,
     setFile: handleFile, setPreviewImage: showPreviewImage, getPreviewFile: ()=> state.previewFile,
-    getState: ()=> state
+    getState: ()=> state, getPage: ()=> state.page
   };
+}
+
+// A multi-page PDF on the front while the back is still open: offer
+// its page 2 for the back.
+function updateInlayPairOffer(){
+  const front = inlayFrontSlot.getState(), back = inlayBackSlot.getState();
+  const show = front.pageCount > 1 && !back.file && !back.storedFileName;
+  document.getElementById("inlaypair").classList.toggle("hidden", !show);
 }
 
 function inlaySlotFileName(variant, file){
@@ -305,8 +339,13 @@ function renderInlaySpecs(){
 
 export function initInlay(onStateChange = ()=>{}){
   inlayOnStateChange = onStateChange;
-  inlayFrontSlot = createInlayArtworkSlot("inlayfront", ()=> inlayOnStateChange());
-  inlayBackSlot = createInlayArtworkSlot("inlayback", ()=> inlayOnStateChange());
+  const onSlotChange = ()=>{ updateInlayPairOffer(); inlayOnStateChange(); };
+  inlayFrontSlot = createInlayArtworkSlot("inlayfront", onSlotChange);
+  inlayBackSlot = createInlayArtworkSlot("inlayback", onSlotChange);
+  document.getElementById("inlaypair").addEventListener("click", ()=>{
+    const front = inlayFrontSlot.getState();
+    inlayBackSlot.setFile(front.file, front.originalFileName, 2);
+  });
   populateInlayProducts();
   [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
   document.getElementById("inlayfrontinput").accept = CONFIG.artworkFileTypes.accept;
@@ -316,6 +355,7 @@ export function initInlay(onStateChange = ()=>{}){
 
   document.getElementById("format").addEventListener("change", ()=>{
     [inlayFrontSlot, inlayBackSlot].forEach(s=> s.clear());
+    updateInlayPairOffer();
     populateInlayProducts();
     [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
     renderInlaySpecs();
@@ -325,6 +365,7 @@ export function initInlay(onStateChange = ()=>{}){
 
   document.getElementById("inlayProduct").addEventListener("change", ()=>{
     [inlayFrontSlot, inlayBackSlot].forEach(s=>{ s.clear(); s.updateSizing(); });
+    updateInlayPairOffer();
     renderInlaySpecs();
     updateInlayVisibility();
     inlayOnStateChange();
@@ -350,10 +391,10 @@ function setInlayFileNamePlaceholder(prefix, name, originalName){
   }
 }
 
-async function applyInlaySlotFile(slot, prefix, variant, fileName, originalFileName, fileMap){
+async function applyInlaySlotFile(slot, prefix, variant, fileName, originalFileName, fileMap, page){
   const file = fileMap && fileName && fileMap.get(fileName);
   if(file){
-    const current = await slot.setFile(file, originalFileName || fileName);
+    const current = await slot.setFile(file, originalFileName || fileName, page || 1);
     if(current){
       const previewName = previewFileName({catalogue: document.getElementById("catalogue").value, part:"inlay", variant});
       const previewImg = fileMap && fileMap.get(previewName);
@@ -378,11 +419,13 @@ export function collectInlay(){
     productId: product ? product.id : null,
     front: {
       fileName: nameFor(inlayFrontSlot, "front"),
-      originalFileName: originalNameFor(inlayFrontSlot)
+      originalFileName: originalNameFor(inlayFrontSlot),
+      page: product && inlayFrontSlot.getFile() ? inlayFrontSlot.getPage() : 1
     },
     back: {
       fileName: nameFor(inlayBackSlot, "back"),
-      originalFileName: originalNameFor(inlayBackSlot)
+      originalFileName: originalNameFor(inlayBackSlot),
+      page: product && inlayBackSlot.getFile() ? inlayBackSlot.getPage() : 1
     }
   };
 }
@@ -392,12 +435,13 @@ export async function applyInlay(data, fileMap){
   const match = productById(inlayProducts(), inlay.productId);
   document.getElementById("inlayProduct").value = match ? match.id : "";
   await Promise.all([
-    applyInlaySlotFile(inlayFrontSlot, "inlayfront", "front", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap),
-    applyInlaySlotFile(inlayBackSlot, "inlayback", "back", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap)
+    applyInlaySlotFile(inlayFrontSlot, "inlayfront", "front", inlay.front && inlay.front.fileName, inlay.front && inlay.front.originalFileName, fileMap, inlay.front && inlay.front.page),
+    applyInlaySlotFile(inlayBackSlot, "inlayback", "back", inlay.back && inlay.back.fileName, inlay.back && inlay.back.originalFileName, fileMap, inlay.back && inlay.back.page)
   ]);
   updateInlayVisibility();
   [inlayFrontSlot, inlayBackSlot].forEach(s=> s.updateSizing());
   renderInlaySpecs();
+  updateInlayPairOffer();
   inlayOnStateChange();
 }
 

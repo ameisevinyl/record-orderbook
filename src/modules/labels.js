@@ -432,6 +432,7 @@ export async function applyLabels(data, fileMap){
       clearLabelArtwork(side);
     }
   }));
+  updateLabelPairOffer();
   labelsOnStateChange();
 }
 
