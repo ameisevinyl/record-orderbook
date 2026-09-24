@@ -812,13 +812,9 @@ function serializeSide(side, forSend = false){
   return data;
 }
 
-// Plant edit notes (see src/plant.js). No field shows them; they ride
-// along from the loaded project.json to the next save.
+// Plant edit notes (see project.json history). No field shows them; they
+// ride along from the loaded project.json to the next save.
 let projectHistory = [];
-
-export function addHistoryEntry(entry){
-  projectHistory = [...projectHistory, entry];
-}
 
 function buildProjectObject(forSend = false){
   return {
@@ -1105,8 +1101,6 @@ async function loadProject(file){
   syncAlbumArtistToLinkedTracks();
   document.getElementById("stamp").textContent = document.getElementById("catalogue").value || "— unsaved —";
   recompute();
-  // Fired only on success — plant.js must not treat a rejected zip as opened.
-  document.dispatchEvent(new CustomEvent("projectloaded", {detail: p}));
 }
 
 function collectPackageFiles(forSend = false){
