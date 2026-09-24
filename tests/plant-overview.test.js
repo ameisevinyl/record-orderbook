@@ -29,6 +29,8 @@ test("files show size or are marked missing; side total shown", () => {
   assert.ok(html.includes("Total 5:02 — 33 rpm</p>"), "normal cut goes unnamed");
   const loud = prepareProject({format:"12", soundsystem:true, sides:{A:{rpm:"33"}}}, CONFIG);
   assert.ok(renderOverview(loud, CONFIG, []).includes("Total 0:00 — 33 rpm, soundsystem cut</p>"));
+  assert.ok(renderOverview(loud, CONFIG, []).includes("<dt>Cut</dt><dd>soundsystem</dd>"));
+  assert.ok(!html.includes("<dt>Cut</dt>"), "no Cut row for a normal cut");
   assert.ok(!html.includes("ideal"), "limits are specs, not part of the order");
   assert.ok(html.includes("Blank"));
 });

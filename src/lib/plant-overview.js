@@ -94,7 +94,7 @@ export function renderOverview(project, config, files){
       ["Format", escapeHtml(format.label)],
       ["Title", escapeHtml(project.albumTitle)],
       ["Artist", escapeHtml(project.albumArtist)],
-      ["Cut", project.soundsystem ? "soundsystem" : "normal"],
+      ["Cut", project.soundsystem ? "soundsystem" : ""],
       ["Big center hole", labels.bigCenter ? "yes" : ""]
     ])),
     sideHtml(project, format, "A", sizes),
