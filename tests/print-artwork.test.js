@@ -7,7 +7,10 @@ import {
   parseTiffArtwork,
   parsePdfArtwork,
   buildChecklistRows,
+  pdfPreviewSrc,
+  pageOptionsHtml,
 } from "../src/lib/print-artwork.js";
+import { buildPdf } from "../src/lib/pdf.js";
 
 // A format's CONFIG.printCheck shape (see config.js) — reused across the
 // buildChecklistRows tests below, and by one parsePdfArtwork regression
@@ -857,3 +860,53 @@ test("buildChecklistRows reports and fails the lower X-axis effective DPI", () =
   assert.equal(row.expected, "≥300dpi");
 });
 
+
+// ---- page count ----
+
+function pages(n){
+  return Array.from({length: n}, () => ({ widthMm: 100, heightMm: 100, content: "0 0 0 1 k\n" }));
+}
+
+test("parsePdfArtwork counts pages of a plain page tree", async () => {
+  for(const n of [1, 2, 3]){
+    const bytes = buildPdf({ title: "t", pages: pages(n) });
+    const info = await parsePdfArtwork(bytes.buffer);
+    assert.equal(info.pageCount, n);
+  }
+});
+
+test("parsePdfArtwork counts pages whose tree sits in a Flate object stream", async () => {
+  // PDF 1.5 object stream: "objnum offset" header pairs, then the objects.
+  const objs = "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >> << /Type /Page /Parent 2 0 R /MediaBox [0 0 283.46 283.46] >> << /Type /Page /Parent 2 0 R >>";
+  const header = "2 0 3 49 4 83 ";
+  const packed = deflateSync(Buffer.from(header + objs, "latin1"));
+  const pdf = concatBytes([
+    `%PDF-1.5\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`
+    + `5 0 obj\n<< /Type /ObjStm /N 3 /First ${header.length} /Filter /FlateDecode /Length ${packed.length} >>\nstream\n`,
+    new Uint8Array(packed),
+    "\nendstream\nendobj\n%%EOF\n"
+  ]);
+  const info = await parsePdfArtwork(pdf);
+  assert.equal(info.pageCount, 2);
+  assert.equal(Math.round(info.pageSizeMm.w), 100); // page boxes live in the object stream too
+});
+
+test("parsePdfArtwork ignores outline /Count and defaults to 1", async () => {
+  const pdf = vectorPdfBuffer({ content: "0 0 0 1 k", extraObjects: "3 0 obj\n<< /Type /Outlines /Count -3 >>\nendobj\n" });
+  const info = await parsePdfArtwork(pdf);
+  assert.equal(info.pageCount, 1);
+});
+
+test("buildChecklistRows adds a Pages row only for multi-page files", () => {
+  const parsed = { pageSizeMm: TARGET, imagePx: null, declaredDpi: null, colorMode: "CMYK", spotColors: [],
+    iccProfileName: null, trimBoxMm: null, encrypted: false, hasUnembeddedFonts: false, pdfVersion: "1.4", pageCount: 2 };
+  const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, false, 2);
+  assert.deepEqual(rows[0], { feature: "Pages", severity: "info", detected: "2 pages — page 2 used; exact checks at the plant", expected: null });
+  const single = buildChecklistRows({ ...parsed, pageCount: 1 }, "pdf", TARGET, TRIM, PRINT_CHECK, false);
+  assert.ok(!single.some(row => row.feature === "Pages"));
+});
+
+test("pdfPreviewSrc and pageOptionsHtml", () => {
+  assert.equal(pdfPreviewSrc("blob:x", 2), "blob:x#toolbar=0&navpanes=0&page=2");
+  assert.equal(pageOptionsHtml(3, 2), '<option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>');
+});

@@ -10,7 +10,7 @@
 //
 // All three parsers return the same shape (or null if unreadable):
 //   { pageSizeMm, imagePx, declaredDpi, colorMode, spotColors, iccProfileName,
-//     trimBoxMm, encrypted, hasUnembeddedFonts, pdfVersion }
+//     trimBoxMm, encrypted, hasUnembeddedFonts, pdfVersion, pageCount }
 // - pageSizeMm  — {w,h} in mm, from a PDF's /BleedBox, /TrimBox, or
 //                 /MediaBox (first one present, in that priority order —
 //                 see parsePdfArtwork). null for JPEG/TIFF, which have no
@@ -48,6 +48,7 @@
 //                 JPEG/TIFF, same reasoning as the PDF/X checks above.
 // - pdfVersion  — the literal "%PDF-X.Y" header version string (e.g.
 //                 "1.4"), or null for JPEG/TIFF/an unreadable file.
+// - pageCount   — pages in the PDF (1 for JPEG/TIFF).
 
 // ---- format sniffing (magic bytes, not file extension) ----------------
 
@@ -124,7 +125,7 @@ export function parseJpegArtwork(arrayBuffer){
   return {
     pageSizeMm: null, imagePx: {w:widthPx, h:heightPx}, declaredDpi: dpi, colorMode, spotColors: [],
     iccProfileName: null, trimBoxMm: null, encrypted: null, hasUnembeddedFonts: null,
-    pdfVersion: null
+    pdfVersion: null, pageCount: 1
   };
 }
 
@@ -204,7 +205,7 @@ export function parseTiffArtwork(arrayBuffer){
     trimBoxMm: null,
     encrypted: null,
     hasUnembeddedFonts: null,
-    pdfVersion: null
+    pdfVersion: null, pageCount: 1
   };
 }
 
@@ -319,21 +320,14 @@ async function inflateFlateDecodeText(bytes){
   return new TextDecoder("latin1").decode(await inflateFlateDecodeBytes(bytes));
 }
 
-// Every Flate-compressed stream in the document that isn't image pixel
-// data or another internal PDF structure (a compressed object stream,
-// cross-reference stream, or metadata stream) — the shared candidate
-// pool detectVectorColorMode and detectIccProfileName both draw from,
-// each applying its own policy for how many candidates it trusts.
-function findFlateStreamCandidates(text){
+// Every Flate-compressed stream whose dictionary passes keep(dictText).
+function flateStreams(text, keep){
   const candidates = [];
   const streamOpenRe = /(>>)\s*stream\r?\n/g;
   let m;
   while((m = streamOpenRe.exec(text)) !== null){
     const dictText = dictBefore(text, m.index + 2);
-    if(!dictText) continue;
-    if(!/\/FlateDecode\b/.test(dictText)) continue;
-    if(/\/Subtype\s*\/Image/.test(dictText)) continue;
-    if(/\/Type\s*\/(ObjStm|XRef|Metadata)\b/.test(dictText)) continue;
+    if(!dictText || !/\/FlateDecode\b/.test(dictText) || !keep(dictText)) continue;
 
     const dataStart = streamOpenRe.lastIndex;
     let dataEnd = text.indexOf("endstream", dataStart);
@@ -346,6 +340,15 @@ function findFlateStreamCandidates(text){
     candidates.push({ start: dataStart, end: dataEnd });
   }
   return candidates;
+}
+
+// Content-like streams: not image pixel data, not a compressed object
+// stream, cross-reference stream or metadata — the shared candidate
+// pool detectVectorColorMode and detectIccProfileName both draw from,
+// each applying its own policy for how many candidates it trusts.
+function findFlateStreamCandidates(text){
+  return flateStreams(text, dict => !/\/Subtype\s*\/Image/.test(dict)
+    && !/\/Type\s*\/(ObjStm|XRef|Metadata)\b/.test(dict));
 }
 
 // True when a bare content-stream operator token appears preceded by a
@@ -467,6 +470,29 @@ async function detectIccProfileName(text, bytes){
   return null;
 }
 
+// The root page tree's /Count is the largest /Count of any /Type /Pages
+// dict (inner nodes count only their subtree; an outline's /Count sits
+// in a /Type /Outlines dict and never matches). [^<>] keeps a match
+// inside one dict.
+const PAGES_COUNT = /\/Type\s*\/Pages\b[^<>]*?\/Count\s+(\d+)|\/Count\s+(\d+)[^<>]*?\/Type\s*\/Pages\b/g;
+
+function pdfPageCount(structText){
+  let count = 0;
+  for(const m of structText.matchAll(PAGES_COUNT)) count = Math.max(count, Number(m[1] ?? m[2]));
+  return count || 1;
+}
+
+// The file's own text plus every inflated object stream: PDF 1.5+
+// exports keep page dicts (boxes, /Count) in those.
+async function withObjectStreams(text, bytes){
+  const texts = [text];
+  for(const {start, end} of flateStreams(text, dict => /\/Type\s*\/ObjStm\b/.test(dict))){
+    try{ texts.push(await inflateFlateDecodeText(bytes.slice(start, end))); }
+    catch{ /* unreadable stream: use what's readable */ }
+  }
+  return texts.join("\n");
+}
+
 export async function parsePdfArtwork(arrayBuffer){
   const bytes = new Uint8Array(arrayBuffer);
   // Latin-1, not UTF-8: PDF structure is always single-byte ASCII even
@@ -492,7 +518,8 @@ export async function parsePdfArtwork(arrayBuffer){
   // /TrimBox only outranks /MediaBox as a fallback for files that omit
   // /BleedBox — a closer approximation than the full marked-up sheet,
   // even though it'll still read a bit undersized against the target.
-  const boxMatch = key => text.match(new RegExp(`\\/${key}\\s*\\[\\s*([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s*\\]`));
+  const structText = await withObjectStreams(text, bytes);
+  const boxMatch = key => structText.match(new RegExp(`\\/${key}\\s*\\[\\s*([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s+([\\d.+-]+)\\s*\\]`));
   const pageBoxMatch = boxMatch("BleedBox") || boxMatch("TrimBox") || boxMatch("MediaBox");
   let pageSizeMm = null;
   if(pageBoxMatch){
@@ -598,9 +625,11 @@ export async function parsePdfArtwork(arrayBuffer){
   const versionMatch = text.match(/%PDF-(\d\.\d)/);
   const pdfVersion = versionMatch ? versionMatch[1] : null;
 
+  const pageCount = pdfPageCount(structText);
+
   return {
     pageSizeMm, imagePx, declaredDpi: null, colorMode, spotColors, iccProfileName,
-    trimBoxMm, encrypted, hasUnembeddedFonts, pdfVersion
+    trimBoxMm, encrypted, hasUnembeddedFonts, pdfVersion, pageCount
   };
 }
 
@@ -664,7 +693,7 @@ function pushRow(rows, debugMode, row){
   rows.push(row);
 }
 
-export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, debugMode){
+export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, debugMode, page = 1){
   if(kind === "unknown"){
     return [{ feature: "File", severity: "error", detected: "unrecognized file — expected PDF, JPG, or TIFF", expected: null }];
   }
@@ -674,6 +703,11 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
 
   const rows = [];
   const checks = printCheck.checks;
+  // The browser reads the PDF as a whole; only the plant checks one page.
+  if(parsed.pageCount > 1){
+    rows.push({ feature: "Pages", severity: "info",
+      detected: `${parsed.pageCount} pages — page ${page} used; exact checks at the plant`, expected: null });
+  }
   const isPdf = parsed.encrypted !== null; // set (true/false) only by parsePdfArtwork
 
   // ---- Size + implied DPI (from page size for a PDF, from pixel count
@@ -828,3 +862,15 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
   return rows;
 }
 
+
+// The browser's own PDF viewer opens at #page=N (Chrome, Firefox;
+// Safari ignores it and shows page 1).
+export function pdfPreviewSrc(url, page){
+  return `${url}#toolbar=0&navpanes=0&page=${page}`;
+}
+
+export function pageOptionsHtml(count, page){
+  let html = "";
+  for(let i = 1; i <= count; i++) html += `<option value="${i}"${i === page ? " selected" : ""}>${i}</option>`;
+  return html;
+}
