@@ -10,7 +10,7 @@ const plant = readFileSync("dist/plant.html", "utf8");
 test("plant build sets the flag and includes plant code and styles", () => {
   assert.ok(plant.includes("globalThis.PLANT_VIEW = true;"));
   assert.ok(plant.includes("// ---- src/plant.js ----"));
-  assert.ok(plant.includes("Plant view (dist/plant.html only): dense"));
+  assert.ok(plant.includes("Plant view (dist/plant.html only): plain monospaced"));
 });
 
 test("customer build has no plant flag, code or styles, and an unlocked form", () => {

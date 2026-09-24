@@ -1,34 +1,63 @@
-/* Plant view (dist/plant.html only): dense, plain layout. */
-body{ font-size:13px; }
-section{ margin-bottom:8px; }
-.sheet{ max-width:none; padding:8px 12px; }
+/* Plant view (dist/plant.html only): plain monospaced text, one column,
+   top to bottom. Overrides the customer sheet; no decoration. */
+body{ margin:0; padding:6px 10px 40px; line-height:1.35; }
+*{ font-family:var(--mono) !important; font-size:12px !important; }
+.sheet{ max-width:none; }
+h2, h3{ font-weight:700; text-transform:uppercase; margin:8px 0 0; }
+section{ margin:0 0 4px; }
 
 .plantbar{
-  position:sticky; top:0; z-index:10; display:flex; flex-wrap:wrap; align-items:center; gap:8px;
-  background:var(--bg); border-bottom:1px solid var(--edge); padding:6px 0; margin-bottom:8px;
+  position:sticky; top:0; z-index:10; display:flex; flex-wrap:wrap; align-items:center; gap:1ch;
+  background:var(--bg); border-bottom:1px solid var(--ink); padding:2px 0; margin-bottom:4px;
 }
-#plantIdentity{ font-family:var(--mono); margin-right:auto; }
-#godBanner{ flex-basis:100%; background:var(--danger); color:#fff; padding:4px 8px; font-weight:600; }
+#plantIdentity{ margin-right:auto; font-weight:700; }
+#godBanner{ flex-basis:100%; background:var(--danger); color:#fff; padding:0 1ch; font-weight:700; }
+.btn, .pickbtn, .rmbtn, .addbtn{
+  height:auto; margin:0; padding:0 1ch; background:none; border:1px solid var(--ink); border-radius:0; color:var(--ink);
+}
 
 /* Customer-only chrome. */
-header.top, .foot, details.info, .spread-caption, .hint,
+header.top, .foot, details.info, .spread-caption, .hint, .label-placeholder,
 #btnSend, #btnPrint, #btnDownloadSpecs, #sendPanel{ display:none !important; }
 ::placeholder{ color:transparent; }
 
-/* Spec boxes stay open (plant.js); no toggle. */
-details.specs > summary{ display:none; }
-
+/* Controls read as text. */
+input[type=text], input[type=number], select, textarea{
+  height:auto; padding:0; background:none; border:0; border-radius:0; appearance:none; color:var(--ink);
+}
+textarea{ min-height:0; resize:none; field-sizing:content; }
+.artist-field input.artist[readonly]{ background:none; }
 /* The customer sheet dims :disabled to .4 — locked is not unavailable. */
 #orderForm:disabled :disabled{ opacity:1; cursor:default; }
+/* Nothing to click while locked. */
+#orderForm:disabled button{ display:none; }
 
-/* Thumbnails; the modules size previews with inline styles, hence !important. */
-.label-preview-wrap{ height:160px !important; width:auto !important; max-width:100%; margin:4px 0 !important; }
-#labelSides .label-preview-wrap{ width:160px !important; }
-.label-preview{ cursor:zoom-in; }
+/* One field per line: label, then value. */
+.row{ display:block; }
+.field{ display:flex; gap:1ch; margin:0; }
+.field > label:first-child{ flex:0 0 22ch; margin:0; }
+.field > :not(label){ flex:1; }
+
+/* Tracklist grid and side blocks without spacing. */
+.grid-head, .track-row{ gap:1ch; padding:0; }
+.filemeta{ margin:0 0 0 4ch; }
+.side-head, .side-total, .side-opts, .cols2, .label-cols2{ margin:0; padding:0; gap:1ch; }
+.label-cols2{ grid-template-columns:1fr; }
+#shipAddrs .ship-addr + .ship-addr{ margin-top:4px; }
+
+/* Spec boxes: always open (plant.js), plain rows. */
+details.specs{ margin:0; }
+details.specs > summary{ display:none; }
+details.specs .specs-body{ margin:0; padding:0; max-width:none; background:none; border:0; }
+details.specs .specs-body div{ justify-content:flex-start; }
+details.specs .specs-body div span:first-child{ flex:0 0 22ch; color:var(--ink-dim); }
+
+.checklist li, .labelwarnings td, .labelwarnings th{ padding:0 1ch 0 0; }
+.labelwarnings{ margin:0; }
+
+/* Artwork as a small plain thumbnail; the modules size previews with
+   inline styles, hence !important. Click opens it full size (plant.js). */
+.label-preview-wrap{ height:96px !important; width:auto !important; max-width:100%; margin:2px 0 !important; }
+#labelSides .label-preview-wrap{ width:96px !important; }
+.label-preview{ background:none; border-radius:0; cursor:zoom-in; }
 .label-preview img, .label-preview iframe{ pointer-events:none; }
-
-/* Sections flow in columns on wide screens, same order as the form. */
-@media (min-width: 1400px){
-  #orderForm{ columns:2 640px; column-gap:16px; }
-  #orderForm > section, #orderForm > .cols2{ break-inside:avoid; }
-}

@@ -70,10 +70,13 @@ display, quantity tolerance and order lifecycle in the customer tool,
 - `plant.js` sets `open` on every spec box (`details.specs`) and CSS
   hides their `<summary>`, so they read as plain key/value rows. Info
   icons are also `<details>` (`details.info`) and are hidden instead.
-- Artwork previews shrink to fixed ~160px thumbnails, still clickable
+- Artwork previews shrink to plain ~96px thumbnails, still clickable
   for full size.
-- 13px base font, tight padding; sections flow in columns on wide
-  screens, same grouping and order as the customer form.
+- Plain monospaced text, one size, one column top to bottom (revised
+  after the first browser review: the dense two-column layout still read
+  as cluttered). Controls render as text — no boxes, backgrounds or
+  rounded corners — each field one `label  value` line; in-form buttons
+  are hidden while locked.
 - Print behaviour is unchanged (existing `@media print` rules).
 
 ## Saving and history
