@@ -17,3 +17,7 @@
 
 # Personal Claude Code settings — per-user, not shared.
 /.claude/settings.local.json
+
+# Plant view working copies of opened project zips, and Python caches.
+/plant/work/
+__pycache__/
