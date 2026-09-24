@@ -1021,8 +1021,8 @@ In `## Architecture`, add a bullet after the `tests/*.test.js` bullet:
   Python server on 127.0.0.1 that serves `src/plant/` and `src/`
   unbuilt and unpacks opened project zips into `plant/work/`
   (gitignored). The page renders `project.json` itself
-  (`src/lib/plant-overview.js`, `src/lib/completeness.js`) — it never
-  reuses the customer form.
+  (`src/lib/plant-overview.js`, `src/lib/completeness.js`), not the
+  customer form (god-mode editing may reuse the form later).
 ```
 
 - [ ] **Step 2: Run all tests**

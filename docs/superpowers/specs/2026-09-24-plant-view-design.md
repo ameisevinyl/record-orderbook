@@ -131,4 +131,5 @@ command, and one Architecture bullet for `plant/` + `src/plant/`.
 ## Out of scope
 
 Deep checks, inquiry/order/change detection, folders, editing, quotes,
-the customer checklist refactor.
+the customer checklist refactor. Editing (god mode, e.g. phone-in
+changes) may later reuse the customer form; the overview does not.
