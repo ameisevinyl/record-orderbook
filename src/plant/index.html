@@ -34,7 +34,7 @@
   .missing, #error, .gaps{ color:var(--danger); }
   .gaps{ margin:6px 0; padding-left:18px; }
   .complete{ font-weight:700; }
-  #error:empty{ display:none; }
+  #error:empty, #status:empty{ display:none; }
 </style>
 </head>
 <body>
@@ -42,6 +42,7 @@
   <h1>Plant view</h1>
   <button type="button" id="btnLoad">Load project</button>
   <input type="file" id="zipInput" accept=".zip,application/zip" hidden>
+  <p id="status"></p>
   <p id="error"></p>
   <div id="out"></div>
 </main>

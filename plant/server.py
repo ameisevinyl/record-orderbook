@@ -8,7 +8,9 @@ import json
 import shutil
 import stat
 import tempfile
+import threading
 import zipfile
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
@@ -23,6 +25,9 @@ TYPES = {
     ".css": "text/css; charset=utf-8",
 }
 CHUNK = 1 << 20
+# ThreadingHTTPServer: two opens of the same zip would otherwise wipe
+# and fill the same work folder at once.
+UNPACK_LOCK = threading.Lock()
 
 
 class OpenError(Exception):
@@ -64,13 +69,17 @@ def unpack(zip_file, dest):
             project = json.loads(zf.read(jsons[0]))
         except ValueError:
             raise OpenError("project.json is not valid JSON") from None
-        if dest.exists():
-            shutil.rmtree(dest)
-        dest.mkdir(parents=True)
-        zf.extractall(dest)
-    base = dest / PurePosixPath(jsons[0]).parent
-    files = [{"name": p.relative_to(base).as_posix(), "size": p.stat().st_size}
-             for p in sorted(base.rglob("*")) if p.is_file() and p != base / "project.json"]
+        with UNPACK_LOCK:
+            if dest.exists():
+                shutil.rmtree(dest)
+            dest.mkdir(parents=True)
+            try:
+                zf.extractall(dest)
+            except (zipfile.BadZipFile, zlib.error, EOFError) as error:
+                raise OpenError(f"corrupt file in zip: {error}") from None
+            base = dest / PurePosixPath(jsons[0]).parent
+            files = [{"name": p.relative_to(base).as_posix(), "size": p.stat().st_size}
+                     for p in sorted(base.rglob("*")) if p.is_file() and p != base / "project.json"]
     return project, files
 
 
@@ -111,9 +120,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             raw_name = self.headers.get("X-Filename", "")
             stem = zip_stem(raw_name)
+            try:
+                remaining = int(self.headers.get("Content-Length", 0))
+            except ValueError:
+                raise OpenError("invalid Content-Length") from None
             # Project zips can be hundreds of MB: stream to disk, not memory.
             with tempfile.TemporaryFile() as tmp:
-                remaining = int(self.headers.get("Content-Length", 0))
                 while remaining > 0:
                     chunk = self.rfile.read(min(remaining, CHUNK))
                     if not chunk:
@@ -124,6 +136,9 @@ class Handler(BaseHTTPRequestHandler):
                 project, files = unpack(tmp, WORK / stem)
         except OpenError as error:
             return self.reply(400, str(error), "text/plain; charset=utf-8")
+        except OSError as error:
+            # Disk full, name too long, ...: still an answer the page can show.
+            return self.reply(500, f"couldn't unpack: {error}", "text/plain; charset=utf-8")
         name = PurePosixPath(unquote(raw_name)).name
         self.reply(200, json.dumps({"name": name, "project": project, "files": files}),
                    "application/json; charset=utf-8")

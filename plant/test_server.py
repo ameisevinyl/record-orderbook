@@ -1,12 +1,15 @@
+import http.client
 import io
 import stat
 import tempfile
+import threading
 import unittest
 import warnings
 import zipfile
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from server import OpenError, ROOT, static_target, unpack, zip_stem
+from server import Handler, OpenError, ROOT, static_target, unpack, zip_stem
 
 
 def make_zip(entries):
@@ -64,6 +67,60 @@ class UnpackTest(unittest.TestCase):
                 with self.assertRaisesRegex(OpenError, message.strip()):
                     unpack(z, self.dest)
 
+
+    def test_corrupt_member_is_an_open_error(self):
+        z = make_zip([("project.json", b"{}"), ("A1.wav", b"x" * 100)])
+        data = bytearray(z.getvalue())
+        data[data.index(b"x" * 100)] = ord("y")  # breaks the CRC of A1.wav
+        with self.assertRaisesRegex(OpenError, "corrupt"):
+            unpack(io.BytesIO(bytes(data)), self.dest)
+
+    def test_concurrent_opens_of_the_same_name_all_succeed(self):
+        errors = []
+
+        def run():
+            try:
+                files = unpack(make_zip([("p/project.json", b"{}"), ("p/A1.wav", b"1" * 50000)]), self.dest)[1]
+                self.assertEqual(files, [{"name": "A1.wav", "size": 50000}])
+            except Exception as error:  # collected, asserted below
+                errors.append(error)
+
+        threads = [threading.Thread(target=run) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+
+
+class HttpTest(unittest.TestCase):
+    def setUp(self):
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def post(self, headers, body=b""):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        conn.putrequest("POST", "/api/open")
+        for key, value in headers.items():
+            conn.putheader(key, value)
+        conn.endheaders(body)
+        res = conn.getresponse()
+        return res.status, res.read().decode()
+
+    def test_bad_content_length_gets_a_reply(self):
+        status, text = self.post({"X-Filename": "x.zip", "Content-Length": "abc"})
+        self.assertEqual(status, 400)
+        self.assertIn("Content-Length", text)
+
+    def test_overlong_name_gets_a_reply(self):
+        body = make_zip([("project.json", b"{}")]).getvalue()
+        status, text = self.post({"X-Filename": "a" * 300 + ".zip", "Content-Length": str(len(body))}, body)
+        self.assertEqual(status, 500)
+        self.assertTrue(text)
 
 class HelpersTest(unittest.TestCase):
     def test_static_target_stays_inside_src(self):
