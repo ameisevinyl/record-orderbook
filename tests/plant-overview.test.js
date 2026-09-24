@@ -79,6 +79,14 @@ test("audio: continuous side shows file markers and the form's track starts", ()
   assert.ok(html.includes('class="mark form" style="left:30.000%" title="1:00 A2"'));
 });
 
+test("audio: form track starts stop at the first empty length", () => {
+  const side = prepareProject({format:"12", sides:{A:{rpm:"33", continuous:true, continuousFileName:"A.wav",
+    tracks:[{title:"One", length:"1:00"}, {title:"Two", length:""}, {title:"Three", length:"1:00"}]}, B:{blank:true}}}, CONFIG);
+  const html = renderAudio(side, {files:{"A.wav": wavFacts(200)}}, [], "/w/");
+  assert.ok(html.includes('title="1:00 A2"'));
+  assert.ok(!html.includes("A3"));
+});
+
 test("audio: needs ffmpeg shows only the finding", () => {
   const html = renderAudio(project, {error:"needs ffmpeg"}, [{group:"Audio", text:"needs ffmpeg"}], "/w/");
   assert.ok(html.includes("needs ffmpeg"));

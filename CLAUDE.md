@@ -104,7 +104,8 @@ now; revisit if/when the plant needs to tell file revisions apart.
 node --test tests/            # run all unit tests
 node build/build.js           # build dist/index.html from src/
 python3 plant/server.py       # plant view on http://127.0.0.1:8765/
-python3 -m unittest discover plant   # plant server tests
+python3 -m unittest discover plant   # plant server + checks tests
+brew install ffmpeg           # plant checks need ffprobe/ffmpeg on the PATH
 ```
 
 Run tests before considering any change done. There is no linter/formatter
@@ -126,6 +127,11 @@ configured on purpose — keep it that way unless asked.
   (gitignored). The page renders `project.json` itself
   (`src/lib/plant-overview.js`, `src/lib/completeness.js`), not the
   customer form (god-mode editing may reuse the form later).
+- `plant/checks.py` — deep checks on disk, piece 1 (audio): ffprobe
+  facts, AIFF `MARK` markers, MP3 + waveform PNG per file, written to
+  `plant/work/<stem>.checks/` (beside the unpacked zip, never inside).
+  Python only reads facts; the rules live in `src/lib/audio-checks.js`.
+  Spec: `docs/superpowers/specs/2026-09-24-audio-checks-design.md`.
 - `src/plant.config.local.js` (gitignored, copied from the committed
   sample `src/plant.config.local.example.js`) holds a real plant's
   identity; `build/build.js` bundles it instead of the sample when

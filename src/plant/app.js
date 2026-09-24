@@ -82,6 +82,11 @@ async function load(wave){
   if(playing) playButton(playing).textContent = "play";
   playing = wave;
   player.src = url;
+  // Seek only once the duration is known.
+  await new Promise((resolve, reject)=>{
+    player.addEventListener("loadedmetadata", resolve, {once: true});
+    player.addEventListener("error", ()=> reject(new Error("preview can't be played")), {once: true});
+  });
 }
 
 // Click on a waveform: seek there and play. Play button: toggle.

@@ -39,8 +39,9 @@ Python stays standard library only; the one external tool is ffmpeg
     behind the same resolve + `is_relative_to` guard as `src/`.
 - **`src/lib/audio-checks.js`** — pure `audioFindings(project, facts,
   config)` → `[{group, text}]`, the shape `projectGaps` returns.
-- **`src/lib/plant-overview.js`** — `renderAudio(project, facts, findings)`:
-  facts table, findings and waveform per side.
+- **`src/lib/plant-overview.js`** — `renderAudio(project, facts, findings,
+  base)`: findings, then per side and file the facts and the waveform;
+  `base` is the URL folder of the check output.
 - **`src/plant/app.js`** — after the overview renders, calls
   `/api/check` ("checking audio…"), appends the audio section, drives
   the player.
@@ -57,7 +58,7 @@ From `ffprobe -show_format -show_streams -show_chapters -of json`
 | software | tags `encoder` (WAV INFO `ISFT`), `encoded_by` (BWF `bext` originator), `coding_history` (BWF) |
 | title, artist, comment | tags |
 | markers, WAV | chapters (`cue ` offsets + `LIST/adtl/labl` titles) |
-| markers, AIFF | own reader: `MARK` chunk (marker id, position in sample frames, pstring name) — ffprobe ignores it |
+| markers, AIFF | own reader: `MARK` chunk (marker id, position in sample frames, pstring name) — ffprobe ignores it; walks the chunks by seeking, never reads the file whole |
 
 Per file (name relative to the `project.json` folder):
 
@@ -91,13 +92,17 @@ the whole result is `{error: "needs ffmpeg"}` and the page says so.
 ## Prelisten
 
 - Server makes per file a 128 kbps stereo MP3 and a waveform PNG
-  (`showwavespic`, 1600×120, mono, `--ink-dim` colour).
+  (`showwavespic`, 1600×120, mono, linear peaks like a DAW, `--ink-dim`
+  colour). A 20 min 96 kHz side plus a 5 min float file: ~6 s.
 - Page: the PNG at full width; a translucent overlay marks the played
-  part; markers from the file and — on a continuous side — the form's
-  track boundaries (cumulative lengths + gaps) as thin lines in percent.
-- Click seeks (`x / width × duration`) and plays; clicking the playing
-  waveform pauses. One shared `<audio>` element. The MP3 is fetched as
-  a blob on first play, so seeking works without HTTP Range support.
+  part; markers from the file on top and — on a continuous side — the
+  form's track starts below, as thin lines in percent. Form starts are
+  the summed track lengths without gaps (a continuous side's pauses are
+  in the file) and stop at the first empty length.
+- Click on the waveform seeks (`x / width × duration`) and plays; a
+  play/pause button per file toggles. One shared `<audio>` element. The
+  MP3 is fetched as a blob on first play, so seeking works without HTTP
+  Range support.
 - Plain, dense, no hover effects — like the rest of the plant view.
 
 ## Tests

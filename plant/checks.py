@@ -21,30 +21,32 @@ SOFTWARE_TAGS = ("encoder", "encoded_by", "coding_history")
 WAVE_COLOUR = "#5c5c59"  # --ink-dim in src/plant/index.html
 
 
-def aiff_markers(data):
+def aiff_markers(f):
     """(position in sample frames, name) per MARK marker, by position.
 
-    MARK: numMarkers(2), then per marker id(2), position(4), name as a
-    pstring padded to even length. Chunks are padded to even size."""
-    if data[:4] != b"FORM" or data[8:12] not in (b"AIFF", b"AIFC"):
+    f: a binary file; chunks are skipped by seeking, so a large side file
+    is never read whole. MARK: numMarkers(2), then per marker id(2),
+    position(4), name as a pstring padded to even length. Chunks are
+    padded to even size."""
+    head = f.read(12)
+    if head[:4] != b"FORM" or head[8:12] not in (b"AIFF", b"AIFC"):
         return []
-    offset = 12
-    while offset + 8 <= len(data):
-        chunk_id, size = data[offset:offset + 4], struct.unpack_from(">I", data, offset + 4)[0]
-        if chunk_id == b"MARK":
-            end = min(offset + 8 + size, len(data))
-            pos = offset + 10
-            markers = []
-            for _ in range(struct.unpack_from(">H", data, offset + 8)[0]):
-                if pos + 7 > end:
-                    break
-                position, length = struct.unpack_from(">IB", data, pos + 2)
-                if pos + 7 + length > end:
-                    break
-                markers.append((position, data[pos + 7:pos + 7 + length].decode("latin-1")))
-                pos += 7 + length + (length + 1) % 2
-            return sorted(markers)
-        offset += 8 + size + size % 2
+    while len(chunk := f.read(8)) == 8:
+        size = struct.unpack(">I", chunk[4:])[0]
+        if chunk[:4] != b"MARK":
+            f.seek(size + size % 2, 1)
+            continue
+        data = f.read(size)
+        pos, markers = 2, []
+        for _ in range(struct.unpack_from(">H", data)[0] if len(data) >= 2 else 0):
+            if pos + 7 > len(data):
+                break
+            position, length = struct.unpack_from(">IB", data, pos + 2)
+            if pos + 7 + length > len(data):
+                break
+            markers.append((position, data[pos + 7:pos + 7 + length].decode("latin-1")))
+            pos += 7 + length + (length + 1) % 2
+        return sorted(markers)
     return []
 
 
@@ -71,7 +73,8 @@ def probe_facts(path):
     rate = int(stream.get("sample_rate") or 0) or None
     bits = int(stream.get("bits_per_sample") or stream.get("bits_per_raw_sample") or 0) or None
     if fmt["format_name"] == "aiff":
-        markers = [(pos / rate, name) for pos, name in aiff_markers(Path(path).read_bytes())] if rate else []
+        with open(path, "rb") as f:
+            markers = [(pos / rate, name) for pos, name in aiff_markers(f)] if rate else []
     else:
         markers = [(float(c["start_time"]), c.get("tags", {}).get("title", "")) for c in info.get("chapters", [])]
     pcm = codec.startswith("pcm_")
@@ -94,7 +97,7 @@ def render_previews(path, out_dir, base):
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(path), "-vn", "-ac", "2", "-b:a", "128k",
                     str(out_dir / mp3)], check=True, capture_output=True)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(path), "-filter_complex",
-                    f"aformat=channel_layouts=mono,showwavespic=s=1600x120:colors={WAVE_COLOUR}",
+                    f"aformat=channel_layouts=mono,showwavespic=s=1600x120:colors={WAVE_COLOUR}:filter=peak",
                     "-frames:v", "1", str(out_dir / png)], check=True, capture_output=True)
     return mp3, png
 

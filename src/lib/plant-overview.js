@@ -96,14 +96,17 @@ function markHtml(seconds, duration, label, kind){
 
 // Where the form puts each track after the first on a continuous side:
 // the sum of the lengths before it. No gaps — on a continuous side the
-// pauses are part of the file, the form disables the gap fields.
+// pauses are part of the file, the form disables the gap fields. Stops
+// at the first empty length: the starts after it are unknown.
 function formTrackStarts(side, sideId){
   const starts = [];
   let at = 0;
-  side.tracks.forEach((track, i) => {
+  for(const [i, track] of side.tracks.entries()){
     if(i) starts.push([at, `${sideId}${i + 1}`]);
-    at += parseTime(track.length) || 0;
-  });
+    const length = parseTime(track.length);
+    if(length === null) break;
+    at += length;
+  }
   return starts;
 }
 

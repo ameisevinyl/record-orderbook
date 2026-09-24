@@ -1,3 +1,4 @@
+import io
 import shutil
 import struct
 import subprocess
@@ -5,7 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from checks import aiff_markers, probe_facts, run
+from checks import aiff_markers as read_markers, probe_facts, run
+
+
+def aiff_markers(data):
+    return read_markers(io.BytesIO(data))
 
 HAS_FFMPEG = bool(shutil.which("ffprobe") and shutil.which("ffmpeg"))
 
