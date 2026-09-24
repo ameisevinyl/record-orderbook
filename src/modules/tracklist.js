@@ -812,6 +812,14 @@ function serializeSide(side, forSend = false){
   return data;
 }
 
+// Plant edit notes (see src/plant.js). No field shows them; they ride
+// along from the loaded project.json to the next save.
+let projectHistory = [];
+
+export function addHistoryEntry(entry){
+  projectHistory = [...projectHistory, entry];
+}
+
 function buildProjectObject(forSend = false){
   return {
     projectVersion: PROJECT_VERSION,
@@ -825,7 +833,8 @@ function buildProjectObject(forSend = false){
     vinylColor: collectVinylColor(),
     shippingBilling: collectShippingBilling(),
     labels: collectLabels(forSend),
-    coverSleeve: { cover: collectCover(), innerSleeve: collectInnerSleeve(), inlay: collectInlay() }
+    coverSleeve: { cover: collectCover(), innerSleeve: collectInnerSleeve(), inlay: collectInlay() },
+    history: projectHistory
   };
 }
 
@@ -999,6 +1008,7 @@ async function loadProject(file){
     fileMap.set(name, new File([e.data], name, {type: mimeType(fileExt(name))}));
   }
 
+  projectHistory = p.history;
   document.getElementById("catalogue").value = p.catalogue || "";
   ensureFormatOption(p.format);
   document.getElementById("format").value = p.format;
