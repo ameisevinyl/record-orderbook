@@ -26,7 +26,8 @@ test("files show size or are marked missing; side total shown", () => {
   const html = renderOverview(project, CONFIG, [{name:"A1.wav", size:52428800}]);
   assert.ok(html.includes("A1.wav (50.0 MB)"));
   assert.match(html, /A2\.wav <span class="missing">missing<\/span>/);
-  assert.ok(html.includes("Total 5:02"));
+  assert.ok(html.includes("Total 5:02 — 33 rpm, normal cut</p>"));
+  assert.ok(!html.includes("ideal"), "limits are specs, not part of the order");
   assert.ok(html.includes("Blank"));
 });
 

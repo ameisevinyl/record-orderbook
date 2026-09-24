@@ -17,3 +17,13 @@ export function computeStatus(timeLimits, rpm, mode, seconds){
   else if(minutes > idealMin) level = "warn";
   return {level, maxMin, idealMin, minutes};
 }
+
+// Reference rows for the Specifications box: every cut and rpm of one
+// format's table, independent of what the customer chose.
+export function timeLimitRows(timeLimits){
+  return Object.entries(timeLimits).flatMap(([cut, limits]) =>
+    Object.keys(limits.max).sort((a, b) => a - b).map(rpm => ({
+      label: `${cut}, ${rpm} RPM`,
+      text: `${limits.ideal[rpm]} / ${limits.max[rpm]} min`
+    })));
+}

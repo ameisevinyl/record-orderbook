@@ -4,7 +4,6 @@
 // project value goes through escapeHtml here.
 
 import { formatTime } from "./time.js";
-import { computeStatus } from "./playing-time.js";
 import { getFormat, productById } from "./format-catalogue.js";
 import { colorLabel } from "./vinyl-color.js";
 import { sideTiming, ADDRESS_FIELD_LABELS } from "./completeness.js";
@@ -42,7 +41,6 @@ function sideHtml(project, format, sideId, sizes){
   if(side.blank) return group(`Side ${sideId}`, "<p>Blank</p>");
   const mode = project.soundsystem ? "soundsystem" : "normal";
   const {seconds} = sideTiming(side);
-  const status = computeStatus(format.timeLimits, Number(side.rpm), mode, seconds);
   let body = rows([
     ["RPM", escapeHtml(side.rpm)],
     ["Matrix", escapeHtml(side.matrixInscription)],
@@ -58,7 +56,7 @@ function sideHtml(project, format, sideId, sizes){
       }).join("")
       + `</table>`;
   }
-  body += `<p>Total ${formatTime(seconds)} — ${escapeHtml(side.rpm)} rpm, ${mode} cut, ideal ${status.idealMin} min, max ${status.maxMin} min</p>`;
+  body += `<p>Total ${formatTime(seconds)} — ${escapeHtml(side.rpm)} rpm, ${mode} cut</p>`;
   return group(`Side ${sideId}`, body);
 }
 

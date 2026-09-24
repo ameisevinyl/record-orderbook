@@ -199,7 +199,6 @@
   .badge.ok{ color:var(--ink-dim); }
   .badge.warn{ color:var(--danger); }
   .badge.danger{ color:var(--danger); }
-  .limits-note{ font-size:11px; color:var(--ink-dim); margin-top:4px; }
 
   .blank-note{ color:var(--ink-dim); font-style:italic; font-size:12px; }
 
@@ -293,6 +292,8 @@
     font-size:12px; line-height:1.6; color:var(--ink-dim);
   }
   details.specs .specs-body div{ display:flex; justify-content:space-between; gap:10px; }
+  /* A block of rows inside the box, not one row itself. */
+  details.specs .specs-body .specs-rows{ display:block; }
 
   /* cover / inner sleeve flat spreads reuse the .label-preview-wrap /
      .label-preview / .labelwarnings rules above — only the back/front
@@ -452,7 +453,7 @@
   <section>
     <h2>Notes to the Cutting Engineer</h2>
     <label class="chk">
-      <input type="checkbox" id="soundsystem"> Soundsystem cut (louder but shorter playing-time)
+      <input type="checkbox" id="soundsystem"> Soundsystem cut
     </label>
     <textarea id="notes"></textarea>
   </section>

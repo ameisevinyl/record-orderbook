@@ -10,7 +10,7 @@ import { CONFIG } from "../config.js";
 import { formatTime, parseTime, trackGapSeconds } from "../lib/time.js";
 import { readAudioDuration, readAudioSpec, compressionWarning, audioSpecWarning } from "../lib/audio-duration.js";
 import { buildZip, parseZipBytes } from "../lib/zip.js";
-import { computeStatus } from "../lib/playing-time.js";
+import { computeStatus, timeLimitRows } from "../lib/playing-time.js";
 import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-catalogue.js";
 import { trackFileName, continuousSideFileName, tracklistFileName, projectFileName, fileExt, mimeType, humanDate, slug } from "../lib/package-naming.js";
 import { defaultMatrix } from "../lib/matrix.js";
@@ -420,18 +420,15 @@ function statusFor(seconds, side){
 function recompute(){
   ["A","B"].forEach(side=>{
     const seconds = computeSideSeconds(side);
-    const {level, maxMin, idealMin} = statusFor(seconds, side);
+    const {level} = statusFor(seconds, side);
     const totalFig = document.getElementById("total-"+side);
     const badge = document.getElementById("badge-"+side);
-    const note = document.getElementById("limitsnote-"+side);
-    const {format, rpm, mode} = sideMeta(side);
 
     totalFig.textContent = formatTime(seconds);
     badge.className = "badge " + level;
     badge.textContent = level === "ok" ? "within recommendation"
                        : level === "warn" ? "approaching limit"
                        : "exceeds recommendation";
-    note.textContent = `${format}", ${rpm} RPM${mode==="soundsystem"?" · soundsystem cut":""} — ideal up to ${idealMin} min, max ${maxMin} min`;
   });
   updateChecklist();
 }
@@ -543,6 +540,8 @@ const AUDIO_SPECS_HTML = `
           <div><span>Allowed filetypes</span><span id="audioSpecFiletypes"></span></div>
           <div><span>Bit depth</span><span id="audioSpecBitDepth"></span></div>
           <div><span>Sample rate</span><span id="audioSpecSampleRate"></span></div>
+          <div><span>Playing time per side</span><span>ideal / max</span></div>
+          <div class="specs-rows" id="timeLimitSpecs"></div>
         </div>
       </details>`;
 
@@ -597,10 +596,7 @@ function sideTemplate(side){
       <button type="button" class="addbtn no-print" id="addbtn-${side}">+ add track</button>
 
       <div class="side-total">
-        <div>
-          <div>total playing time: <span class="total-fig" id="total-${side}">0:00</span></div>
-          <div class="limits-note" id="limitsnote-${side}"></div>
-        </div>
+        <div>total playing time: <span class="total-fig" id="total-${side}">0:00</span></div>
         <span class="badge ok" id="badge-${side}">within recommendation</span>
       </div>
 
@@ -704,11 +700,20 @@ function renderAudioSpecs(){
   document.getElementById("audioSpecSampleRate").textContent = `>=${a.minSampleRateHz/1000}kHz`;
 }
 
+// The selected format's playing-time limits for every cut and rpm — a
+// reference, deliberately apart from the cut the customer picks below.
+function renderTimeLimitSpecs(){
+  const rows = timeLimitRows(getFormat(CONFIG, document.getElementById("format").value).timeLimits);
+  document.getElementById("timeLimitSpecs").innerHTML =
+    rows.map(row => `<div><span>${row.label}</span><span>${row.text}</span></div>`).join("");
+}
+
 export function initTracklist(){
   renderImprint();
   populateFormatOptions();
   document.getElementById("sides").innerHTML = sideTemplate("A") + sideTemplate("B");
   renderAudioSpecs();
+  renderTimeLimitSpecs();
   ["A","B"].forEach(side=>{
     addTrack(side);
     wireSideOptions(side);
@@ -727,6 +732,7 @@ export function initTracklist(){
   });
 
   document.getElementById("format").addEventListener("change", applyDefaultRpm);
+  document.getElementById("format").addEventListener("change", renderTimeLimitSpecs);
   document.getElementById("soundsystem").addEventListener("change", recompute);
   document.getElementById("catalogue").addEventListener("input", ()=>{
     document.getElementById("stamp").textContent =
