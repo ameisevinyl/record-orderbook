@@ -53,7 +53,12 @@ display, quantity tolerance and order lifecycle in the customer tool,
   restores the lock.
 - Edits unlock file pickers too, so staff can swap an artwork file.
 - Nothing saves automatically. A `beforeunload` warning fires while
-  edits are unsaved.
+  edits are unsaved, and opening another zip asks to discard them.
+- Only real user input counts as an edit (`event.isTrusted`) — the
+  synthetic `change` events `loadProject` dispatches don't.
+- Opening a zip always re-locks the form.
+- Locked controls render at full opacity (the customer stylesheet dims
+  `:disabled` controls to .4, which would make the whole order faint).
 
 ## Layout (`src/plant.css`, `src/plant.js`)
 
@@ -62,8 +67,9 @@ display, quantity tolerance and order lifecycle in the customer tool,
 - The status checklist is pinned at the top.
 - Hidden: info icons, placeholders, captions/hints, header decoration,
   and customer actions (Send to Plant, Print, Specs download).
-- `plant.js` sets `open` on every `<details>` and CSS hides their
-  `<summary>`, so spec boxes read as plain key/value rows.
+- `plant.js` sets `open` on every spec box (`details.specs`) and CSS
+  hides their `<summary>`, so they read as plain key/value rows. Info
+  icons are also `<details>` (`details.info`) and are hidden instead.
 - Artwork previews shrink to fixed ~160px thumbnails, still clickable
   for full size.
 - 13px base font, tight padding; sections flow in columns on wide
@@ -75,8 +81,9 @@ display, quantity tolerance and order lifecycle in the customer tool,
 - Save uses the existing `saveProject`; the zip gets today's
   `<YYMMDD>_<catalogue#>_<customer-email>` name.
 - If anything was edited in god mode, Save first asks for a one-line
-  note (e.g. "qty 300 → 500, per phone 24.09."). Save without edits
-  (re-packaging) asks nothing.
+  note (e.g. "qty 300 → 500, per phone 24.09."). Cancelling or leaving
+  it empty aborts the save. Save without edits (re-packaging) asks
+  nothing.
 - The note is appended to `project.json` as
   `history: [{ savedAt, by: "plant", note }]` (ISO timestamp) and
   printed as a History block at the end of `order_summary.txt`.
