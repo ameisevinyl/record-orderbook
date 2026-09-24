@@ -1,1 +1,34 @@
 /* Plant view (dist/plant.html only): dense, plain layout. */
+body{ font-size:13px; }
+section{ margin-bottom:8px; }
+.sheet{ max-width:none; padding:8px 12px; }
+
+.plantbar{
+  position:sticky; top:0; z-index:10; display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+  background:var(--bg); border-bottom:1px solid var(--edge); padding:6px 0; margin-bottom:8px;
+}
+#plantIdentity{ font-family:var(--mono); margin-right:auto; }
+#godBanner{ flex-basis:100%; background:var(--danger); color:#fff; padding:4px 8px; font-weight:600; }
+
+/* Customer-only chrome. */
+header.top, .foot, details.info, .spread-caption, .hint,
+#btnSend, #btnPrint, #btnDownloadSpecs, #sendPanel{ display:none !important; }
+::placeholder{ color:transparent; }
+
+/* Spec boxes stay open (plant.js); no toggle. */
+details.specs > summary{ display:none; }
+
+/* The customer sheet dims :disabled to .4 — locked is not unavailable. */
+#orderForm:disabled :disabled{ opacity:1; cursor:default; }
+
+/* Thumbnails; the modules size previews with inline styles, hence !important. */
+.label-preview-wrap{ height:160px !important; width:auto !important; max-width:100%; margin:4px 0 !important; }
+#labelSides .label-preview-wrap{ width:160px !important; }
+.label-preview{ cursor:zoom-in; }
+.label-preview img, .label-preview iframe{ pointer-events:none; }
+
+/* Sections flow in columns on wide screens, same order as the form. */
+@media (min-width: 1400px){
+  #orderForm{ columns:2 640px; column-gap:16px; }
+  #orderForm > section, #orderForm > .cols2{ break-inside:avoid; }
+}
