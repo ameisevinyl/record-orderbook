@@ -98,6 +98,12 @@ export const CONFIG = {
       // blocked, not just have it silently refused.
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
+        // Max total ink (C+M+Y+K, %) per part. Labels are baked in the
+        // oven before pressing, so they stay well below ISO Coated v2 300 %.
+        inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
+        // Black should be 100 % K: a black-looking pixel (K ≥ kMinPct)
+        // with more than cmyMaxPct C+M+Y counts as rich black.
+        black: { kMinPct: 85, cmyMaxPct: 30 },
         checks: {
           size:         { severity: "warn" },
           resolution:   { severity: "warn" },
@@ -107,7 +113,11 @@ export const CONFIG = {
           pdfVersion:   { accepted: ["1.4"],  severity: "debug" },
           trimBox:      { required: false,    severity: "warn" },
           encryption:   { severity: "error" },
-          fonts:        { requireEmbedded: true, severity: "debug" }
+          fonts:        { requireEmbedded: true, severity: "debug" },
+          // Plant-only rows (measured on disk, see src/lib/artwork-checks.js).
+          ink:          { severity: "warn" },
+          black:        { severity: "warn" },
+          bleed:        { severity: "warn" }
         }
       },
       // Every packaging category below (innerSleeve/outerCover/inlay) is
@@ -212,6 +222,8 @@ export const CONFIG = {
       recordWeightG: 100,
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
+        inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
+        black: { kMinPct: 85, cmyMaxPct: 30 },
         checks: {
           size:         { severity: "warn" },
           resolution:   { severity: "warn" },
@@ -221,7 +233,10 @@ export const CONFIG = {
           pdfVersion:   { accepted: ["1.4"],  severity: "debug" },
           trimBox:      { required: false,    severity: "warn" },
           encryption:   { severity: "error" },
-          fonts:        { requireEmbedded: true, severity: "debug" }
+          fonts:        { requireEmbedded: true, severity: "debug" },
+          ink:          { severity: "warn" },
+          black:        { severity: "warn" },
+          bleed:        { severity: "warn" }
         }
       },
       printableParts: {
@@ -286,6 +301,8 @@ export const CONFIG = {
       recordWeightG: 40,
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
+        inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
+        black: { kMinPct: 85, cmyMaxPct: 30 },
         checks: {
           size:         { severity: "warn" },
           resolution:   { severity: "warn" },
@@ -295,7 +312,10 @@ export const CONFIG = {
           pdfVersion:   { accepted: ["1.4"],  severity: "debug" },
           trimBox:      { required: false,    severity: "warn" },
           encryption:   { severity: "error" },
-          fonts:        { requireEmbedded: true, severity: "debug" }
+          fonts:        { requireEmbedded: true, severity: "debug" },
+          ink:          { severity: "warn" },
+          black:        { severity: "warn" },
+          bleed:        { severity: "warn" }
         }
       },
       printableParts: {

@@ -1,7 +1,7 @@
 const SEVERITIES = new Set(["debug", "info", "warn", "error"]);
 const CHECK_NAMES = [
   "size", "resolution", "colorMode", "spotColors", "colorProfile",
-  "pdfVersion", "trimBox", "encryption", "fonts"
+  "pdfVersion", "trimBox", "encryption", "fonts", "ink", "black", "bleed"
 ];
 
 function fail(path, expected){
@@ -62,6 +62,15 @@ function validatePrintCheck(value, path){
     if(typeof checks[name].required !== "boolean") fail(`${path}.checks.${name}.required`, "must be a boolean");
   }
   if(typeof checks.fonts.requireEmbedded !== "boolean") fail(`${path}.checks.fonts.requireEmbedded`, "must be a boolean");
+
+  const ink = object(printCheck.inkLimitPct, `${path}.inkLimitPct`);
+  for(const part of ["labels", "innerSleeve", "outerCover", "inlay"]){
+    number(ink[part], `${path}.inkLimitPct.${part}`);
+    if(ink[part] > 400) fail(`${path}.inkLimitPct.${part}`, "must not exceed 400");
+  }
+  const black = object(printCheck.black, `${path}.black`);
+  number(black.kMinPct, `${path}.black.kMinPct`);
+  number(black.cmyMaxPct, `${path}.black.cmyMaxPct`);
 }
 
 function validateTimeLimits(value, path){

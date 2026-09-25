@@ -155,3 +155,17 @@ test("validates artwork file types, print spec, locale, and info text", () => {
   delete info.infoText.bigCenter.en;
   assert.throws(() => validateConfig(info), /infoText\.bigCenter\.en must be a non-empty string/);
 });
+
+test("printCheck ink limits, black thresholds and new check severities are validated", () => {
+  const cases = [
+    [c => { delete c.formats[0].printCheck.inkLimitPct.labels; }, /inkLimitPct\.labels/],
+    [c => { c.formats[0].printCheck.inkLimitPct.inlay = 500; }, /inkLimitPct\.inlay/],
+    [c => { c.formats[0].printCheck.black.kMinPct = "85"; }, /black\.kMinPct/],
+    [c => { c.formats[0].printCheck.checks.bleed.severity = "loud"; }, /checks\.bleed\.severity/]
+  ];
+  for(const [mutate, message] of cases){
+    const config = copy();
+    mutate(config);
+    assert.throws(() => validateConfig(config), message);
+  }
+});
