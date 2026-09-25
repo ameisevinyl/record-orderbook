@@ -49,6 +49,7 @@
 // - pdfVersion  — the literal "%PDF-X.Y" header version string (e.g.
 //                 "1.4"), or null for JPEG/TIFF/an unreadable file.
 // - pageCount   — pages in the PDF (1 for JPEG/TIFF).
+// - effectiveDpi — {x,y}, plant only: lowest resolution of any placed image.
 
 // ---- format sniffing (magic bytes, not file extension) ----------------
 
@@ -724,7 +725,7 @@ function colourModeLabel(mode){
 
 // configSeverity: a check's CONFIG.printCheck.checks.<name>.severity.
 // passed: whether this particular row's check succeeded.
-function resolveSeverity(configSeverity, passed){
+export function resolveSeverity(configSeverity, passed){
   if(configSeverity === "debug") return "debug";
   return passed ? "info" : configSeverity;
 }
@@ -781,6 +782,9 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
       };
     }
   }
+
+  // The plant measures each placed image's own resolution exactly.
+  if(parsed.effectiveDpi) impliedDpi = parsed.effectiveDpi;
 
   if(checkedSizeMm){
     const passed = Math.abs(checkedSizeMm.w - targetMm.w) <= printCheck.sizeToleranceMm

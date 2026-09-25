@@ -1056,3 +1056,12 @@ test("pdfSinglePageView answers an xref stream with an xref stream", async () =>
   assert.deepEqual([entries[0], dv.getUint32(1), dv.getUint16(5)], [1, pagesAt, 0]);
   assert.deepEqual([entries[7], dv.getUint32(8), dv.getUint16(12)], [1, xrefAt, 0]);
 });
+
+test("buildChecklistRows prefers effectiveDpi over pixels-per-page", () => {
+  const parsed = { pageSizeMm: TARGET, imagePx: { w: 5000, h: 5000 }, effectiveDpi: { x: 150, y: 160 },
+    declaredDpi: null, colorMode: "CMYK", spotColors: [], iccProfileName: null, trimBoxMm: null,
+    encrypted: false, hasUnembeddedFonts: false, pdfVersion: "1.4", pageCount: 1 };
+  const row = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, true).find(r => r.feature === "Resolution");
+  assert.equal(row.detected, "~150dpi");
+  assert.equal(row.expected, "≥300dpi");
+});
