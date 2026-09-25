@@ -139,6 +139,8 @@ class HttpTest(unittest.TestCase):
                 self.post({"X-Filename": "p.zip", "Content-Length": str(len(body))}, body)
                 status, text = self.post({"X-Filename": "p.zip", "Content-Length": "5"}, b"{nope", path="/api/check")
                 self.assertEqual((status, text), (400, "check request is not valid JSON"))
+                status, text = self.post({"X-Filename": "p.zip", "Content-Length": "2"}, b"[]", path="/api/check")
+                self.assertEqual((status, text), (400, "check request is not valid JSON"))
                 status, _ = self.post({"X-Filename": "p.zip", "Content-Length": "0"}, path="/api/check")
                 self.assertEqual(status, 200)
             finally:

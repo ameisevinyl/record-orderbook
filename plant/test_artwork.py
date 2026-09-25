@@ -42,7 +42,7 @@ class StructureTest(unittest.TestCase):
         kind, parsed, fonts = artwork.structure(path, 1)
         self.assertEqual(kind, "pdf")
         self.assertAlmostEqual(parsed["trimBoxMm"]["w"], 100, places=1)
-        self.assertAlmostEqual(parsed["pageSizeMm"]["w"], 100, places=1)  # TrimBox beats MediaBox
+        self.assertAlmostEqual(parsed["pageSizeMm"]["w"], 106, places=1)  # no BleedBox: the CropBox, bleed included
         self.assertEqual(parsed["colorMode"], "RGB")  # the RGB image wins
         self.assertEqual(round(parsed["effectiveDpi"]["x"]), 150)
         self.assertTrue(parsed["hasUnembeddedFonts"])
@@ -161,6 +161,56 @@ class MeasureTest(unittest.TestCase):
         path = self.dir / "one.pdf"
         pdf(path)
         self.assertIn("page 2 of 1", self.facts(path, page=2)["error"])
+
+
+class ReviewFixesTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_rotated_page_is_measured_as_displayed(self):
+        # Landscape MediaBox turned upright by /Rotate 90, bled all round.
+        path = self.dir / "rot.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=318 * MM, height=160 * MM)
+        page.draw_rect(page.rect, color=None, fill=(0, 1, 0, 0))
+        page.set_trimbox(pymupdf.Rect(3 * MM, 3 * MM, 315 * MM, 157 * MM))
+        page.set_rotation(90)
+        doc.save(path)
+        f = artwork.facts(path, {**LABEL, "round": False, "targetMm": {"w": 160, "h": 318},
+                                 "trimMm": {"w": 154, "h": 312}}, self.dir, "rot")
+        self.assertAlmostEqual(f["pageMm"]["w"], 160, places=0)
+        self.assertAlmostEqual(f["pageMm"]["h"], 318, places=0)
+        self.assertAlmostEqual(f["trimRectMm"]["x"], 3, places=0)
+        self.assertAlmostEqual(f["trimRectMm"]["w"], 154, places=0)
+        self.assertGreater(f["bleed"]["outerInkPct"], 90)
+
+    def test_crop_marks_outside_the_bleed_box_are_not_measured(self):
+        # Prepress export: 126 mm sheet, BleedBox 106, TrimBox 100, 400 % registration marks in the slug.
+        path = self.dir / "marks.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=126 * MM, height=126 * MM)
+        page.draw_rect(pymupdf.Rect(10 * MM, 10 * MM, 116 * MM, 116 * MM), color=None, fill=(0, 0, 0, 1))
+        for x, y in ((0, 0), (120, 0), (0, 120), (120, 120)):
+            page.draw_rect(pymupdf.Rect(x * MM, y * MM, (x + 6) * MM, (y + 6) * MM), color=None, fill=(1, 1, 1, 1))
+        page.set_bleedbox(pymupdf.Rect(10 * MM, 10 * MM, 116 * MM, 116 * MM))
+        page.set_trimbox(pymupdf.Rect(13 * MM, 13 * MM, 113 * MM, 113 * MM))
+        doc.save(path)
+        f = artwork.facts(path, LABEL, self.dir, "marks")
+        self.assertAlmostEqual(f["pageMm"]["w"], 106, places=0)
+        self.assertLessEqual(f["ink"]["maxPct"], 101)
+        self.assertAlmostEqual(f["trimRectMm"]["x"], 3, places=0)
+        self.assertGreater(f["bleed"]["outerInkPct"], 90)
+
+    def test_measuring_grid_is_capped(self):
+        self.assertLessEqual(artwork.measure_dpi({"w": 5000, "h": 300}) * 5000 / 25.4, artwork.MAX_GRID_PX)
+        self.assertEqual(artwork.measure_dpi({"w": 106, "h": 106}), artwork.MEASURE_DPI)
+
+    def test_big_rasters_are_not_decompression_bombs(self):
+        self.assertIsNone(Image.MAX_IMAGE_PIXELS)
 
 
 if __name__ == "__main__":

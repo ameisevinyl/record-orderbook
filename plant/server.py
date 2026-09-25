@@ -198,6 +198,8 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     length = int(self.headers.get("Content-Length", 0))
                     request = json.loads(self.rfile.read(length) or b"{}")
+                    if not isinstance(request, dict) or not isinstance(request.get("artwork", {}), dict):
+                        raise ValueError
                 except ValueError:
                     raise OpenError("check request is not valid JSON") from None
                 result = run_checks(zip_stem(self.headers.get("X-Filename", "")), request.get("artwork", {}))

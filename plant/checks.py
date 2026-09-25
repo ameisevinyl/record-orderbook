@@ -127,9 +127,15 @@ def check_artwork(project_dir, out_dir, params_by_name):
     """Facts per artwork file the page asked for, with its part's params."""
     result = {}
     for name, params in params_by_name.items():
-        path = project_dir / name
-        result[name] = (artwork.facts(path, params, out_dir, name.replace("/", "_"))
-                        if path.is_file() else {"error": "not in the zip"})
+        # Names come from the page: only files inside the project count.
+        path = (project_dir / name).resolve()
+        if not path.is_relative_to(project_dir.resolve()) or not path.is_file():
+            result[name] = {"error": "not in the zip"}
+            continue
+        try:
+            result[name] = artwork.facts(path, params, out_dir, name.replace("/", "_"))
+        except Exception as error:  # one broken file must not end the whole check
+            result[name] = {"error": f"can't check: {error}"}
     return result
 
 

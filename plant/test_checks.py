@@ -131,6 +131,31 @@ class ProbeTest(unittest.TestCase):
 
 
 class ArtworkWiringTest(unittest.TestCase):
+    def test_one_failing_file_stays_a_file_error(self):
+        import checks
+        saved = checks.artwork.facts
+
+        def facts(path, params, out_dir, base):
+            if path.name == "bad.pdf":
+                raise ValueError("boom")
+            return {"ok": True}
+        checks.artwork.facts = facts
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                project = Path(tmp) / "p"
+                project.mkdir()
+                for name in ("bad.pdf", "good.pdf"):
+                    (project / name).write_bytes(b"%PDF")
+                (Path(tmp) / "outside.pdf").write_bytes(b"%PDF")
+                result = checks.check_artwork(project, Path(tmp), {
+                    "bad.pdf": {}, "good.pdf": {}, "../outside.pdf": {}, str(Path(tmp) / "outside.pdf"): {}})
+            self.assertEqual(result["bad.pdf"], {"error": "can't check: boom"})
+            self.assertEqual(result["good.pdf"], {"ok": True})
+            self.assertEqual(result["../outside.pdf"], {"error": "not in the zip"})
+            self.assertEqual(result[str(Path(tmp) / "outside.pdf")], {"error": "not in the zip"})
+        finally:
+            checks.artwork.facts = saved
+
     def test_run_passes_params_per_file(self):
         import checks
         saved = checks.artwork.facts
