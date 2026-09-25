@@ -8,6 +8,8 @@ import { getFormat, productById } from "./format-catalogue.js";
 import { colorLabel } from "./vinyl-color.js";
 import { sideTiming, ADDRESS_FIELD_LABELS } from "./completeness.js";
 import { sideAudio } from "./audio-checks.js";
+import { artworkRows, artworkVerdict } from "./artwork-checks.js";
+import { CHECKLIST_ICON } from "./print-artwork.js";
 
 export function escapeHtml(value){
   return String(value ?? "").replace(/[&<>"']/g, c =>
@@ -207,4 +209,44 @@ export function renderOverview(project, config, files){
     project.history.length ? group("History", rows(project.history.map(h =>
       [h.savedAt, `${escapeHtml(h.by)}: ${escapeHtml(h.note)}`]))) : ""
   ].join("");
+}
+
+const VERDICT = {ok: "OK", review: "review", customer: "needs customer"};
+
+// Trim (solid) and bleed (dashed) in page millimetres; the SVG stretches
+// over the preview, so the lines sit where the cut will be.
+function cutLinesSvg(page, trim, bleedMm, round){
+  const n = v => Math.round(v * 100) / 100;
+  const shape = (cls, grow) => round
+    ? `<circle class="${cls}" cx="${n(trim.x + trim.w / 2)}" cy="${n(trim.y + trim.h / 2)}" r="${n(trim.w / 2 + grow)}"/>`
+    : `<rect class="${cls}" x="${n(trim.x - grow)}" y="${n(trim.y - grow)}" width="${n(trim.w + 2 * grow)}" height="${n(trim.h + 2 * grow)}"/>`;
+  return `<svg viewBox="0 0 ${n(page.w)} ${n(page.h)}" preserveAspectRatio="none">${shape("trim", 0)}${shape("bleed", bleedMm)}</svg>`;
+}
+
+function checklistHtml(rows){
+  return `<table>${rows.map(r => `<tr class="${r.severity}"><td>${CHECKLIST_ICON[r.severity]}</td>`
+    + `<td>${escapeHtml(r.feature)}</td><td>${escapeHtml(r.detected)}</td><td>${escapeHtml(r.expected || "")}</td></tr>`).join("")}</table>`;
+}
+
+// One block per artwork file: verdict, preview with cut lines and a
+// switchable problem-area overlay, the checklist. base: URL folder of
+// the check output.
+export function renderArtwork(slots, artworkFacts, printCheck, base){
+  if(!slots.length) return "";
+  if(artworkFacts.error) return group("Artwork", `<p class="missing">${escapeHtml(artworkFacts.error)}</p>`);
+  return group("Artwork", slots.map(({title, name, params}) => {
+    const facts = artworkFacts[name] || {error: "not checked"};
+    const rows = artworkRows(facts, params, printCheck);
+    const verdict = artworkVerdict(rows);
+    let body = `<p><b>${escapeHtml(title)}</b> <span class="ident">${escapeHtml(name)}</span> `
+      + `<span class="verdict ${verdict}">${VERDICT[verdict]}</span></p>`;
+    if(facts.preview){
+      const url = file => escapeHtml(base + encodeURIComponent(file));
+      body += `<label class="chk"><input type="checkbox" class="show-overlay"> problem areas</label>`
+        + `<div class="art" style="aspect-ratio:${facts.pageMm.w} / ${facts.pageMm.h}">`
+        + `<img src="${url(facts.preview)}" alt=""><img class="overlay" hidden src="${url(facts.overlay)}" alt="">`
+        + cutLinesSvg(facts.pageMm, facts.trimRectMm, params.bleedMm, params.round) + `</div>`;
+    }
+    return `<div class="art-file">${body}${checklistHtml(rows)}</div>`;
+  }).join(""));
 }

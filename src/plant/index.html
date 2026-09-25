@@ -45,6 +45,17 @@
   .mark span{ position:absolute; left:2px; top:0; white-space:nowrap; }
   .mark.form{ border-left:1px dashed var(--danger); }
   .mark.form span{ top:auto; bottom:-12px; color:var(--danger); }
+  /* Artwork: preview with the plant's overlay and cut lines on top. */
+  .art-file{ margin:6px 0 12px; }
+  .art{ position:relative; max-width:420px; }
+  .art img{ display:block; width:100%; height:100%; }
+  .art .overlay, .art svg{ position:absolute; inset:0; width:100%; height:100%; }
+  .art .trim, .art .bleed{ fill:none; stroke-width:1; vector-effect:non-scaling-stroke; }
+  .art .trim{ stroke:var(--ink); }
+  .art .bleed{ stroke:var(--danger); stroke-dasharray:4 3; }
+  .verdict.review, tr.warn{ color:#8a5a00; }
+  .verdict.customer, tr.error{ color:var(--danger); }
+  .verdict.ok{ font-weight:700; }
 </style>
 </head>
 <body>

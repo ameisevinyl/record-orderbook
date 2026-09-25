@@ -1,11 +1,14 @@
 // Plant view page: send a project zip to plant/server.py (which unpacks
-// it to disk), show completeness and the overview, then the audio
-// checks run on disk, with a prelisten per file.
+// it to disk), show completeness and the overview, then the audio and
+// artwork checks run on disk, with a prelisten per audio file and a
+// preview per artwork file.
 import { CONFIG } from "../config.js";
 import { prepareProject } from "../lib/project.js";
 import { projectGaps } from "../lib/completeness.js";
 import { audioFindings } from "../lib/audio-checks.js";
-import { renderHeader, renderGaps, renderOverview, renderAudio } from "../lib/plant-overview.js";
+import { artworkSlots } from "../lib/artwork-checks.js";
+import { getFormat } from "../lib/format-catalogue.js";
+import { renderHeader, renderGaps, renderOverview, renderAudio, renderArtwork } from "../lib/plant-overview.js";
 
 const input = document.getElementById("zipInput");
 const out = document.getElementById("out");
@@ -32,12 +35,15 @@ async function openZip(file){
     const project = prepareProject(raw, CONFIG);
     out.innerHTML = renderHeader(name, project)
       + renderGaps(projectGaps(project, CONFIG, files))
-      + '<div id="audio"></div>'
+      + '<div id="audio"></div><div id="artwork"></div>'
       + renderOverview(project, CONFIG, files);
 
-    step = "check audio of";
-    status.textContent = "Checking audio…";
-    const checked = await fetch("/api/check", {method: "POST", headers});
+    step = "check";
+    status.textContent = "Checking audio and artwork…";
+    const slots = artworkSlots(project, CONFIG);
+    const checked = await fetch("/api/check", {method: "POST",
+      headers: {...headers, "Content-Type": "application/json"},
+      body: JSON.stringify({artwork: Object.fromEntries(slots.map(s => [s.name, s.params]))})});
     if(!checked.ok) throw new Error(await checked.text());
     const facts = await checked.json();
     if(openId !== latestOpen) return;
@@ -45,6 +51,8 @@ async function openZip(file){
     const base = `/work/${encodeURIComponent(file.name.replace(/\.zip$/i, "") + ".checks")}/`;
     document.getElementById("audio").innerHTML =
       renderAudio(project, facts, audioFindings(project, facts, CONFIG), base);
+    document.getElementById("artwork").innerHTML =
+      renderArtwork(slots, facts.artwork, getFormat(CONFIG, project.format).printCheck, base);
   }catch(err){
     if(openId === latestOpen) error.textContent = `Couldn't ${step} ${file.name}: ${err.message}`;
   }finally{
@@ -105,6 +113,12 @@ out.addEventListener("click", async e => {
   }catch(err){
     error.textContent = `Couldn't play: ${err.message}`;
   }
+});
+
+// "problem areas" checkbox: show or hide that file's overlay.
+out.addEventListener("change", e => {
+  if(!e.target.matches(".show-overlay")) return;
+  e.target.closest(".art-file").querySelector(".overlay").hidden = !e.target.checked;
 });
 
 player.addEventListener("timeupdate", ()=>{

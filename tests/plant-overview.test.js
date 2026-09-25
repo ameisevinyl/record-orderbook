@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
 import { prepareProject } from "../src/lib/project.js";
-import { renderOverview, renderGaps, renderHeader, renderAudio, escapeHtml } from "../src/lib/plant-overview.js";
+import { renderOverview, renderGaps, renderHeader, renderAudio, renderArtwork, escapeHtml } from "../src/lib/plant-overview.js";
+import { getFormat } from "../src/lib/format-catalogue.js";
 
 const project = prepareProject({
   projectVersion:1, format:"12", catalogue:"PNKRCK007", albumTitle:"<b>Loud</b>", albumArtist:"Band",
@@ -98,4 +99,29 @@ test("artwork files show their page when it isn't 1", () => {
   const html = renderOverview(p, CONFIG, [{name:"L.pdf", size:1024}, {name:"L2.pdf", size:1024}]);
   assert.ok(html.includes("L2.pdf (1 KB), page 2"));
   assert.ok(!html.includes("L.pdf (1 KB), page"));
+});
+
+test("artwork: verdict, preview with trim/bleed lines, overlay, rows", () => {
+  const slots = [{title: "Label A", name: "L <A>.pdf", params: {targetMm: {w: 106, h: 106}, trimMm: {w: 100, h: 100},
+    bleedMm: 3, round: true, page: 1, inkLimitPct: 220}}];
+  const facts = {"L <A>.pdf": {kind: "pdf", parsed: {pageSizeMm: {w: 106, h: 106}, imagePx: null, declaredDpi: null,
+    colorMode: "CMYK", spotColors: [], iccProfileName: null, trimBoxMm: null, encrypted: false, hasUnembeddedFonts: false,
+    pdfVersion: "1.4", pageCount: 1, effectiveDpi: null}, pageMm: {w: 106, h: 106}, trimRectMm: {x: 3, y: 3, w: 100, h: 100},
+    ink: {maxPct: 330, overPct: 10}, black: {richPct: 0}, bleed: {outerInkPct: 90, innerInkPct: 90},
+    preview: "L <A>.pdf.png", overlay: "L <A>.pdf.overlay.png"}};
+  const html = renderArtwork(slots, facts, getFormat(CONFIG, "12").printCheck, "/work/p.checks/");
+  assert.ok(html.startsWith("<section><h2>Artwork"));
+  assert.ok(html.includes("L &lt;A&gt;.pdf"));
+  assert.ok(html.includes('class="verdict review">review'));
+  assert.ok(html.includes('src="/work/p.checks/L%20%3CA%3E.pdf.png"'));
+  assert.ok(html.includes('viewBox="0 0 106 106"'));
+  assert.ok(html.includes('<circle class="trim" cx="53" cy="53" r="50"'));
+  assert.ok(html.includes('<circle class="bleed" cx="53" cy="53" r="53"'));
+  assert.ok(html.includes("max 330 %"));
+});
+
+test("artwork: needs PyMuPDF, no slots", () => {
+  const printCheck = getFormat(CONFIG, "12").printCheck;
+  assert.ok(renderArtwork([{title: "Cover", name: "C.pdf", params: {}}], {error: "needs PyMuPDF"}, printCheck, "/w/").includes("needs PyMuPDF"));
+  assert.equal(renderArtwork([], {}, printCheck, "/w/"), "");
 });
