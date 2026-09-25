@@ -18,7 +18,7 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat, flatDataMm, partWeightG, groupProductsByKind, productById } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON, pdfPreviewSrc, pageOptionsHtml } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON, pdfPreviewSrc, pageOptionsHtml, pdfSinglePageView } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 import { requiredFileIssue } from "../lib/file-issues.js";
@@ -88,7 +88,7 @@ function createCoverArtworkSlot(onStateChange){
     file: null, originalFileName: null, storedFileName: null,
     pending: false, rows: [], error: null, revision: 0,
     url: null, previewFile: null, previewUrl: null,
-    page: 1, pageCount: 1, parsed: null, kind: null
+    page: 1, pageCount: 1, parsed: null, kind: null, viewUrl: null
   };
 
   // No-op when there's no dataMm to size against — "None" selected, or
@@ -157,7 +157,10 @@ function createCoverArtworkSlot(onStateChange){
       // CSS-transform-scale attempt scaled that margin right along with
       // it) — so Safari shows a grey margin around the artwork here;
       // Chrome/Firefox fill exactly.
-      preview.innerHTML = `<iframe src="${pdfPreviewSrc(state.url, state.page)}"></iframe>`;
+      if(state.pageCount > 1){
+        preview.innerHTML = `<div class="label-placeholder">page ${state.page}…</div>`;
+        showPageView();
+      } else preview.innerHTML = `<iframe src="${pdfPreviewSrc(state.url)}"></iframe>`;
     } else if(kind === "jpeg"){
       preview.innerHTML = `<img src="${state.url}" alt="artwork">`;
     } else if(kind === "tiff"){
@@ -169,6 +172,18 @@ function createCoverArtworkSlot(onStateChange){
     pageWrap.classList.toggle("hidden", state.pageCount < 2);
     pageSelect.innerHTML = pageOptionsHtml(state.pageCount, state.page);
     document.getElementById("coverpagecount").textContent = `of ${state.pageCount}`;
+  }
+
+  // Multi-page PDF: preview a one-page copy of the chosen page (see
+  // pdfSinglePageView), or the file as it is when that isn't possible. A
+  // newer file or page, or a plant preview image, wins over a late result.
+  async function showPageView(){
+    const {file, page, revision} = state;
+    const view = await pdfSinglePageView(await file.arrayBuffer(), page);
+    if(state.revision !== revision || state.page !== page || state.previewFile) return;
+    if(state.viewUrl) URL.revokeObjectURL(state.viewUrl);
+    state.viewUrl = view ? URL.createObjectURL(new Blob([view], {type: "application/pdf"})) : null;
+    preview.innerHTML = `<iframe src="${pdfPreviewSrc(state.viewUrl || state.url)}"></iframe>`;
   }
 
   pageSelect.addEventListener("change", ()=>{
@@ -187,11 +202,12 @@ function createCoverArtworkSlot(onStateChange){
     renderCoverFileMeta(f.name, origName, "checking…");
     if(state.url) URL.revokeObjectURL(state.url);
     if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    if(state.viewUrl) URL.revokeObjectURL(state.viewUrl);
     Object.assign(state, {
       file: f, originalFileName: origName, storedFileName: null,
       pending: true, rows: [], error: null,
       url: null, previewFile: null, previewUrl: null,
-      page: 1, pageCount: 1, parsed: null, kind: null
+      page: 1, pageCount: 1, parsed: null, kind: null, viewUrl: null
     });
     onStateChange();
 
@@ -237,11 +253,12 @@ function createCoverArtworkSlot(onStateChange){
     ++state.revision;
     if(state.url) URL.revokeObjectURL(state.url);
     if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    if(state.viewUrl) URL.revokeObjectURL(state.viewUrl);
     Object.assign(state, {
       file: null, originalFileName: null, storedFileName: null,
       pending: false, rows: [], error: null,
       url: null, previewFile: null, previewUrl: null,
-      page: 1, pageCount: 1, parsed: null, kind: null
+      page: 1, pageCount: 1, parsed: null, kind: null, viewUrl: null
     });
     input.value = "";
     meta.classList.add("empty");

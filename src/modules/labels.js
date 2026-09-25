@@ -10,7 +10,7 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat, labelDataSizeMm } from "../lib/format-catalogue.js";
-import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON, pdfPreviewSrc, pageOptionsHtml } from "../lib/print-artwork.js";
+import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON, pdfPreviewSrc, pageOptionsHtml, pdfSinglePageView } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
 import { infoText, renderInfoIcon } from "../lib/info-text.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
@@ -25,7 +25,7 @@ function newLabelState(){
     file: null, originalFileName: null, storedFileName: null,
     pending: false, rows: [], error: null, revision: 0,
     url: null, previewFile: null, previewUrl: null,
-    page: 1, pageCount: 1, parsed: null, kind: null
+    page: 1, pageCount: 1, parsed: null, kind: null, viewUrl: null
   };
 }
 
@@ -199,7 +199,10 @@ function renderLabelArtwork(side){
   if(kind === "pdf"){
     // Fills via CSS (.label-preview iframe{width/height:100%}) — see
     // cover.js's identical comment on Safari's PDF viewer margin.
-    setPreview(side, `<iframe src="${pdfPreviewSrc(state.url, state.page)}"></iframe>`);
+    if(state.pageCount > 1){
+      setPreview(side, `<div class="label-placeholder">page ${state.page}…</div>`);
+      showLabelPageView(side);
+    } else setPreview(side, `<iframe src="${pdfPreviewSrc(state.url)}"></iframe>`);
   } else if(kind === "jpeg"){
     setPreview(side, `<img src="${state.url}" alt="label ${side} artwork">`);
   } else if(kind === "tiff"){
@@ -212,6 +215,19 @@ function renderLabelArtwork(side){
   document.getElementById("labelpage-"+side).innerHTML = pageOptionsHtml(state.pageCount, state.page);
   document.getElementById("labelpagecount-"+side).textContent = `of ${state.pageCount}`;
   updateLabelPairOffer();
+}
+
+// Multi-page PDF: preview a one-page copy of the chosen page (see
+// pdfSinglePageView), or the file as it is when that isn't possible. A
+// newer file or page, or a plant preview image, wins over a late result.
+async function showLabelPageView(side){
+  const state = labelStates[side];
+  const {file, page, revision} = state;
+  const view = await pdfSinglePageView(await file.arrayBuffer(), page);
+  if(state.revision !== revision || state.page !== page || state.previewFile) return;
+  if(state.viewUrl) URL.revokeObjectURL(state.viewUrl);
+  state.viewUrl = view ? URL.createObjectURL(new Blob([view], {type: "application/pdf"})) : null;
+  setPreview(side, `<iframe src="${pdfPreviewSrc(state.viewUrl || state.url)}"></iframe>`);
 }
 
 // A multi-page PDF on side A while B is still open: offer its page 2 for B.
@@ -231,10 +247,11 @@ async function handleFile(side, file, originalFileName = file.name, page = 1){
 
   if(state.url) URL.revokeObjectURL(state.url);
   if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+  if(state.viewUrl) URL.revokeObjectURL(state.viewUrl);
   Object.assign(state, {
     file, originalFileName, storedFileName: null, pending: true,
     rows: [], error: null, url: null, previewFile: null, previewUrl: null,
-    page: 1, pageCount: 1, parsed: null, kind: null
+    page: 1, pageCount: 1, parsed: null, kind: null, viewUrl: null
   });
   labelsOnStateChange();
 
@@ -282,11 +299,12 @@ function clearLabelArtwork(side){
   ++state.revision;
   if(state.url) URL.revokeObjectURL(state.url);
   if(state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+  if(state.viewUrl) URL.revokeObjectURL(state.viewUrl);
   Object.assign(state, {
     file: null, originalFileName: null, storedFileName: null,
     pending: false, rows: [], error: null,
     url: null, previewFile: null, previewUrl: null,
-    page: 1, pageCount: 1, parsed: null, kind: null
+    page: 1, pageCount: 1, parsed: null, kind: null, viewUrl: null
   });
   document.getElementById("labelinput-"+side).value = "";
   const meta = document.getElementById("labelmeta-"+side);

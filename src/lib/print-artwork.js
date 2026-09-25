@@ -320,14 +320,14 @@ async function inflateFlateDecodeText(bytes){
   return new TextDecoder("latin1").decode(await inflateFlateDecodeBytes(bytes));
 }
 
-// Every Flate-compressed stream whose dictionary passes keep(dictText).
-function flateStreams(text, keep){
+// Every stream whose dictionary passes keep(dictText).
+function streams(text, keep){
   const candidates = [];
   const streamOpenRe = /(>>)\s*stream\r?\n/g;
   let m;
   while((m = streamOpenRe.exec(text)) !== null){
     const dictText = dictBefore(text, m.index + 2);
-    if(!dictText || !/\/FlateDecode\b/.test(dictText) || !keep(dictText)) continue;
+    if(!dictText || !keep(dictText)) continue;
 
     const dataStart = streamOpenRe.lastIndex;
     let dataEnd = text.indexOf("endstream", dataStart);
@@ -337,9 +337,27 @@ function flateStreams(text, keep){
     // part of the compressed payload, so left in it trips zlib's
     // trailing-data check on an otherwise perfectly valid stream.
     if(text[dataEnd-1] === "\n"){ dataEnd--; if(text[dataEnd-1] === "\r") dataEnd--; }
-    candidates.push({ start: dataStart, end: dataEnd });
+    candidates.push({ start: dataStart, end: dataEnd, dictText });
   }
   return candidates;
+}
+
+// Every Flate-compressed stream whose dictionary passes keep(dictText).
+function flateStreams(text, keep){
+  return streams(text, dict => /\/FlateDecode\b/.test(dict) && keep(dict));
+}
+
+// Object streams (/Type /ObjStm) as text, Flate-compressed or plain,
+// each with its position and dict; unreadable ones are skipped.
+async function objectStreams(text, bytes){
+  const out = [];
+  for(const {start, end, dictText} of streams(text, dict => /\/Type\s*\/ObjStm\b/.test(dict))){
+    const flate = /\/FlateDecode\b/.test(dictText);
+    if(!flate && /\/Filter\b/.test(dictText)) continue;
+    try{ out.push({ start, dictText, text: flate ? await inflateFlateDecodeText(bytes.slice(start, end)) : text.slice(start, end) }); }
+    catch{ /* unreadable stream: use what's readable */ }
+  }
+  return out;
 }
 
 // Content-like streams: not image pixel data, not a compressed object
@@ -484,6 +502,13 @@ function dictStart(text, textIndex){
   return null;
 }
 
+// A dict's own keys: nested dicts (inline /Resources etc.) dropped.
+function topLevel(dict){
+  let top = dict.slice(2, -2);
+  while(/<<[^<>]*>>/.test(top)) top = top.replace(/<<[^<>]*>>/g, "");
+  return top;
+}
+
 // The last root page tree (/Type /Pages without /Parent) in text, as
 // {at, count}. Inner tree nodes count only their subtree; nested dicts
 // (inline /Resources) are dropped before reading the top-level keys.
@@ -493,8 +518,7 @@ function lastRootPageCount(text){
     const start = dictStart(text, m.index);
     const dict = start === null ? null : dictAround(text, start);
     if(!dict) continue;
-    let top = dict.slice(2, -2);
-    while(/<<[^<>]*>>/.test(top)) top = top.replace(/<<[^<>]*>>/g, "");
+    const top = topLevel(dict);
     const count = top.match(/\/Count\s+(\d+)/);
     if(count && !/\/Parent\b/.test(top)) found = {at: m.index, count: Number(count[1])};
   }
@@ -509,10 +533,7 @@ function lastRootPageCount(text){
 async function pdfStructure(text, bytes){
   const texts = [text];
   let root = lastRootPageCount(text);
-  for(const {start, end} of flateStreams(text, dict => /\/Type\s*\/ObjStm\b/.test(dict))){
-    let inflated;
-    try{ inflated = await inflateFlateDecodeText(bytes.slice(start, end)); }
-    catch{ continue; } // unreadable stream: use what's readable
+  for(const {start, text: inflated} of await objectStreams(text, bytes)){
     texts.push(inflated);
     const inner = lastRootPageCount(inflated);
     if(inner && (!root || start > root.at)) root = {at: start, count: inner.count};
@@ -888,14 +909,104 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
 }
 
 
-// The browser's own PDF viewer opens at #page=N (Chrome, Firefox;
-// Safari ignores it and shows page 1).
-export function pdfPreviewSrc(url, page){
-  return `${url}#toolbar=0&navpanes=0&page=${page}`;
+// The iframe of the browser's own PDF viewer, without its toolbar.
+export function pdfPreviewSrc(url){
+  return `${url}#toolbar=0&navpanes=0`;
 }
 
 export function pageOptionsHtml(count, page){
   let html = "";
   for(let i = 1; i <= count; i++) html += `<option value="${i}"${i === page ? " selected" : ""}>${i}</option>`;
   return html;
+}
+
+// ---- one-page view of a multi-page PDF ----
+// Safari's viewer ignores #page=N and scrolls through every page, so the
+// preview shows a copy whose page tree holds just the chosen page: an
+// incremental update (the mechanism of Acrobat's "Save") appended to the
+// original bytes rewrites the root /Pages dict. The customer's file
+// itself is never changed.
+
+// Every object's dict by number; later definitions win, as an
+// incremental save redefines objects further down the file. Objects in
+// object streams (/Type /ObjStm: "num offset" pairs, then the objects
+// from /First on) count at their stream's position.
+async function pdfObjects(text, bytes){
+  const found = [];
+  for(const m of text.matchAll(/(\d+)\s+(\d+)\s+obj\s*<</g)){
+    const dict = dictAround(text, m.index + m[0].length - 2);
+    if(dict) found.push({ at: m.index, num: Number(m[1]), gen: Number(m[2]), dict });
+  }
+  for(const {start, dictText, text: inflated} of await objectStreams(text, bytes)){
+    const first = Number((dictText.match(/\/First\s+(\d+)/) || [])[1]);
+    const pairs = inflated.slice(0, first).trim().split(/\s+/).map(Number);
+    for(let i = 0; i + 1 < pairs.length; i += 2){
+      const body = inflated.slice(first + pairs[i + 1], i + 3 < pairs.length ? first + pairs[i + 3] : undefined);
+      const open = body.indexOf("<<");
+      const dict = open === -1 ? null : dictAround(body, open);
+      if(dict) found.push({ at: start, num: pairs[i], gen: 0, dict });
+    }
+  }
+  found.sort((a, b) => a.at - b.at);
+  return new Map(found.map(obj => [obj.num, obj]));
+}
+
+const lastMatch = (text, re) => [...text.matchAll(re)].pop();
+
+// The original bytes plus an update showing only `page` (1-based), or
+// null when the file can't be rewritten (encrypted, no page tree found,
+// no such page) — the caller then previews the file as it is.
+export async function pdfSinglePageView(arrayBuffer, page){
+  const bytes = new Uint8Array(arrayBuffer);
+  const text = new TextDecoder("latin1").decode(bytes);
+  const root = lastMatch(text, /\/Root\s+(\d+)\s+(\d+)\s+R/g);
+  const size = lastMatch(text, /\/Size\s+(\d+)/g);
+  const prev = lastMatch(text, /startxref\s+(\d+)/g);
+  if(!root || !size || !prev || /\/Encrypt\b/.test(text)) return null;
+
+  const objects = await pdfObjects(text, bytes);
+  const catalog = objects.get(Number(root[1]));
+  const pagesRef = catalog && topLevel(catalog.dict).match(/\/Pages\s+(\d+)\s+\d+\s+R/);
+  const tree = pagesRef && objects.get(Number(pagesRef[1]));
+  if(!tree) return null;
+
+  // Leaf page refs in reading order (depth-first through /Kids).
+  const leaves = [];
+  const walk = (ref, depth) => {
+    const obj = objects.get(Number(ref.split(/\s+/)[0]));
+    if(!obj || depth > 32) return;
+    const top = topLevel(obj.dict);
+    if(/\/Type\s*\/Pages\b/.test(top)){
+      const kids = top.match(/\/Kids\s*\[([^\]]*)\]/);
+      for(const kid of (kids ? kids[1] : "").matchAll(/\d+\s+\d+\s+R/g)) walk(kid[0], depth + 1);
+    } else if(/\/Type\s*\/Page\b/.test(top)) leaves.push(ref);
+  };
+  walk(`${tree.num} ${tree.gen} R`, 0);
+  const chosen = leaves[page - 1];
+  if(!chosen) return null;
+
+  const dict = tree.dict.replace(/\/Kids\s*\[[^\]]*\]/, `/Kids [${chosen}]`).replace(/\/Count\s+\d+/, "/Count 1");
+  const object = `\n${tree.num} ${tree.gen} obj\n${dict}\nendobj\n`;
+  const offset = bytes.length + 1;
+  const xrefAt = bytes.length + object.length;
+  const rootRef = `/Root ${root[1]} ${root[2]} R /Prev ${prev[1]}`;
+  // Answer in kind: after an xref stream (PDF 1.5+) Apple's PDF engine
+  // rejects a classic xref table, so write a stream there too — entries
+  // type 1, 4-byte offset, 2-byte generation, uncompressed.
+  const prevIsStream = /^\s*\d+\s+\d+\s+obj\b/.test(text.slice(Number(prev[1]), Number(prev[1]) + 40));
+  let xref;
+  if(prevIsStream){
+    const num = Math.max(Number(size[1]), tree.num + 1);
+    const entry = (at, gen) => String.fromCharCode(1, at >>> 24 & 255, at >>> 16 & 255, at >>> 8 & 255, at & 255, gen >> 8 & 255, gen & 255);
+    xref = `${num} 0 obj\n<< /Type /XRef /Size ${num + 1} ${rootRef} /W [1 4 2] /Index [${tree.num} 1 ${num} 1] /Length 14 >>\n`
+      + `stream\n${entry(offset, tree.gen)}${entry(xrefAt, 0)}\nendstream\nendobj\n`;
+  } else{
+    xref = `xref\n0 1\n0000000000 65535 f \n${tree.num} 1\n${String(offset).padStart(10, "0")} ${String(tree.gen).padStart(5, "0")} n \n`
+      + `trailer\n<< /Size ${Math.max(Number(size[1]), tree.num + 1)} ${rootRef} >>\n`;
+  }
+  const update = object + xref + `startxref\n${xrefAt}\n%%EOF\n`;
+  const out = new Uint8Array(bytes.length + update.length);
+  out.set(bytes);
+  for(let i = 0; i < update.length; i++) out[bytes.length + i] = update.charCodeAt(i);
+  return out;
 }

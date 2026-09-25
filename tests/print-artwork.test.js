@@ -9,6 +9,7 @@ import {
   buildChecklistRows,
   pdfPreviewSrc,
   pageOptionsHtml,
+  pdfSinglePageView,
 } from "../src/lib/print-artwork.js";
 import { buildPdf } from "../src/lib/pdf.js";
 
@@ -907,7 +908,7 @@ test("buildChecklistRows adds a Pages row only for multi-page files", () => {
 });
 
 test("pdfPreviewSrc and pageOptionsHtml", () => {
-  assert.equal(pdfPreviewSrc("blob:x", 2), "blob:x#toolbar=0&navpanes=0&page=2");
+  assert.equal(pdfPreviewSrc("blob:x"), "blob:x#toolbar=0&navpanes=0");
   assert.equal(pageOptionsHtml(3, 2), '<option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>');
 });
 
@@ -940,4 +941,118 @@ endobj
 endobj
 `);
   assert.equal((await parsePdfArtwork(pdf)).pageCount, 3);
+});
+
+// ---- one-page view ----
+
+const latin1 = bytes => new TextDecoder("latin1").decode(bytes);
+
+// The appended update must be a well-formed incremental save: its
+// startxref points at its xref, the xref at the rewritten object.
+function assertIncrementalUpdate(original, view){
+  const text = latin1(view);
+  assert.equal(text.slice(0, original.length), latin1(original), "original bytes untouched");
+  const startxref = Number(text.match(/startxref\s+(\d+)\s+%%EOF\s*$/)[1]);
+  assert.ok(text.startsWith("xref", startxref));
+  const [, num, offset] = text.slice(startxref).match(/\n(\d+) 1\n(\d{10}) \d{5} n /);
+  assert.ok(text.startsWith(`${num} 0 obj`, Number(offset)));
+  const prev = Number(text.slice(startxref).match(/\/Prev (\d+)/)[1]);
+  assert.equal(prev, Number(latin1(original).match(/startxref\s+(\d+)/)[1]));
+}
+
+test("pdfSinglePageView keeps only the chosen page", async () => {
+  const bytes = buildPdf({ title: "t", pages: [1, 2, 3].map(n => ({ widthMm: 100 * n, heightMm: 100, content: "0 0 0 1 k\n" })) });
+  const view = await pdfSinglePageView(bytes.buffer, 2);
+  assertIncrementalUpdate(bytes, view);
+  const info = await parsePdfArtwork(view.buffer);
+  assert.equal(info.pageCount, 1);
+  // pages 1-3 are objects 6, 8, 10 in buildPdf's layout; page 2 is 8
+  assert.match(latin1(view).slice(bytes.length), /\/Kids \[8 0 R\] \/Count 1/);
+});
+
+test("pdfSinglePageView walks a nested page tree in order", async () => {
+  const pdf = pdfBuffer(`%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /MediaBox [0 0 100 100] /Kids [3 0 R 6 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Pages /Parent 2 0 R /Kids [4 0 R 5 0 R] /Count 2 >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 3 0 R >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 3 0 R >>
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R >>
+endobj
+xref
+0 7
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+400
+%%EOF
+`);
+  const view = await pdfSinglePageView(pdf, 3);
+  const update = latin1(view).slice(pdf.byteLength);
+  assert.match(update, /^\n?2 0 obj\n<< \/Type \/Pages \/MediaBox \[0 0 100 100\] \/Kids \[6 0 R\] \/Count 1 >>/);
+  assert.match(update, /\/Root 1 0 R/);
+  assert.match(update, /\/Size 7\b/);
+});
+
+test("pdfSinglePageView finds the tree inside an object stream", async () => {
+  const objs = "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >> << /Type /Page /Parent 2 0 R >> << /Type /Page /Parent 2 0 R >>";
+  const header = "2 0 3 47 4 79 ";
+  const packed = deflateSync(Buffer.from(header + objs, "latin1"));
+  const pdf = concatBytes([
+    `%PDF-1.5\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`
+    + `5 0 obj\n<< /Type /ObjStm /N 3 /First ${header.length} /Filter /FlateDecode /Length ${packed.length} >>\nstream\n`,
+    new Uint8Array(packed),
+    "\nendstream\nendobj\n6 0 obj\n<< /Type /XRef /Size 7 /Root 1 0 R /W [1 2 1] /Length 0 >>\nstream\n\nendstream\nendobj\nstartxref\n9\n%%EOF\n"
+  ]);
+  const view = await pdfSinglePageView(pdf, 2);
+  assert.match(latin1(view).slice(pdf.byteLength), /2 0 obj\n<< \/Type \/Pages \/Kids \[4 0 R\] \/Count 1 >>/);
+});
+
+test("pdfSinglePageView gives up on what it can't rewrite", async () => {
+  const bytes = buildPdf({ title: "t", pages: [{ widthMm: 100, heightMm: 100, content: "" }] });
+  assert.equal(await pdfSinglePageView(bytes.buffer, 2), null);           // no such page
+  const encrypted = latin1(bytes).replace("/Root", "/Encrypt 9 0 R /Root");
+  assert.equal(await pdfSinglePageView(pdfBuffer(encrypted), 1), null);    // encrypted
+  assert.equal(await pdfSinglePageView(pdfBuffer("%PDF-1.4\n%%EOF\n"), 1), null); // no tree
+});
+
+test("an uncompressed object stream counts too", async () => {
+  const objs = "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >> << /Type /Page /Parent 2 0 R >> << /Type /Page /Parent 2 0 R >>";
+  const header = "2 0 3 47 4 79 ";
+  const pdf = pdfBuffer(`%PDF-1.5\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`
+    + `5 0 obj\n<< /Type /ObjStm /N 3 /First ${header.length} /Length ${header.length + objs.length} >>\nstream\n${header}${objs}\nendstream\nendobj\n`
+    + `6 0 obj\n<< /Type /XRef /Size 7 /Root 1 0 R /W [1 2 1] /Length 0 >>\nstream\n\nendstream\nendobj\nstartxref\n9\n%%EOF\n`);
+  const view = await pdfSinglePageView(pdf, 2);
+  assert.ok(view, "rewritable");
+  assert.match(latin1(view).slice(pdf.byteLength), /\/Kids \[4 0 R\] \/Count 1/);
+});
+
+test("pdfSinglePageView answers an xref stream with an xref stream", async () => {
+  const objs = "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >> << /Type /Page /Parent 2 0 R >> << /Type /Page /Parent 2 0 R >>";
+  const header = "2 0 3 47 4 79 ";
+  const head = `%PDF-1.5\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`
+    + `5 0 obj\n<< /Type /ObjStm /N 3 /First ${header.length} /Length ${header.length + objs.length} >>\nstream\n${header}${objs}\nendstream\nendobj\n`;
+  const pdf = pdfBuffer(head + `6 0 obj\n<< /Type /XRef /Size 7 /Root 1 0 R /W [1 2 1] /Length 0 >>\nstream\n\nendstream\nendobj\nstartxref\n${head.length}\n%%EOF\n`);
+  const view = await pdfSinglePageView(pdf, 2);
+  const update = latin1(view).slice(pdf.byteLength);
+  const pagesAt = pdf.byteLength + update.indexOf("2 0 obj");
+  const xrefAt = Number(update.match(/startxref\n(\d+)\n%%EOF\n$/)[1]);
+  assert.ok(latin1(view).startsWith("7 0 obj\n<< /Type /XRef /Size 8 /Root 1 0 R /Prev " + head.length, xrefAt));
+  assert.match(update, /\/W \[1 4 2\] \/Index \[2 1 7 1\] \/Length 14 >>\nstream\n/);
+  // entry for object 2: type 1, 4-byte offset, 2-byte generation
+  const entries = view.slice(view.length - "\nendstream\nendobj\nstartxref\n".length - String(xrefAt).length - "\n%%EOF\n".length - 14, view.length - "\nendstream\nendobj\nstartxref\n".length - String(xrefAt).length - "\n%%EOF\n".length);
+  const dv = new DataView(entries.buffer, entries.byteOffset);
+  assert.deepEqual([entries[0], dv.getUint32(1), dv.getUint16(5)], [1, pagesAt, 0]);
+  assert.deepEqual([entries[7], dv.getUint32(8), dv.getUint16(12)], [1, xrefAt, 0]);
 });
