@@ -98,7 +98,7 @@ test("artwork files show their page when it isn't 1", () => {
 
 test("artwork: verdict, preview with trim/bleed lines, overlay, rows", () => {
   const slots = [{title: "Label A", name: "L <A>.pdf", params: {targetMm: {w: 106, h: 106}, trimMm: {w: 100, h: 100},
-    bleedMm: 3, round: true, page: 1, inkLimitPct: 220}}];
+    bleedMm: 3, round: true, page: 1, inkLimitPct: 220, holeMm: 7.4}}];
   const facts = {"L <A>.pdf": {kind: "pdf", parsed: {pageSizeMm: {w: 106, h: 106}, imagePx: null, declaredDpi: null,
     colorMode: "CMYK", spotColors: [], iccProfileName: null, trimBoxMm: null, encrypted: false, hasUnembeddedFonts: false,
     pdfVersion: "1.4", pageCount: 1, effectiveDpi: null}, pageMm: {w: 106, h: 106}, trimRectMm: {x: 3, y: 3, w: 100, h: 100},
@@ -112,6 +112,7 @@ test("artwork: verdict, preview with trim/bleed lines, overlay, rows", () => {
   assert.ok(html.includes('viewBox="0 0 106 106"'));
   assert.ok(html.includes('<circle class="trim" cx="53" cy="53" r="50"'));
   assert.ok(html.includes('<circle class="bleed" cx="53" cy="53" r="53"'));
+  assert.ok(html.includes('<circle class="hole" cx="53" cy="53" r="3.7"'));
   assert.ok(html.includes("max 330 %"));
 });
 

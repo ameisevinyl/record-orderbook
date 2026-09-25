@@ -23,7 +23,8 @@ test("artworkSlots: labels unless whitelabel, printed parts only, page and limit
     part: "labels", round: true, page: 1, bleedMm: label.bleedMm,
     targetMm: {w: label.diameterMm + 2 * label.bleedMm, h: label.diameterMm + 2 * label.bleedMm},
     trimMm: {w: label.diameterMm, h: label.diameterMm},
-    inkLimitPct: 220, black: printCheck.black, toleranceMm: printCheck.sizeToleranceMm
+    inkLimitPct: 220, black: printCheck.black, toleranceMm: printCheck.sizeToleranceMm,
+    holeMm: getFormat(CONFIG, "12").centerHole.normal
   });
   assert.equal(slots[1].params.inkLimitPct, 300);
   assert.equal(slots[1].params.round, false);
@@ -77,4 +78,10 @@ test("artworkRows: encrypted file without pixel facts", () => {
   const rows = artworkRows({kind: "pdf", parsed: {...clean.parsed, encrypted: true}}, params, printCheck);
   assert.equal(rows.find(r => r.feature === "Encryption").severity, "error");
   assert.ok(!rows.some(r => r.feature === "Ink"));
+});
+
+test("artworkSlots: a big center hole where the format has one", () => {
+  const seven = getFormat(CONFIG, "7");
+  const slots = artworkSlots(prepareProject({format:"7", labels:{bigCenter:true, sides:{A:{fileName:"L.pdf"}}}}, CONFIG), CONFIG);
+  assert.equal(slots[0].params.holeMm, seven.centerHole.big || seven.centerHole.normal);
 });

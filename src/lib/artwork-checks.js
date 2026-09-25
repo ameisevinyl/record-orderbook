@@ -14,7 +14,8 @@ const AREA_PCT = 0.5;
 const EDGE_INKED_PCT = 20, BLEED_EMPTY_PCT = 5;
 
 export function artworkSlots(project, config){
-  const {printCheck, printableParts: parts} = getFormat(config, project.format);
+  const format = getFormat(config, project.format);
+  const {printCheck, printableParts: parts} = format;
   const slots = [];
   const add = (title, slot, part, sizes) => {
     if(!slot.fileName) return;
@@ -30,7 +31,8 @@ export function artworkSlots(project, config){
     const slot = project.labels.sides[side];
     if(slot.whitelabel) continue;
     add(`Label ${side}`, slot, "labels", {targetMm: {w: data, h: data},
-      trimMm: {w: label.diameterMm, h: label.diameterMm}, bleedMm: label.bleedMm, round: true});
+      trimMm: {w: label.diameterMm, h: label.diameterMm}, bleedMm: label.bleedMm, round: true,
+      holeMm: format.centerHole[project.labels.bigCenter ? "big" : "normal"]});
   }
 
   const sleeve = project.coverSleeve;

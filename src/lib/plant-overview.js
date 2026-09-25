@@ -211,14 +211,17 @@ export function renderOverview(project, config, files){
 
 const VERDICT = {ok: "OK", review: "review", customer: "needs customer"};
 
-// Trim (solid) and bleed (dashed) in page millimetres; the SVG stretches
-// over the preview, so the lines sit where the cut will be.
-function cutLinesSvg(page, trim, bleedMm, round){
+// Trim (solid), bleed (dashed) and a label's center hole in page
+// millimetres; the SVG stretches over the preview, so the lines sit
+// where the cut and the punch will be.
+function cutLinesSvg(page, trim, bleedMm, round, holeMm){
   const n = v => Math.round(v * 100) / 100;
   const shape = (cls, grow) => round
     ? `<circle class="${cls}" cx="${n(trim.x + trim.w / 2)}" cy="${n(trim.y + trim.h / 2)}" r="${n(trim.w / 2 + grow)}"/>`
     : `<rect class="${cls}" x="${n(trim.x - grow)}" y="${n(trim.y - grow)}" width="${n(trim.w + 2 * grow)}" height="${n(trim.h + 2 * grow)}"/>`;
-  return `<svg viewBox="0 0 ${n(page.w)} ${n(page.h)}" preserveAspectRatio="none">${shape("trim", 0)}${shape("bleed", bleedMm)}</svg>`;
+  const hole = holeMm
+    ? `<circle class="hole" cx="${n(trim.x + trim.w / 2)}" cy="${n(trim.y + trim.h / 2)}" r="${n(holeMm / 2)}"/>` : "";
+  return `<svg viewBox="0 0 ${n(page.w)} ${n(page.h)}" preserveAspectRatio="none">${shape("trim", 0)}${shape("bleed", bleedMm)}${hole}</svg>`;
 }
 
 function checklistHtml(rows){
@@ -242,7 +245,7 @@ export function renderArtwork(slots, artworkFacts, printCheck, base){
       body += `<label class="chk"><input type="checkbox" class="show-overlay"> problem areas</label>`
         + `<div class="art" style="aspect-ratio:${facts.pageMm.w} / ${facts.pageMm.h}">`
         + `<img src="${url(facts.preview)}" alt=""><img class="overlay" hidden src="${url(facts.overlay)}" alt="">`
-        + cutLinesSvg(facts.pageMm, facts.trimRectMm, params.bleedMm, params.round) + `</div>`;
+        + cutLinesSvg(facts.pageMm, facts.trimRectMm, params.bleedMm, params.round, params.holeMm) + `</div>`;
     }
     return `<div class="art-file">${body}${checklistHtml(rows)}</div>`;
   }).join(""));
