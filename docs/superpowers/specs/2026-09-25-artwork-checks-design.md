@@ -31,7 +31,8 @@ from backgrounds).
 Same split as the audio checks: the page decides what to measure,
 Python measures, JS judges.
 
-- **Page → server.** `POST /api/check` gets a JSON body
+- **Page → server.** After the audio check, `POST /api/check/artwork`
+  (a spinner: "Checking artwork…") gets a JSON body
   `{artwork: {"<file name>": params}}`. The page derives `params` from
   the project and `CONFIG` (`artworkSlots`, below), so Python never
   reads `CONFIG` or `project.json`.
@@ -196,7 +197,7 @@ Plain and dense like the rest of the plant view.
   present/absent, an RGB image at known placement for `effectiveDpi`,
   an unembedded font; a CMYK TIFF and an RGB JPEG via Pillow. Skipped
   without the libraries.
-- `plant/test_server.py` — `/api/check` passes the artwork params
+- `plant/test_server.py` — `/api/check/artwork` passes the artwork params
   through.
 - `tests/artwork-checks.test.js` — `artworkSlots` per part and
   format, each new rule, `effectiveDpi` in `buildChecklistRows`,

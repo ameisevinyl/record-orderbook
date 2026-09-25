@@ -130,6 +130,23 @@ class ProbeTest(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in project.iterdir()), ["A1.wav", "cover.pdf", "project.json"])
 
 
+class AudioProgressTest(unittest.TestCase):
+    def test_progress_rises_to_one_over_all_files(self):
+        from checks import audio
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "p"
+            project.mkdir()
+            for name, seconds in (("A.wav", 30), ("B.wav", 10)):
+                ffmpeg("-f", "lavfi", "-i", f"sine=d={seconds}", "-c:a", "pcm_s24le", str(project / name))
+            seen = []
+            result = audio(project, Path(tmp), seen.append)
+        self.assertEqual(sorted(result["files"]), ["A.wav", "B.wav"])
+        self.assertTrue(all("preview" in f and "waveform" in f for f in result["files"].values()))
+        self.assertGreater(len(seen), 2)
+        self.assertEqual(seen, sorted(seen))
+        self.assertEqual(seen[-1], 1.0)
+
+
 class ArtworkWiringTest(unittest.TestCase):
     def test_one_failing_file_stays_a_file_error(self):
         import checks

@@ -29,8 +29,11 @@ Python stays standard library only; the one external tool is ffmpeg
   written to `out_dir/facts.json`. CLI:
   `python3 plant/checks.py plant/work/<stem>`.
 - **`plant/server.py`**
-  - `POST /api/check`, header `X-Filename` (same as `/api/open`): runs
-    the checks on `plant/work/<stem>/` and returns the facts JSON.
+  - `POST /api/check/audio`, header `X-Filename` (same as
+    `/api/open`): checks the audio in `plant/work/<stem>/` and streams
+    one JSON object per line — `{"progress": percent}` while the files
+    are read (fed to ffmpeg through stdin, so the bytes can be counted;
+    MP3 and waveform come from one pass), then `{"result": facts}`.
   - Generated files go to `plant/work/<stem>.checks/` — beside the
     unpacked zip, never inside it, so they can't appear in
     `/api/open`'s file list or a re-saved zip. `unpack` removes it with
@@ -43,8 +46,8 @@ Python stays standard library only; the one external tool is ffmpeg
   base)`: findings, then per side and file the facts and the waveform;
   `base` is the URL folder of the check output.
 - **`src/plant/app.js`** — after the overview renders, calls
-  `/api/check` ("checking audio…"), appends the audio section, drives
-  the player.
+  `/api/check/audio` ("Checking audio… n %" with a spinner), appends the
+  audio section, then the artwork check; drives the player.
 
 ## Facts
 
@@ -111,5 +114,5 @@ without ffmpeg (see the artwork-checks spec, Setup).
   ffprobe mapping on synthetic WAV/AIFF with INFO/`bext`/`cue `
   (skipped without ffprobe); preview files written to `out_dir`.
 - `plant/test_server.py` — `.checks` removed on unpack, served with
-  the traversal guard, `/api/check` round trip.
+  the traversal guard, the progress stream of `/api/check/audio`.
 - `tests/audio-checks.test.js` — each rule with hand-made facts.

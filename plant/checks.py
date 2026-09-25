@@ -94,32 +94,55 @@ def probe_facts(path):
     }
 
 
-def render_previews(path, out_dir, base):
-    """MP3 for prelisten and a mono waveform PNG; returns their names."""
+def render_previews(path, out_dir, base, read=lambda n: None):
+    """MP3 for prelisten and a mono waveform PNG in one ffmpeg pass;
+    returns their names. The file goes in through stdin, so read(n) can
+    count the bytes: ffmpeg's own progress stays N/A until the waveform
+    output is written at the very end."""
     mp3, png = base + ".mp3", base + ".png"
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(path), "-vn", "-ac", "2", "-b:a", "128k",
-                    str(out_dir / mp3)], check=True, capture_output=True)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(path), "-filter_complex",
-                    f"aformat=channel_layouts=mono,showwavespic=s=1600x120:colors={WAVE_COLOUR}:filter=peak",
-                    "-frames:v", "1", str(out_dir / png)], check=True, capture_output=True)
+    cmd = ["ffmpeg", "-v", "error", "-y", "-i", "pipe:0", "-filter_complex",
+           f"[0:a]asplit[a][b];[b]aformat=channel_layouts=mono,showwavespic=s=1600x120:colors={WAVE_COLOUR}:filter=peak[w]",
+           "-map", "[a]", "-ac", "2", "-b:a", "128k", str(out_dir / mp3),
+           "-map", "[w]", "-frames:v", "1", str(out_dir / png)]
+    with open(path, "rb") as f, subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+        try:
+            while chunk := f.read(1 << 20):
+                proc.stdin.write(chunk)
+                read(len(chunk))
+            proc.stdin.close()
+        except BrokenPipeError:
+            pass  # ffmpeg stopped early; its exit code and stderr tell why
+        err = proc.stderr.read()
+    if proc.returncode:
+        raise subprocess.CalledProcessError(proc.returncode, cmd, stderr=err)
     return mp3, png
 
 
-def audio(project_dir, out_dir):
+def audio(project_dir, out_dir, progress=lambda fraction: None):
     """Facts for every audio file under project_dir, keyed by its name
-    relative to it; previews go to out_dir."""
+    relative to it; previews go to out_dir. progress(fraction) follows
+    the bytes read, across all files."""
+    paths = [p for p in sorted(project_dir.rglob("*")) if p.is_file() and p.suffix.lower() in AUDIO_EXT]
+    total = sum(p.stat().st_size for p in paths) or 1
+    done = 0
+
+    def read(n):
+        nonlocal done
+        done += n
+        progress(min(done / total, 1.0))
+
     files = {}
-    for path in sorted(project_dir.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in AUDIO_EXT:
-            continue
+    for path in paths:
         name = path.relative_to(project_dir).as_posix()
         facts = probe_facts(path)
         if "error" not in facts:
             try:
-                facts["preview"], facts["waveform"] = render_previews(path, out_dir, name.replace("/", "_"))
+                facts["preview"], facts["waveform"] = render_previews(path, out_dir, name.replace("/", "_"), read)
             except subprocess.CalledProcessError as error:
                 facts["previewError"] = error.stderr.decode(errors="replace").strip() or "ffmpeg failed"
         files[name] = facts
+    done = total
+    progress(1.0)
     return {"files": files}
 
 

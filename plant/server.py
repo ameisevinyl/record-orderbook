@@ -8,6 +8,7 @@ tools and libraries the checks need (plant/pyproject.toml).
 Run: uv run --project plant plant/server.py
 """
 import argparse
+import errno
 import importlib.metadata
 import json
 import re
@@ -159,13 +160,15 @@ def static_target(url_path):
     return target if allowed and target.is_file() else None
 
 
-def run_checks(stem, artwork_params):
+def open_project(stem):
+    """The folder holding project.json and the (created) check output."""
     dest = WORK / stem
     found = list(dest.rglob("project.json")) if dest.is_dir() else []
     if len(found) != 1:
         raise OpenError("project not open")
-    import checks  # needs the libraries main() verified
-    return checks.run(found[0].parent, checks_dir(dest), artwork_params)
+    out = checks_dir(dest)
+    out.mkdir(exist_ok=True)
+    return found[0].parent, out
 
 
 def zip_stem(header_value):
@@ -192,22 +195,56 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(404, "not found", "text/plain; charset=utf-8")
         self.reply(200, target.read_bytes(), TYPES.get(target.suffix, "application/octet-stream"))
 
-    def do_POST(self):
-        if self.path == "/api/check":
+    def check_audio(self):
+        """Streams one JSON object per line: {"progress": percent} while
+        the files are read, then {"result": facts} (or {"error": …})."""
+        import checks  # needs the libraries main() verified
+        try:
+            project_dir, out = open_project(zip_stem(self.headers.get("X-Filename", "")))
+        except OpenError as error:
+            return self.reply(400, str(error), "text/plain; charset=utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson")
+        self.end_headers()  # no length: HTTP/1.0 ends the body by closing
+
+        def line(obj):
+            self.wfile.write((json.dumps(obj) + "\n").encode())
+            self.wfile.flush()
+        shown = -1
+
+        def progress(fraction):
+            nonlocal shown
+            if int(fraction * 100) != shown:
+                shown = int(fraction * 100)
+                line({"progress": shown})
+        try:
+            line({"result": checks.audio(project_dir, out, progress)})
+        except OSError as error:
+            line({"error": f"couldn't check audio: {error}"})
+
+    def check_artwork(self):
+        import checks  # needs the libraries main() verified
+        try:
             try:
-                try:
-                    length = int(self.headers.get("Content-Length", 0))
-                    request = json.loads(self.rfile.read(length) or b"{}")
-                    if not isinstance(request, dict) or not isinstance(request.get("artwork", {}), dict):
-                        raise ValueError
-                except ValueError:
-                    raise OpenError("check request is not valid JSON") from None
-                result = run_checks(zip_stem(self.headers.get("X-Filename", "")), request.get("artwork", {}))
-            except OpenError as error:
-                return self.reply(400, str(error), "text/plain; charset=utf-8")
-            except OSError as error:
-                return self.reply(500, f"couldn't check: {error}", "text/plain; charset=utf-8")
-            return self.reply(200, json.dumps(result), "application/json; charset=utf-8")
+                length = int(self.headers.get("Content-Length", 0))
+                request = json.loads(self.rfile.read(length) or b"{}")
+                if not isinstance(request, dict) or not isinstance(request.get("artwork", {}), dict):
+                    raise ValueError
+            except ValueError:
+                raise OpenError("check request is not valid JSON") from None
+            project_dir, out = open_project(zip_stem(self.headers.get("X-Filename", "")))
+            result = checks.check_artwork(project_dir, out, request.get("artwork", {}))
+        except OpenError as error:
+            return self.reply(400, str(error), "text/plain; charset=utf-8")
+        except OSError as error:
+            return self.reply(500, f"couldn't check artwork: {error}", "text/plain; charset=utf-8")
+        self.reply(200, json.dumps(result), "application/json; charset=utf-8")
+
+    def do_POST(self):
+        if self.path == "/api/check/audio":
+            return self.check_audio()
+        if self.path == "/api/check/artwork":
+            return self.check_artwork()
         if self.path != "/api/open":
             return self.reply(404, "not found", "text/plain; charset=utf-8")
         try:
@@ -237,6 +274,15 @@ class Handler(BaseHTTPRequestHandler):
                    "application/json; charset=utf-8")
 
 
+def make_server(port):
+    try:
+        return ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError as error:
+        if error.errno == errno.EADDRINUSE:
+            sys.exit(f"port {port} is in use — is another plant view running? (or: --port)")
+        sys.exit(f"can't listen on port {port}: {error.strerror}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", type=int, default=8765)
@@ -245,7 +291,7 @@ def main():
     if problems:
         sys.exit("plant view can't start:\n" + "".join(f"  {p}\n" for p in problems)
                  + "start with: uv run --project plant plant/server.py (ffmpeg: brew install ffmpeg)")
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = make_server(port)
     print(f"plant view: http://127.0.0.1:{port}/")
     server.serve_forever()
 

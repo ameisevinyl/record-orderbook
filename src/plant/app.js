@@ -25,7 +25,7 @@ async function openZip(file){
   error.textContent = "";
   let step = "open";
   try{
-    status.textContent = `Opening ${file.name}…`;
+    busy(`Opening ${file.name}…`);
     // Header values must be ASCII; the server unquotes it.
     const headers = {"X-Filename": encodeURIComponent(file.name)};
     const res = await fetch("/api/open", {method: "POST", headers, body: file});
@@ -38,25 +38,61 @@ async function openZip(file){
       + '<div id="audio"></div><div id="artwork"></div>'
       + renderOverview(project, CONFIG, files);
 
-    step = "check";
-    status.textContent = "Checking audio and artwork…";
-    const slots = artworkSlots(project, CONFIG);
-    const checked = await fetch("/api/check", {method: "POST",
-      headers: {...headers, "Content-Type": "application/json"},
-      body: JSON.stringify({artwork: Object.fromEntries(slots.map(s => [s.name, s.params]))})});
-    if(!checked.ok) throw new Error(await checked.text());
-    const facts = await checked.json();
-    if(openId !== latestOpen) return;
     // The server's check output folder: the zip's name without ".zip".
     const base = `/work/${encodeURIComponent(file.name.replace(/\.zip$/i, "") + ".checks")}/`;
+
+    step = "check the audio of";
+    busy("Checking audio… 0 %");
+    const audioRes = await fetch("/api/check/audio", {method: "POST", headers});
+    if(!audioRes.ok) throw new Error(await audioRes.text());
+    const facts = await readStream(audioRes, pct => {
+      if(openId === latestOpen) busy(`Checking audio… ${pct} %`);
+    });
+    if(openId !== latestOpen) return;
     document.getElementById("audio").innerHTML =
       renderAudio(project, facts, audioFindings(project, facts, CONFIG), base);
+
+    step = "check the artwork of";
+    busy("Checking artwork…");
+    const slots = artworkSlots(project, CONFIG);
+    const artworkRes = await fetch("/api/check/artwork", {method: "POST",
+      headers: {...headers, "Content-Type": "application/json"},
+      body: JSON.stringify({artwork: Object.fromEntries(slots.map(s => [s.name, s.params]))})});
+    if(!artworkRes.ok) throw new Error(await artworkRes.text());
+    const artworkFacts = await artworkRes.json();
+    if(openId !== latestOpen) return;
     document.getElementById("artwork").innerHTML =
-      renderArtwork(slots, facts.artwork, getFormat(CONFIG, project.format).printCheck, base);
+      renderArtwork(slots, artworkFacts, getFormat(CONFIG, project.format).printCheck, base);
   }catch(err){
     if(openId === latestOpen) error.textContent = `Couldn't ${step} ${file.name}: ${err.message}`;
   }finally{
-    if(openId === latestOpen) status.textContent = "";
+    if(openId === latestOpen) busy("");
+  }
+}
+
+// Status line; while it has text, a spinner shows the page is working.
+function busy(text){
+  status.textContent = text;
+  status.classList.toggle("busy", !!text);
+}
+
+// The audio check streams one JSON object per line: {"progress": percent}
+// while the files are read, then {"result": facts} or {"error": message}.
+async function readStream(res, onProgress){
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for(;;){
+    const {done, value} = await reader.read();
+    buffer += value || "";
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+    for(const line of lines.filter(Boolean)){
+      const msg = JSON.parse(line);
+      if("progress" in msg) onProgress(msg.progress);
+      else if(msg.error) throw new Error(msg.error);
+      else return msg.result;
+    }
+    if(done) throw new Error("the check ended without a result");
   }
 }
 

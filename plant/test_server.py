@@ -131,44 +131,60 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(status, 500)
         self.assertTrue(text)
 
-    def test_check_body_must_be_json(self):
+    def open_project(self, entries):
+        body = make_zip(entries).getvalue()
+        self.assertEqual(self.post({"X-Filename": "p.zip", "Content-Length": str(len(body))}, body)[0], 200)
+
+    def test_artwork_check_body_must_be_a_json_object(self):
         with tempfile.TemporaryDirectory() as tmp:
             saved, server.WORK = server.WORK, Path(tmp)
             try:
-                body = make_zip([("p/project.json", b"{}")]).getvalue()
-                self.post({"X-Filename": "p.zip", "Content-Length": str(len(body))}, body)
-                status, text = self.post({"X-Filename": "p.zip", "Content-Length": "5"}, b"{nope", path="/api/check")
-                self.assertEqual((status, text), (400, "check request is not valid JSON"))
-                status, text = self.post({"X-Filename": "p.zip", "Content-Length": "2"}, b"[]", path="/api/check")
-                self.assertEqual((status, text), (400, "check request is not valid JSON"))
-                status, _ = self.post({"X-Filename": "p.zip", "Content-Length": "0"}, path="/api/check")
-                self.assertEqual(status, 200)
+                self.open_project([("p/project.json", b"{}")])
+                for body in (b"{nope", b"[]", b'{"artwork": []}'):
+                    status, text = self.post({"X-Filename": "p.zip", "Content-Length": str(len(body))}, body,
+                                             path="/api/check/artwork")
+                    self.assertEqual((status, text), (400, "check request is not valid JSON"))
+                status, text = self.post({"X-Filename": "p.zip", "Content-Length": "0"}, path="/api/check/artwork")
+                self.assertEqual((status, json.loads(text)), (200, {}))
             finally:
                 server.WORK = saved
 
     def test_check_before_open_is_refused(self):
-        status, text = self.post({"X-Filename": "never-opened-xyz.zip"}, path="/api/check")
-        self.assertEqual((status, text), (400, "project not open"))
+        for path in ("/api/check/audio", "/api/check/artwork"):
+            status, text = self.post({"X-Filename": "never-opened-xyz.zip"}, path=path)
+            self.assertEqual((status, text), (400, "project not open"))
 
-    def test_open_then_check_serves_previews(self):
+    def test_audio_check_streams_progress_then_the_result(self):
         with tempfile.TemporaryDirectory() as tmp:
             saved, server.WORK = server.WORK, Path(tmp)
             try:
                 wav = Path(tmp) / "A1.wav"
-                subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=d=1", "-c:a", "pcm_s16le",
+                subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=d=20", "-c:a", "pcm_s24le",
                                 str(wav)], check=True)
-                body = make_zip([("p/project.json", b"{}"), ("p/A1.wav", wav.read_bytes())]).getvalue()
-                self.assertEqual(self.post({"X-Filename": "p.zip", "Content-Length": str(len(body))}, body)[0], 200)
-                status, text = self.post({"X-Filename": "p.zip"}, path="/api/check")
+                self.open_project([("p/project.json", b"{}"), ("p/A1.wav", wav.read_bytes())])
+                status, text = self.post({"X-Filename": "p.zip"}, path="/api/check/audio")
                 self.assertEqual(status, 200)
-                facts = json.loads(text)["files"]["A1.wav"]
+                lines = [json.loads(line) for line in text.splitlines()]
+                progress = [line["progress"] for line in lines[:-1]]
+                self.assertEqual(progress, sorted(progress))
+                self.assertEqual(progress[-1], 100)
+                facts = lines[-1]["result"]["files"]["A1.wav"]
                 self.assertEqual(static_target(f"/work/p.checks/{facts['preview']}"),
                                  (Path(tmp) / "p.checks" / facts["preview"]).resolve())
+                self.assertTrue((Path(tmp) / "p.checks" / facts["waveform"]).is_file())
             finally:
                 server.WORK = saved
 
 
 class StartupTest(unittest.TestCase):
+    def test_port_in_use_is_a_clear_exit(self):
+        busy = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        try:
+            with self.assertRaisesRegex(SystemExit, f"port {busy.server_port} is in use"):
+                server.make_server(busy.server_port)
+        finally:
+            busy.server_close()
+
     def test_reports_missing_and_too_old_tools(self):
         libs = {"pymupdf": "1.28.2", "pillow": "11.3.0", "numpy": None}
         tools = {"ffmpeg": "6.1.1", "ffprobe": "N-118000-g1234"}  # git build: no version to compare
