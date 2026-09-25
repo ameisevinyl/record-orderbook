@@ -22,3 +22,6 @@
 /plant/work/
 /plant/.venv/
 __pycache__/
+
+# Sample project zips dropped in for testing (customer data, huge).
+/docs/*.zip
