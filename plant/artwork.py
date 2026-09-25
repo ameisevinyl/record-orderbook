@@ -164,3 +164,102 @@ def structure(path, page_no):
     if kind in ("jpeg", "tiff"):
         return (kind, *raster_structure(path))
     raise ArtworkError("unrecognized file — expected PDF, JPG, or TIFF")
+
+
+MEASURE_DPI = 72      # 1 px ≈ 0.35 mm, averages like a densitometer spot
+INKED_PCT = 5         # a pixel with more coverage counts as printed
+PREVIEW_PX = 800      # long side of the preview PNG
+EDGE_MM = 0.5         # bands keep off the cut line: anti-aliasing, cutting tolerance
+OVER = (220, 0, 0, 170)       # overlay: over the ink limit
+RICH = (255, 140, 0, 170)     # overlay: rich black
+
+
+def page_geometry(doc_page, kind, parsed, params):
+    """Page size and trim rectangle in mm, top-left origin."""
+    if kind == "pdf":
+        crop = doc_page.cropbox
+        page_mm = size_mm(crop)
+        if parsed["trimBoxMm"]:
+            t = doc_page.trimbox
+            return page_mm, {"x": (t.x0 - crop.x0) * MM_PER_PT, "y": (t.y0 - crop.y0) * MM_PER_PT,
+                             "w": t.width * MM_PER_PT, "h": t.height * MM_PER_PT}
+    elif parsed["declaredDpi"]:
+        px, dpi = parsed["imagePx"], parsed["declaredDpi"]
+        page_mm = {"w": px["w"] / dpi["x"] * 25.4, "h": px["h"] / dpi["y"] * 25.4}
+    else:
+        page_mm = dict(params["targetMm"])  # no dpi: taken to be the data size, as in the browser
+    trim = params["trimMm"]
+    return page_mm, {"x": (page_mm["w"] - trim["w"]) / 2, "y": (page_mm["h"] - trim["h"]) / 2, **trim}
+
+
+def render(doc_page, page_mm, dpi, colorspace):
+    sx = page_mm["w"] / 25.4 * dpi / doc_page.rect.width
+    sy = page_mm["h"] / 25.4 * dpi / doc_page.rect.height
+    return doc_page.get_pixmap(matrix=pymupdf.Matrix(sx, sy), colorspace=colorspace, alpha=False)
+
+
+def bands(shape, trim, bleed_mm, round_):
+    """Boolean masks (the bleed band outside the trim, a band of the same
+    width inside it) on the measuring grid, both EDGE_MM off the cut."""
+    h, w = shape
+    px = MEASURE_DPI / 25.4
+    ys, xs = numpy.mgrid[0:h, 0:w]
+    x, y = (xs + 0.5) / px, (ys + 0.5) / px  # pixel centres in mm
+    if round_:
+        r = trim["w"] / 2
+        d = numpy.hypot(x - (trim["x"] + r), y - (trim["y"] + r))
+        return (d > r + EDGE_MM) & (d <= r + bleed_mm), (d < r - EDGE_MM) & (d >= r - bleed_mm)
+
+    def inside(grow):
+        return ((x >= trim["x"] - grow) & (x <= trim["x"] + trim["w"] + grow)
+                & (y >= trim["y"] - grow) & (y <= trim["y"] + trim["h"] + grow))
+    return inside(bleed_mm) & ~inside(EDGE_MM), inside(-EDGE_MM) & ~inside(-bleed_mm)
+
+
+def share(mask, where=None):
+    """Percent of `where` (default: everything) covered by mask."""
+    n = mask.size if where is None else where.sum()
+    hit = mask.sum() if where is None else (mask & where).sum()
+    return round(float(hit / n * 100), 2) if n else 0.0
+
+
+def facts(path, params, out_dir, base):
+    try:
+        kind, parsed, fonts = structure(path, params["page"])
+        if parsed["encrypted"] and parsed["pageSizeMm"] is None:
+            return {"kind": kind, "parsed": parsed, "unembeddedFonts": fonts}
+        doc_page = pymupdf.open(path)[params["page"] - 1 if kind == "pdf" else 0]
+    except ArtworkError as error:
+        return {"error": str(error)}
+    page_mm, trim = page_geometry(doc_page, kind, parsed, params)
+
+    cmyk = render(doc_page, page_mm, MEASURE_DPI, pymupdf.csCMYK)
+    ink = numpy.frombuffer(cmyk.samples, numpy.uint8).reshape(cmyk.height, cmyk.width, 4) / 255 * 100
+    total = ink.sum(axis=2)
+    c, m, y, k = (ink[..., i] for i in range(4))
+    black = params["black"]
+    rich = ((k >= black["kMinPct"]) | ((c >= 60) & (m >= 60) & (y >= 60))) & (c + m + y > black["cmyMaxPct"])
+    over = total > params["inkLimitPct"]
+
+    outer, inner = bands(total.shape, trim, params["bleedMm"], params["round"])
+    inked = total > INKED_PCT
+    bleed, tol = params["bleedMm"], params["toleranceMm"]
+    no_bleed = page_mm["w"] < trim["w"] + 2 * bleed - tol or page_mm["h"] < trim["h"] + 2 * bleed - tol
+
+    preview, overlay = base + ".png", base + ".overlay.png"
+    render(doc_page, page_mm, PREVIEW_PX / max(page_mm["w"], page_mm["h"]) * 25.4, pymupdf.csRGB).save(out_dir / preview)
+    layer = numpy.zeros((*total.shape, 4), numpy.uint8)
+    layer[over] = OVER
+    layer[rich] = RICH
+    with Image.open(out_dir / preview) as im:
+        size = im.size
+    Image.fromarray(layer, "RGBA").resize(size, Image.NEAREST).save(out_dir / overlay)
+
+    return {
+        "kind": kind, "parsed": parsed, "unembeddedFonts": fonts,
+        "pageMm": page_mm, "trimRectMm": trim,
+        "ink": {"maxPct": round(float(total.max()), 1), "overPct": share(over)},
+        "black": {"richPct": share(rich)},
+        "bleed": {"outerInkPct": None if no_bleed else share(inked, outer), "innerInkPct": share(inked, inner)},
+        "preview": preview, "overlay": overlay,
+    }
