@@ -133,6 +133,25 @@ class ProbeTest(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in project.iterdir()), ["A1.wav", "cover.pdf", "project.json"])
 
 
+class ArtworkWiringTest(unittest.TestCase):
+    def test_run_passes_params_and_keeps_audio_errors_separate(self):
+        import checks
+        saved_which, saved_artwork = checks.shutil.which, checks.artwork_facts
+        checks.shutil.which = lambda name: None
+        checks.artwork_facts = lambda path, params, out_dir, base: {"page": params["page"], "base": base}
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                project = Path(tmp) / "p"
+                project.mkdir()
+                (project / "L.pdf").write_bytes(b"%PDF")
+                result = run(project, Path(tmp) / "out", {"L.pdf": {"page": 2}, "gone.pdf": {"page": 1}})
+            self.assertEqual(result["error"], "needs ffmpeg")
+            self.assertEqual(result["artwork"]["L.pdf"], {"page": 2, "base": "L.pdf"})
+            self.assertEqual(result["artwork"]["gone.pdf"], {"error": "not in the zip"})
+        finally:
+            checks.shutil.which, checks.artwork_facts = saved_which, saved_artwork
+
+
 class NoFfmpegTest(unittest.TestCase):
     def test_run_says_needs_ffmpeg(self):
         import checks
@@ -140,7 +159,7 @@ class NoFfmpegTest(unittest.TestCase):
         checks.shutil.which = lambda name: None
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                self.assertEqual(run(Path(tmp), Path(tmp) / "out"), {"error": "needs ffmpeg"})
+                self.assertEqual(run(Path(tmp), Path(tmp) / "out"), {"error": "needs ffmpeg", "artwork": {}})
         finally:
             checks.shutil.which = saved
 

@@ -110,12 +110,12 @@ def static_target(url_path):
     return target if allowed and target.is_file() else None
 
 
-def run_checks(stem):
+def run_checks(stem, artwork_params):
     dest = WORK / stem
     found = list(dest.rglob("project.json")) if dest.is_dir() else []
     if len(found) != 1:
         raise OpenError("project not open")
-    return checks.run(found[0].parent, checks_dir(dest))
+    return checks.run(found[0].parent, checks_dir(dest), artwork_params)
 
 
 def zip_stem(header_value):
@@ -145,7 +145,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/check":
             try:
-                result = run_checks(zip_stem(self.headers.get("X-Filename", "")))
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                    request = json.loads(self.rfile.read(length) or b"{}")
+                except ValueError:
+                    raise OpenError("check request is not valid JSON") from None
+                result = run_checks(zip_stem(self.headers.get("X-Filename", "")), request.get("artwork", {}))
             except OpenError as error:
                 return self.reply(400, str(error), "text/plain; charset=utf-8")
             except OSError as error:

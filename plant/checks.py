@@ -102,14 +102,11 @@ def render_previews(path, out_dir, base):
     return mp3, png
 
 
-def run(project_dir, out_dir):
+def audio(project_dir, out_dir):
     """Facts for every audio file under project_dir, keyed by its name
-    relative to it; previews and facts.json go to out_dir (replaced)."""
+    relative to it; previews go to out_dir."""
     if not (shutil.which("ffprobe") and shutil.which("ffmpeg")):
         return {"error": "needs ffmpeg"}
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True)
     files = {}
     for path in sorted(project_dir.rglob("*")):
         if not path.is_file() or path.suffix.lower() not in AUDIO_EXT:
@@ -122,7 +119,36 @@ def run(project_dir, out_dir):
             except subprocess.CalledProcessError as error:
                 facts["previewError"] = error.stderr.decode(errors="replace").strip() or "ffmpeg failed"
         files[name] = facts
-    result = {"files": files}
+    return {"files": files}
+
+
+def artwork_facts(path, params, out_dir, base):
+    """artwork.facts; the libraries load only when artwork is checked."""
+    import artwork
+    return artwork.facts(path, params, out_dir, base)
+
+
+def check_artwork(project_dir, out_dir, params_by_name):
+    """Facts per artwork file the page asked for, with its part's params."""
+    result = {}
+    try:
+        for name, params in params_by_name.items():
+            path = project_dir / name
+            result[name] = (artwork_facts(path, params, out_dir, name.replace("/", "_"))
+                            if path.is_file() else {"error": "not in the zip"})
+    except ImportError:
+        return {"error": "needs PyMuPDF: uv run --project plant plant/server.py"}
+    return result
+
+
+def run(project_dir, out_dir, artwork_params=None):
+    """Audio facts plus artwork facts for the files named in
+    artwork_params; previews and facts.json go to out_dir (replaced)."""
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True)
+    result = audio(project_dir, out_dir)
+    result["artwork"] = check_artwork(project_dir, out_dir, artwork_params or {})
     (out_dir / "facts.json").write_text(json.dumps(result, indent=1))
     return result
 

@@ -132,6 +132,19 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(status, 500)
         self.assertTrue(text)
 
+    def test_check_body_must_be_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            saved, server.WORK = server.WORK, Path(tmp)
+            try:
+                body = make_zip([("p/project.json", b"{}")]).getvalue()
+                self.post({"X-Filename": "p.zip", "Content-Length": str(len(body))}, body)
+                status, text = self.post({"X-Filename": "p.zip", "Content-Length": "5"}, b"{nope", path="/api/check")
+                self.assertEqual((status, text), (400, "check request is not valid JSON"))
+                status, _ = self.post({"X-Filename": "p.zip", "Content-Length": "0"}, path="/api/check")
+                self.assertEqual(status, 200)
+            finally:
+                server.WORK = saved
+
     def test_check_before_open_is_refused(self):
         status, text = self.post({"X-Filename": "never-opened-xyz.zip"}, path="/api/check")
         self.assertEqual((status, text), (400, "project not open"))
