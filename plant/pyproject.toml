@@ -1,0 +1,10 @@
+# Plant tools' Python dependencies, run through uv (no package, no build):
+#   uv run --project plant plant/server.py
+[project]
+name = "record-orderbook-plant"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["pymupdf", "pillow", "numpy"]
+
+[tool.uv]
+package = false

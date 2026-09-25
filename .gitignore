@@ -20,4 +20,5 @@
 
 # Plant view working copies of opened project zips, and Python caches.
 /plant/work/
+/plant/.venv/
 __pycache__/
