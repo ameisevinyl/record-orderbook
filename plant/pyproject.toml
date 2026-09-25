@@ -1,10 +1,17 @@
-# Plant tools' Python dependencies, run through uv (no package, no build):
+# Plant tools' dependencies, run through uv (no package, no build):
 #   uv run --project plant plant/server.py
+# The minimums are the versions tested; plant/server.py refuses to start
+# below them.
 [project]
 name = "record-orderbook-plant"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ["pymupdf", "pillow", "numpy"]
+dependencies = ["pymupdf>=1.28", "pillow>=12.0", "numpy>=2.5"]
 
 [tool.uv]
 package = false
+
+# Command-line tools the checks call (brew install ffmpeg).
+[tool.plant]
+ffmpeg = "9.0"
+ffprobe = "9.0"

@@ -2,8 +2,9 @@
 project with ffprobe, reads AIFF markers itself, and renders a prelisten
 MP3 and a waveform PNG per file into a separate output folder.
 
-Standard library + ffmpeg on the PATH. The rules that judge these facts
-live in src/lib/audio-checks.js.
+Needs ffmpeg on the PATH and the libraries in plant/pyproject.toml
+(plant/server.py checks both before it starts). The rules that judge
+these facts live in src/lib/audio-checks.js and artwork-checks.js.
 Run: python3 plant/checks.py <project folder> [<output folder>]
 """
 import json
@@ -12,6 +13,8 @@ import struct
 import subprocess
 import sys
 from pathlib import Path
+
+import artwork
 
 AUDIO_EXT = {".wav", ".wave", ".bwf", ".aif", ".aiff", ".aifc",
              ".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus"}
@@ -105,8 +108,6 @@ def render_previews(path, out_dir, base):
 def audio(project_dir, out_dir):
     """Facts for every audio file under project_dir, keyed by its name
     relative to it; previews go to out_dir."""
-    if not (shutil.which("ffprobe") and shutil.which("ffmpeg")):
-        return {"error": "needs ffmpeg"}
     files = {}
     for path in sorted(project_dir.rglob("*")):
         if not path.is_file() or path.suffix.lower() not in AUDIO_EXT:
@@ -122,22 +123,13 @@ def audio(project_dir, out_dir):
     return {"files": files}
 
 
-def artwork_facts(path, params, out_dir, base):
-    """artwork.facts; the libraries load only when artwork is checked."""
-    import artwork
-    return artwork.facts(path, params, out_dir, base)
-
-
 def check_artwork(project_dir, out_dir, params_by_name):
     """Facts per artwork file the page asked for, with its part's params."""
     result = {}
-    try:
-        for name, params in params_by_name.items():
-            path = project_dir / name
-            result[name] = (artwork_facts(path, params, out_dir, name.replace("/", "_"))
-                            if path.is_file() else {"error": "not in the zip"})
-    except ImportError:
-        return {"error": "needs PyMuPDF: uv run --project plant plant/server.py"}
+    for name, params in params_by_name.items():
+        path = project_dir / name
+        result[name] = (artwork.facts(path, params, out_dir, name.replace("/", "_"))
+                        if path.is_file() else {"error": "not in the zip"})
     return result
 
 

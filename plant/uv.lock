@@ -176,7 +176,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy" },
-    { name = "pillow" },
-    { name = "pymupdf" },
+    { name = "numpy", specifier = ">=2.5" },
+    { name = "pillow", specifier = ">=12.0" },
+    { name = "pymupdf", specifier = ">=1.28" },
 ]

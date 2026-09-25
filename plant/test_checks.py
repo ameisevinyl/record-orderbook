@@ -1,5 +1,4 @@
 import io
-import shutil
 import struct
 import subprocess
 import tempfile
@@ -12,7 +11,6 @@ from checks import aiff_markers as read_markers, probe_facts, run
 def aiff_markers(data):
     return read_markers(io.BytesIO(data))
 
-HAS_FFMPEG = bool(shutil.which("ffprobe") and shutil.which("ffmpeg"))
 
 
 def chunk(chunk_id, body, endian=">"):
@@ -59,7 +57,6 @@ class AiffMarkersTest(unittest.TestCase):
         self.assertEqual(aiff_markers(data[:-4]), [(1, "one")])
 
 
-@unittest.skipUnless(HAS_FFMPEG, "needs ffmpeg")
 class ProbeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -134,34 +131,21 @@ class ProbeTest(unittest.TestCase):
 
 
 class ArtworkWiringTest(unittest.TestCase):
-    def test_run_passes_params_and_keeps_audio_errors_separate(self):
+    def test_run_passes_params_per_file(self):
         import checks
-        saved_which, saved_artwork = checks.shutil.which, checks.artwork_facts
-        checks.shutil.which = lambda name: None
-        checks.artwork_facts = lambda path, params, out_dir, base: {"page": params["page"], "base": base}
+        saved = checks.artwork.facts
+        checks.artwork.facts = lambda path, params, out_dir, base: {"page": params["page"], "base": base}
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 project = Path(tmp) / "p"
                 project.mkdir()
                 (project / "L.pdf").write_bytes(b"%PDF")
                 result = run(project, Path(tmp) / "out", {"L.pdf": {"page": 2}, "gone.pdf": {"page": 1}})
-            self.assertEqual(result["error"], "needs ffmpeg")
+            self.assertEqual(result["files"], {})
             self.assertEqual(result["artwork"]["L.pdf"], {"page": 2, "base": "L.pdf"})
             self.assertEqual(result["artwork"]["gone.pdf"], {"error": "not in the zip"})
         finally:
-            checks.shutil.which, checks.artwork_facts = saved_which, saved_artwork
-
-
-class NoFfmpegTest(unittest.TestCase):
-    def test_run_says_needs_ffmpeg(self):
-        import checks
-        saved = checks.shutil.which
-        checks.shutil.which = lambda name: None
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                self.assertEqual(run(Path(tmp), Path(tmp) / "out"), {"error": "needs ffmpeg", "artwork": {}})
-        finally:
-            checks.shutil.which = saved
+            checks.artwork.facts = saved
 
 
 if __name__ == "__main__":

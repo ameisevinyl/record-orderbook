@@ -2,14 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-try:
-    import pymupdf
-    from PIL import Image
-except ImportError:
-    pymupdf = None
+import pymupdf
+from PIL import Image
 
-if pymupdf:
-    import artwork
+import artwork
 
 MM = 72 / 25.4
 
@@ -32,7 +28,6 @@ def pdf(path, size_mm=106, trim_mm=None, fills=(), text=False, image_dpi=None, p
     doc.save(path)
 
 
-@unittest.skipIf(pymupdf is None, "needs uv run --project plant")
 class StructureTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -101,7 +96,6 @@ LABEL = {"targetMm": {"w": 106, "h": 106}, "trimMm": {"w": 100, "h": 100}, "blee
          "page": 1, "inkLimitPct": 220, "black": {"kMinPct": 85, "cmyMaxPct": 30}, "toleranceMm": 0.5}
 
 
-@unittest.skipIf(pymupdf is None, "needs uv run --project plant")
 class MeasureTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

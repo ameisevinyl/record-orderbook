@@ -22,10 +22,6 @@ export function sideAudio(side, sideId){
 export function audioFindings(project, facts, config){
   const findings = [];
   const add = (group, text) => findings.push({group, text});
-  if(facts.error){
-    add("Audio", facts.error);
-    return findings;
-  }
   const referenced = new Set();
 
   for(const sideId of ["A", "B"]){

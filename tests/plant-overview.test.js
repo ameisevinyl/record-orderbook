@@ -88,11 +88,6 @@ test("audio: form track starts stop at the first empty length", () => {
   assert.ok(!html.includes("A3"));
 });
 
-test("audio: needs ffmpeg shows only the finding", () => {
-  const html = renderAudio(project, {error:"needs ffmpeg"}, [{group:"Audio", text:"needs ffmpeg"}], "/w/");
-  assert.ok(html.includes("needs ffmpeg"));
-  assert.ok(!html.includes("<h3>"));
-});
 
 test("artwork files show their page when it isn't 1", () => {
   const p = prepareProject({format:"12", labels:{sides:{A:{fileName:"L.pdf"}, B:{fileName:"L2.pdf", page:2}}}}, CONFIG);
@@ -120,8 +115,7 @@ test("artwork: verdict, preview with trim/bleed lines, overlay, rows", () => {
   assert.ok(html.includes("max 330 %"));
 });
 
-test("artwork: needs PyMuPDF, no slots", () => {
+test("artwork: nothing to show without slots", () => {
   const printCheck = getFormat(CONFIG, "12").printCheck;
-  assert.ok(renderArtwork([{title: "Cover", name: "C.pdf", params: {}}], {error: "needs PyMuPDF"}, printCheck, "/w/").includes("needs PyMuPDF"));
   assert.equal(renderArtwork([], {}, printCheck, "/w/"), "");
 });

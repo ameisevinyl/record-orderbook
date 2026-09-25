@@ -26,10 +26,6 @@ test("matching files give no findings", ()=>{
   assert.deepEqual(texts(project(twoTracks), {"A1.wav": wav(180.4), "A2.wav": wav(149.6)}), []);
 });
 
-test("ffmpeg missing is the only finding", ()=>{
-  assert.deepEqual(audioFindings(project(twoTracks), {error:"needs ffmpeg"}, CONFIG),
-    [{group:"Audio", text:"needs ffmpeg"}]);
-});
 
 test("duration differing from the form by more than 1 s", ()=>{
   assert.deepEqual(texts(project(twoTracks), {"A1.wav": wav(182), "A2.wav": wav(150)}),

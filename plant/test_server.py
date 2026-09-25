@@ -1,7 +1,6 @@
 import http.client
 import io
 import json
-import shutil
 import subprocess
 import stat
 import tempfile
@@ -13,7 +12,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import server
-from server import Handler, OpenError, ROOT, static_target, unpack, zip_stem
+from server import Handler, OpenError, ROOT, missing, static_target, unpack, zip_stem
 
 
 def make_zip(entries):
@@ -149,7 +148,6 @@ class HttpTest(unittest.TestCase):
         status, text = self.post({"X-Filename": "never-opened-xyz.zip"}, path="/api/check")
         self.assertEqual((status, text), (400, "project not open"))
 
-    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "needs ffmpeg")
     def test_open_then_check_serves_previews(self):
         with tempfile.TemporaryDirectory() as tmp:
             saved, server.WORK = server.WORK, Path(tmp)
@@ -166,6 +164,23 @@ class HttpTest(unittest.TestCase):
                                  (Path(tmp) / "p.checks" / facts["preview"]).resolve())
             finally:
                 server.WORK = saved
+
+
+class StartupTest(unittest.TestCase):
+    def test_reports_missing_and_too_old_tools(self):
+        libs = {"pymupdf": "1.28.2", "pillow": "11.3.0", "numpy": None}
+        tools = {"ffmpeg": "6.1.1", "ffprobe": "N-118000-g1234"}  # git build: no version to compare
+        self.assertEqual(missing(libs.get, tools.get), [
+            "pillow >= 12.0 needed (found 11.3.0)",
+            "numpy >= 2.5 needed (not installed)",
+            "ffmpeg >= 9.0 needed (found 6.1.1)",
+        ])
+
+    def test_all_present(self):
+        self.assertEqual(missing(lambda name: "99.0", lambda name: "99.0"), [])
+
+    def test_installed_environment_passes(self):
+        self.assertEqual(missing(), [])
 
 
 class HelpersTest(unittest.TestCase):

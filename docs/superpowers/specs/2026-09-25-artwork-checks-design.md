@@ -125,9 +125,7 @@ Per artwork file:
 - **Preview:** the page as RGB PNG, 800 px on the long side; overlay
   PNG, same size, transparent, red where over the ink limit, orange
   where black is rich.
-- **Errors:** an unreadable file gets `error`; without the Python
-  libraries the whole `artwork` result is `{error: "needs PyMuPDF: uv
-  run --project plant plant/server.py"}`. Audio is unaffected.
+- **Errors:** an unreadable file gets `error`; the run goes on.
 
 ## Rules (JS)
 
@@ -181,8 +179,11 @@ Plain and dense like the rest of the plant view.
   gitignored.
 - Run: `uv run --project plant plant/server.py`; tests:
   `uv run --project plant -m unittest discover plant`.
-- `plant/server.py` stays standard library; only the artwork part of
-  `checks.py` imports the libraries, lazily.
+- `plant/server.py` itself uses only the standard library. Before it
+  starts it checks the minimum versions in `plant/pyproject.toml` (the
+  `>=` dependencies and `[tool.plant]` ffmpeg/ffprobe) and exits with
+  "<name> >= <version> needed (found …/not installed)" when anything is
+  missing — no degraded mode.
 - The repo is MIT; PyMuPDF is AGPL. That binds the plant tool as run
   (its source must be offered to users over a network), which a public
   repo already does.

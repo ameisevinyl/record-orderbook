@@ -73,8 +73,8 @@ Per file (name relative to the `project.json` folder):
 `spec` has the shape `audioSpecWarning` (`src/lib/audio-duration.js`)
 already takes, so the customer tool's rule is reused. Every audio file
 in the folder is probed, not only referenced ones. A file ffprobe
-can't read gets `error`; the run goes on. Without ffmpeg on the PATH
-the whole result is `{error: "needs ffmpeg"}` and the page says so.
+can't read gets `error`; the run goes on. The server doesn't start
+without ffmpeg (see the artwork-checks spec, Setup).
 
 ## Rules (`audioFindings`)
 

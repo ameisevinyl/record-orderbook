@@ -148,15 +148,13 @@ function audioFactsHtml(file, formStarts, base){
 // check output (previews), e.g. "/work/<stem>.checks/".
 export function renderAudio(project, facts, findings, base){
   let body = findings.length ? findingsHtml(findings) : '<p class="complete">No audio findings</p>';
-  if(!facts.error){
-    for(const sideId of ["A", "B"]){
-      const side = project.sides[sideId];
-      const audio = sideAudio(side, sideId);
-      if(!audio.length) continue;
-      const formStarts = side.continuous ? formTrackStarts(side, sideId) : [];
-      body += `<h3>Side ${sideId}</h3>`
-        + audio.map(({name, label}) => audioFileHtml(facts.files[name], name, label, formStarts, base)).join("");
-    }
+  for(const sideId of ["A", "B"]){
+    const side = project.sides[sideId];
+    const audio = sideAudio(side, sideId);
+    if(!audio.length) continue;
+    const formStarts = side.continuous ? formTrackStarts(side, sideId) : [];
+    body += `<h3>Side ${sideId}</h3>`
+      + audio.map(({name, label}) => audioFileHtml(facts.files[name], name, label, formStarts, base)).join("");
   }
   return group("Audio", body);
 }
@@ -233,7 +231,6 @@ function checklistHtml(rows){
 // the check output.
 export function renderArtwork(slots, artworkFacts, printCheck, base){
   if(!slots.length) return "";
-  if(artworkFacts.error) return group("Artwork", `<p class="missing">${escapeHtml(artworkFacts.error)}</p>`);
   return group("Artwork", slots.map(({title, name, params}) => {
     const facts = artworkFacts[name] || {error: "not checked"};
     const rows = artworkRows(facts, params, printCheck);

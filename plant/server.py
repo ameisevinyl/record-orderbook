@@ -1,24 +1,31 @@
 """Plant view server: serves src/plant/ (and the src/ modules it imports,
 unbuilt), unpacks posted project zips into plant/work/<zip stem>/ and
-runs the audio checks (checks.py) into plant/work/<zip stem>.checks/.
+runs the audio and artwork checks (checks.py) into
+plant/work/<zip stem>.checks/.
 
-Standard library only; binds 127.0.0.1. Run: python3 plant/server.py
+Standard library only; binds 127.0.0.1. Refuses to start without the
+tools and libraries the checks need (plant/pyproject.toml).
+Run: uv run --project plant plant/server.py
 """
 import argparse
+import importlib.metadata
 import json
+import re
 import shutil
+import subprocess
+import sys
 import stat
 import tempfile
 import threading
+import tomllib
 import zipfile
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
-import checks
-
 ROOT = Path(__file__).resolve().parent.parent
+PYPROJECT = ROOT / "plant" / "pyproject.toml"
 SRC = ROOT / "src"
 WORK = ROOT / "plant" / "work"
 INDEX = SRC / "plant" / "index.html"
@@ -33,6 +40,48 @@ CHUNK = 1 << 20
 # ThreadingHTTPServer: two opens of the same zip would otherwise wipe
 # and fill the same work folder at once.
 UNPACK_LOCK = threading.Lock()
+
+
+def lib_version(name):
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def tool_version(name):
+    """ffmpeg/ffprobe print "<name> version 9.0.2 …" on -version."""
+    path = shutil.which(name)
+    if not path:
+        return None
+    out = subprocess.run([path, "-version"], capture_output=True, text=True).stdout
+    m = re.search(r"version\s+(\S+)", out)
+    return m.group(1) if m else ""
+
+
+def version_tuple(text):
+    m = re.match(r"\d+(?:\.\d+)*", text)
+    return tuple(int(part) for part in m.group().split(".")) if m else None
+
+
+def missing(lib_version=lib_version, tool_version=tool_version):
+    """What's missing or too old, per plant/pyproject.toml: its
+    "name>=x.y" dependencies and the [tool.plant] command-line tools."""
+    config = tomllib.loads(PYPROJECT.read_text())
+    wanted = [(*re.fullmatch(r"([\w.-]+)\s*>=\s*([\d.]+)", dep).groups(), lib_version)
+              for dep in config["project"]["dependencies"]]
+    wanted += [(name, minimum, tool_version) for name, minimum in config["tool"]["plant"].items()]
+    problems = []
+    for name, minimum, version_of in wanted:
+        found = version_of(name)
+        if found is None:
+            problems.append(f"{name} >= {minimum} needed (not installed)")
+            continue
+        # A version that doesn't parse (e.g. an ffmpeg git build) passes.
+        have = version_tuple(found)
+        if have is not None and have < version_tuple(minimum):
+            problems.append(f"{name} >= {minimum} needed (found {found})")
+    return problems
 
 
 def checks_dir(dest):
@@ -115,6 +164,7 @@ def run_checks(stem, artwork_params):
     found = list(dest.rglob("project.json")) if dest.is_dir() else []
     if len(found) != 1:
         raise OpenError("project not open")
+    import checks  # needs the libraries main() verified
     return checks.run(found[0].parent, checks_dir(dest), artwork_params)
 
 
@@ -189,6 +239,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", type=int, default=8765)
     port = parser.parse_args().port
+    problems = missing()
+    if problems:
+        sys.exit("plant view can't start:\n" + "".join(f"  {p}\n" for p in problems)
+                 + "start with: uv run --project plant plant/server.py (ffmpeg: brew install ffmpeg)")
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     print(f"plant view: http://127.0.0.1:{port}/")
     server.serve_forever()

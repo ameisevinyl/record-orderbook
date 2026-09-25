@@ -103,7 +103,7 @@ now; revisit if/when the plant needs to tell file revisions apart.
 ```
 node --test tests/            # run all unit tests
 node build/build.js           # build dist/index.html from src/
-uv run --project plant plant/server.py   # plant view on http://127.0.0.1:8765/
+uv run --project plant plant/server.py   # plant view on http://127.0.0.1:8765/ (won't start below the versions in plant/pyproject.toml)
 uv run --project plant python -m unittest discover plant   # plant server + checks tests
 brew install ffmpeg uv        # plant checks need ffprobe/ffmpeg; uv installs the Python libs
 ```
