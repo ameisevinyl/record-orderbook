@@ -113,6 +113,9 @@ test("artwork: verdict, preview with trim/bleed lines, overlay, rows", () => {
   assert.ok(html.includes('<circle class="trim" cx="53" cy="53" r="50"'));
   assert.ok(html.includes('<circle class="bleed" cx="53" cy="53" r="53"'));
   assert.ok(html.includes('<circle class="hole" cx="53" cy="53" r="3.7"'));
+  // every line lies on a white line at the same place, so its gaps show white
+  assert.ok(html.includes('<circle class="under" cx="53" cy="53" r="50"/><circle class="trim" cx="53" cy="53" r="50"/>'));
+  assert.ok(html.includes('<circle class="under" cx="53" cy="53" r="3.7"/><circle class="hole"'));
   assert.ok(html.includes("max 330 %"));
 });
 

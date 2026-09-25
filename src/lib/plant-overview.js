@@ -211,17 +211,22 @@ export function renderOverview(project, config, files){
 
 const VERDICT = {ok: "OK", review: "review", customer: "needs customer"};
 
-// Trim (solid), bleed (dashed) and a label's center hole in page
+// Trim and a label's center hole (dashed) and bleed (dotted) in page
 // millimetres; the SVG stretches over the preview, so the lines sit
-// where the cut and the punch will be.
+// where the cut and the punch will be. Black dashes on a white line of
+// the same width read on dark and light designs alike.
 function cutLinesSvg(page, trim, bleedMm, round, holeMm){
   const n = v => Math.round(v * 100) / 100;
-  const shape = (cls, grow) => round
-    ? `<circle class="${cls}" cx="${n(trim.x + trim.w / 2)}" cy="${n(trim.y + trim.h / 2)}" r="${n(trim.w / 2 + grow)}"/>`
-    : `<rect class="${cls}" x="${n(trim.x - grow)}" y="${n(trim.y - grow)}" width="${n(trim.w + 2 * grow)}" height="${n(trim.h + 2 * grow)}"/>`;
-  const hole = holeMm
-    ? `<circle class="hole" cx="${n(trim.x + trim.w / 2)}" cy="${n(trim.y + trim.h / 2)}" r="${n(holeMm / 2)}"/>` : "";
-  return `<svg viewBox="0 0 ${n(page.w)} ${n(page.h)}" preserveAspectRatio="none">${shape("trim", 0)}${shape("bleed", bleedMm)}${hole}</svg>`;
+  const cx = n(trim.x + trim.w / 2), cy = n(trim.y + trim.h / 2);
+  const shape = grow => round
+    ? `cx="${cx}" cy="${cy}" r="${n(trim.w / 2 + grow)}"`
+    : `x="${n(trim.x - grow)}" y="${n(trim.y - grow)}" width="${n(trim.w + 2 * grow)}" height="${n(trim.h + 2 * grow)}"`;
+  const tag = round ? "circle" : "rect";
+  const line = (cls, el, attrs) => `<${el} class="under" ${attrs}/><${el} class="${cls}" ${attrs}/>`;
+  return `<svg viewBox="0 0 ${n(page.w)} ${n(page.h)}" preserveAspectRatio="none">`
+    + line("trim", tag, shape(0)) + line("bleed", tag, shape(bleedMm))
+    + (holeMm ? line("hole", "circle", `cx="${cx}" cy="${cy}" r="${n(holeMm / 2)}"`) : "")
+    + `</svg>`;
 }
 
 function checklistHtml(rows){
