@@ -56,6 +56,15 @@ class SpectrumTest(unittest.TestCase):
         self.assertEqual(seen, [{"file": "A1.wav", "index": 1, "count": 2}, {"file": "A2.wav", "index": 2, "count": 2}])
         self.assertNotIn(self.dir, spectrum.PROGRESS)
 
+    def test_names_limit_the_spectrograms_to_those_files(self):
+        for name in ("A1.wav", "reference.wav"):
+            tone(self.dir / name, 1)
+        stale = self.dir / "spectrum" / "reference.wav.png"
+        stale.parent.mkdir()
+        stale.write_bytes(b"old")
+        spectrum.job(self.dir, ["A1.wav"])
+        self.assertEqual(sorted(p.name for p in (self.dir / "spectrum").iterdir()), ["A1.wav.png"])
+
     def test_start_runs_in_the_background(self):
         tone(self.dir / "A1.wav", 2)
         spectrum.start(self.dir)

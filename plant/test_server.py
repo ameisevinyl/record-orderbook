@@ -139,6 +139,14 @@ class HttpTest(unittest.TestCase):
         status, data = self.request("POST", "/api/check/artwork", b'{"job": "p"}', JSON)
         self.assertEqual((status, [json.loads(line) for line in data.decode().splitlines()]), (200, [{"result": {}}]))
 
+    def test_audio_check_takes_only_the_files_asked_for(self):
+        self.upload("p.zip", [("p/project.json", b"{}"), ("p/reference.wav", b"not audio")])
+        self.post("/api/accept", {"item": "p.zip"})
+        status, data = self.request("POST", "/api/check/audio", b'{"job": "p", "files": []}', JSON)
+        self.assertEqual([json.loads(line) for line in data.decode().splitlines()], [{"result": {"files": {}}}])
+        status, data = self.request("POST", "/api/check/audio", b'{"job": "p", "files": ["../x"]}', JSON)
+        self.assertEqual(status, 400)
+
     def test_audio_check_of_a_job_without_audio_sends_only_the_result(self):
         self.upload("p.zip", [("p/project.json", b"{}"), ("p/cover.pdf", b"%PDF")])
         self.post("/api/accept", {"item": "p.zip"})

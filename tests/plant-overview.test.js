@@ -5,7 +5,8 @@ import { prepareProject } from "../src/lib/project.js";
 import { jobFiles } from "../src/lib/versions.js";
 import { artworkSlots } from "../src/lib/artwork-checks.js";
 import { getFormat } from "../src/lib/format-catalogue.js";
-import { escapeHtml, stageLabel, gapSection, renderBasic, renderArtwork, renderAudio, renderShipping, renderHistory }
+import { escapeHtml, stageLabel, gapSection, renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged,
+  renderHistory }
   from "../src/lib/plant-overview.js";
 
 const project = prepareProject({
@@ -38,15 +39,15 @@ function whole(facts = null){
   return renderBasic(project, CONFIG, place, [])
     + renderArtwork(files, checkable, null, printCheck, "/jobs/j1/", [])
     + renderAudio(project, files, facts, [], "/jobs/j1/", [])
-    + renderShipping(project, []) + renderHistory(project);
+    + renderShipping(project, []) + renderUnmanaged(files) + renderHistory(project);
 }
 
 // How often text shows on the page: tags and attributes don't count.
 const count = (html, text) => html.replace(/<[^>]*>/g, " ").split(text).length - 1;
 
-test("five sections in order, each an id'd section with its heading", () => {
+test("six sections in order, each an id'd section with its heading", () => {
   const html = whole();
-  const order = ["basic", "artwork", "audio", "shipping", "history"].map(id => html.indexOf(`<section id="${id}">`));
+  const order = ["basic", "artwork", "audio", "shipping", "unmanaged", "history"].map(id => html.indexOf(`<section id="${id}">`));
   assert.ok(order.every(i => i >= 0));
   assert.deepEqual([...order].sort((a, b) => a - b), order);
 });
@@ -102,13 +103,18 @@ test("artwork: after the check, verdict and a preview block per checked slot", (
   assert.ok(html.includes("max 330 %"));
 });
 
-test("not assigned: a select of every slot — a PDF may be a side's tracklist — or none when there are no slots", () => {
-  const loose = {slots: files.slots, unassigned: {artwork: ["stray.tif"], audio: []}};
-  const html = renderArtwork(loose, [], null, printCheck, "/jobs/j1/", []);
-  assert.ok(html.includes('<option value="2">Label A</option>'));
-  assert.ok(html.includes('<option value="0">A1</option>'), "slots of the other section too");
-  const none = renderArtwork({slots: [], unassigned: {artwork: ["stray.tif"], audio: []}}, [], null, printCheck, "/w/", []);
-  assert.ok(none.includes("stray.tif") && none.includes("no slot to use it for") && !none.includes("<select"));
+test("unmanaged files: listed with size and time, no use, no select, not in Artwork or Audio", () => {
+  const loose = {slots: files.slots, unmanaged: [{name: "reference <mix>.wav", size: 2097152, modified: "2026-09-30T08:00:00Z"},
+    {name: "cover_final.pdf", size: 1024}]};
+  const html = renderUnmanaged(loose);
+  assert.ok(html.startsWith('<section id="unmanaged"><h2>Unmanaged files</h2>'));
+  assert.ok(html.includes("<tr><td>reference &lt;mix&gt;.wav</td><td>2.0 MB</td><td>2026-09-30 08:00</td></tr>"));
+  assert.ok(html.includes("<tr><td>cover_final.pdf</td><td>1 KB</td><td></td></tr>"));
+  assert.ok(!html.includes("use") && !html.includes("<select"));
+  for(const other of [renderArtwork(loose, [], null, printCheck, "/w/", []), renderAudio(project, loose, null, [], "/w/", [])]){
+    assert.ok(!other.includes("cover_final") && !other.includes("reference"), "only in their own list");
+  }
+  assert.ok(renderUnmanaged({slots: [], unmanaged: []}).includes("<p>None.</p>"));
 });
 
 test("audio: side table, track table with files and spectrum links, a block per file", () => {

@@ -115,6 +115,17 @@ def upload_name(header_value):
     return jobs.plain(name)
 
 
+def files(request):
+    """The file names a check request is limited to (the page's managed
+    files), or None for all."""
+    names = request.get("files")
+    if names is None:
+        return None
+    if not isinstance(names, list):
+        raise JobError("files must be a list")
+    return [jobs.plain(name) for name in names]
+
+
 class Handler(BaseHTTPRequestHandler):
     def reply(self, code, body, content_type="text/plain; charset=utf-8"):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
@@ -300,6 +311,7 @@ class Handler(BaseHTTPRequestHandler):
         facts} (or {"error": …})."""
         import checks  # needs the libraries main() verified
         r = self.body()
+        names = files(r)  # refused before the stream starts, as a plain 400
         folder = jobs.find(JOBS, r["job"])[1]
         out = folder / ".checks"
         out.mkdir(exist_ok=True)
@@ -317,7 +329,7 @@ class Handler(BaseHTTPRequestHandler):
                 shown = int(fraction * 100)
                 line({**state, "progress": shown})
         try:
-            line({"result": checks.audio(folder, out, progress, bool(r.get("rescan")), step)})
+            line({"result": checks.audio(folder, out, progress, bool(r.get("rescan")), step, names)})
         except OSError as error:
             line({"error": f"couldn't check audio: {error}"})
 
@@ -325,7 +337,8 @@ class Handler(BaseHTTPRequestHandler):
         """Starts the job's spectrograms in the background (spectrum.py);
         the page asks once its checks are done."""
         import spectrum
-        spectrum.start(jobs.find(JOBS, self.body()["job"])[1])
+        r = self.body()
+        spectrum.start(jobs.find(JOBS, r["job"])[1], files(r))
         self.json({})
 
     def check_artwork(self):

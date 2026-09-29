@@ -1,18 +1,18 @@
 // Plant view page: a two-column page — the jobs tree and the open job's
 // section links in <nav>, the chosen view in <main> — under one CLI
 // status line. Views: the overview (what needs attention), a zip or
-// folder in the inbox (new job or resend), a job in five sections. A job
+// folder in the inbox (new job or resend), a job in six sections. A job
 // is checked on every load (the server re-reads only changed files, the
 // rules here always run), then its spectrograms are made in the
 // background.
 import { CONFIG } from "../config.js";
 import { prepareProject, setAt, historyEntry } from "../lib/project.js";
 import { projectGaps } from "../lib/completeness.js";
-import { audioFindings } from "../lib/audio-checks.js";
+import { audioFindings, sideAudio } from "../lib/audio-checks.js";
 import { artworkSlots } from "../lib/artwork-checks.js";
 import { getFormat } from "../lib/format-catalogue.js";
 import { jobFiles, assignedName, mergeResend } from "../lib/versions.js";
-import { renderBasic, renderArtwork, renderAudio, renderShipping, renderHistory } from "../lib/plant-overview.js";
+import { renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
 import { renderNav, renderHome, renderInbox } from "../lib/plant-board.js";
 
 const zipInput = document.getElementById("zipInput");
@@ -158,6 +158,9 @@ async function showJob(job, section, id){
   const gaps = projectGaps(project, CONFIG, data.files);
   const checkable = artworkSlots(project, CONFIG);
   const printCheck = getFormat(CONFIG, project.format).printCheck;
+  // The audio the slots point at: checks and spectrograms run on these
+  // only, never on unmanaged files or versions not in use.
+  const audioNames = ["A", "B"].flatMap(side => sideAudio(project.sides[side], side).map(f => f.name));
   // The job's check output and spectrum/ folder, served by the server.
   const base = `/jobs/${encodeURIComponent(job)}/`;
   view = {job, raw: data.project, hash: data.projectHash, stamp: data.stamp,
@@ -168,6 +171,7 @@ async function showJob(job, section, id){
     + renderArtwork(files, checkable, null, printCheck, base, gaps)
     + renderAudio(project, files, null, [], base, gaps)
     + renderShipping(project, gaps)
+    + renderUnmanaged(files)
     + renderHistory(project);
   scrollToSection(section);
   const replace = (sectionId, html) => { document.getElementById(sectionId).outerHTML = html; };
@@ -175,7 +179,7 @@ async function showJob(job, section, id){
   let what = "check the audio of";
   try{
     busy("checking audio");
-    const facts = await readStream(await api("/api/check/audio", {job, rescan: full}), onStep);
+    const facts = await readStream(await api("/api/check/audio", {job, rescan: full, files: audioNames}), onStep);
     if(id !== latest) return;
     replace("audio", renderAudio(project, files, facts, audioFindings(project, facts, CONFIG), base, gaps));
 
@@ -187,7 +191,7 @@ async function showJob(job, section, id){
     replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps));
     // Last: the mastering engineer's spectrograms, in the background; the
     // change poll below shows their progress.
-    await postJson("/api/spectrum", {job});
+    await postJson("/api/spectrum", {job, files: audioNames});
   }catch(err){
     throw new Error(`Couldn't ${what} ${job}: ${err.message}`);
   }
@@ -209,7 +213,7 @@ out.addEventListener("click", async e => {
     if(button.id === "move"){
       await postJson("/api/move", {job: view.job, to: document.getElementById("moveTo").value});
     } else if(button.matches(".use")){
-      const slot = view.slots[Number(button.dataset.slot ?? button.parentElement.querySelector(".slot").value)];
+      const slot = view.slots[Number(button.dataset.slot)];
       const file = button.dataset.file;
       const newName = assignedName(slot.name, file, view.names);
       const project = structuredClone(view.raw);

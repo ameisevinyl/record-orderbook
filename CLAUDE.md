@@ -145,11 +145,15 @@ configured on purpose — keep it that way unless asked.
   The page is plain HTML5 (`src/plant/index.html`, structure-only
   `src/plant/structure.css` — a plant's theme goes on top later): the
   jobs tree and the open job's section links in `<nav>`
-  (`src/lib/plant-board.js`), the job in five table sections — Basic,
-  Artwork, Audio, Shipping & billing, History — each fact once
-  (`src/lib/plant-overview.js`), one CLI status line fed by the checks'
+  (`src/lib/plant-board.js`), the job in six table sections — Basic,
+  Artwork, Audio, Shipping & billing, Unmanaged files, History — each
+  fact once (`src/lib/plant-overview.js`), one CLI status line fed by the checks'
   step streams and the spectrum progress in `/api/job/stamp`. Grouping
-  stages (10_ORDERS) hold no jobs. Spec:
+  stages (10_ORDERS) hold no jobs. `project.json` is the reference and
+  the naming convention strict: a slot's file and its `_v<N>` versions
+  are managed (versions listed with "use", checked once in use); every
+  other file in the job folder is unmanaged — only listed, never renamed
+  into a slot, checked or plotted. Spec:
   `docs/superpowers/specs/2026-09-29-plant-view-layout-design.md`.
 - `plant/checks.py` — deep checks on disk, piece 1 (audio): ffprobe
   facts, AIFF `MARK` markers, MP3 + waveform PNG per file, written to

@@ -85,7 +85,7 @@ A stage folder that has sub-stages (10_ORDERS with 10_PREPRESS and
   inbox items (zips, folders) under 00_INBOX as links to
   `#/inbox/<item>`. This tree is the overview: the only place outside a
   job where catalogue numbers appear.
-- **Sections** (job open): Basic · Artwork · Audio · Shipping & billing ·
+- **Sections** (job open): Basic · Artwork · Audio · Shipping & billing · Unmanaged files ·
   History, as links `#/job/<job>/<section>`. When that job is already
   shown, a section link scrolls to the section's `<h2 id>` and does not
   reload the job or re-run its checks; a changed job or a page load
@@ -138,7 +138,7 @@ with the merge plan (list of changes) and a Merge button; last
 
 ### Job (`#/job/<job>[/<section>]`)
 
-Five sections, each `<section><h2 id="…">`:
+Six sections, each `<section id="…"><h2>`:
 
 1. **Basic** — one table, rows:
    Catalogue # · Title · Artist · Format · Quantity (per colour, and the
@@ -152,8 +152,7 @@ Five sections, each `<section><h2 id="…">`:
    One table, a row per artwork slot: Slot · File · Other versions (each
    with "use", newer ones marked) · Verdict. Then per slot an `<h3>`
    with the slot name, the preview (cut lines, "problem areas"
-   checkbox) and the checklist table. Last, if any: "Not assigned" — a
-   table of files no slot knows, with a slot select and "use".
+   checkbox) and the checklist table.
 3. **Audio** — the gaps of groups Side A/B and the audio findings. Per
    side a table Side · RPM · Matrix · Total (with soundsystem cut when
    set); then the track table: Pos · Title · Artist · Length · Gap ·
@@ -163,17 +162,21 @@ Five sections, each `<section><h2 id="…">`:
    engineer (as in order_summary.txt and tracklist.txt). Then
    per audio file an `<h3>` with its position (A1, Side A): the facts
    table (format, duration, software, tags), play button, waveform with
-   the file's and the form's markers. Last, if any: "Not assigned" —
-   like Artwork's, for files no slot knows. A file goes to Audio's by
-   its audio extension (`checks.AUDIO_EXT`), every other one to
-   Artwork's.
+   the file's and the form's markers. Only the files the slots point at
+   are checked and plotted.
 4. **Shipping & billing** — the gaps of groups Billing and Shipping n.
    The complete billing address table (field rows) — name and email
    stand in Basic's Customer row too, on purpose: staff copy the
    address as a whole; per shipping address an
    `<h3>`, its address table and its quantities, residential flag and
    note.
-5. **History** — a table: Date · By · Note, oldest first.
+5. **Unmanaged files** — every file in the job folder off the naming
+   convention of `project.json`'s slots (an exotic product's artwork,
+   customer extras, sync conflict copies): a table File · Size ·
+   Modified, or "None.". Only listed — no "use", never renamed into a
+   slot, never checked or plotted. `project.json` is the reference; the
+   naming convention is strict.
+6. **History** — a table: Date · By · Note, oldest first.
 
 Gap groups map to sections by name: Release, Quantity → Basic; Side A,
 Side B → Audio; Labels, Inner sleeve, Cover, Inlay → Artwork; Billing,

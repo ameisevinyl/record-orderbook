@@ -147,6 +147,15 @@ class AudioProgressTest(unittest.TestCase):
         self.assertEqual(seen[-1], 1.0)
 
 
+    def test_names_limit_the_check_to_those_files(self):
+        from checks import audio
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "p"
+            (project / "sub").mkdir(parents=True)
+            for name in ("A.wav", "reference.wav", "sub/B.wav"):
+                ffmpeg("-f", "lavfi", "-i", "sine=d=1", "-c:a", "pcm_s16le", str(project / name))
+            self.assertEqual(sorted(audio(project, Path(tmp), names=["A.wav", "gone.wav"])["files"]), ["A.wav"])
+
     def test_steps_name_each_file(self):
         from checks import audio
         with tempfile.TemporaryDirectory() as tmp:

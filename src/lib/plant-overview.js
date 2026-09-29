@@ -1,8 +1,8 @@
-// The plant view's job page in five sections — Basic, Artwork, Audio,
-// Shipping & billing, History — as plain HTML tables, each fact once:
-// a file shows in its slot's row only, the catalogue number in Basic
-// only. Pure: the page (src/plant/app.js) assigns the strings to
-// innerHTML, so every value goes through escapeHtml here.
+// The plant view's job page in six sections — Basic, Artwork, Audio,
+// Shipping & billing, Unmanaged files, History — as plain HTML tables,
+// each fact once: a file shows in its slot's row only, the catalogue
+// number in Basic only. Pure: the page (src/plant/app.js) assigns the
+// strings to innerHTML, so every value goes through escapeHtml here.
 
 import { formatTime, parseTime } from "./time.js";
 import { getFormat, productById } from "./format-catalogue.js";
@@ -14,7 +14,7 @@ import { artworkRows, artworkVerdict } from "./artwork-checks.js";
 import { CHECKLIST_ICON } from "./print-artwork.js";
 
 export const SECTIONS = [["basic", "Basic"], ["artwork", "Artwork"], ["audio", "Audio"],
-  ["shipping", "Shipping & billing"], ["history", "History"]];
+  ["shipping", "Shipping & billing"], ["unmanaged", "Unmanaged files"], ["history", "History"]];
 
 export function escapeHtml(value){
   return String(value ?? "").replace(/[&<>"']/g, c =>
@@ -71,16 +71,6 @@ function versionsCell(slot){
   if(!slot) return "";
   return slot.others.map(o => `${escapeHtml(o.name)}${o.newer ? " (newer)" : ""} `
     + `<button type="button" class="use" data-file="${escapeHtml(o.name)}" data-slot="${slot.index}">use</button>`).join("<br>");
-}
-
-// Files no slot knows, each with a select of every slot: the section
-// goes by the file's kind, but a PDF may be a side's tracklist.
-function unassignedHtml(names, slots){
-  if(!names.length) return "";
-  const options = slots.map(s => `<option value="${s.index}">${escapeHtml(s.title)}</option>`).join("");
-  return `<h3>Not assigned</h3>` + listTable(["File", "Use for"], names.map(name => [escapeHtml(name), options
-    ? `<select class="slot">${options}</select> <button type="button" class="use" data-file="${escapeHtml(name)}">use</button>`
-    : "no slot to use it for"]));
 }
 
 // --- 1 Basic ---------------------------------------------------------
@@ -176,7 +166,6 @@ export function renderArtwork(files, checkable, facts, printCheck, base, gaps){
   if(slots.length) body += listTable(["Slot", "File", "Other versions", "Verdict"],
     slots.map(s => [escapeHtml(s.title) + page(s), fileCell(s), versionsCell(s), verdict(s)]));
   if(facts) body += checkable.map(c => artFileHtml(c, facts[c.name] || {error: "not checked"}, printCheck, base)).join("");
-  body += unassignedHtml(files.unassigned.artwork, files.slots);
   return section("artwork", body || "<p>No artwork.</p>");
 }
 
@@ -277,7 +266,6 @@ export function renderAudio(project, files, facts, findings, base, gaps){
     body += sideAudio(side, sideId).map(({name, label}) =>
       audioFileHtml(facts.files[name], side.continuous ? `Side ${sideId} file` : label, formStarts, base)).join("");
   }
-  body += unassignedHtml(files.unassigned.audio, files.slots);
   return section("audio", body);
 }
 
@@ -302,7 +290,23 @@ export function renderShipping(project, gaps){
     ]))).join(""));
 }
 
-// --- 5 History -------------------------------------------------------
+// --- 5 Unmanaged files ------------------------------------------------
+
+function formatSize(bytes){
+  return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
+}
+
+// Files off the naming convention (jobFiles().unmanaged): part of the job
+// folder, but project.json doesn't know them — listed only, never
+// renamed into a slot or checked.
+export function renderUnmanaged(files){
+  return section("unmanaged", files.unmanaged.length
+    ? listTable(["File", "Size", "Modified"], files.unmanaged.map(f =>
+      [escapeHtml(f.name), f.size == null ? "" : formatSize(f.size), when(f.modified)]))
+    : "<p>None.</p>");
+}
+
+// --- 6 History -------------------------------------------------------
 
 export function renderHistory(project){
   return section("history", project.history.length

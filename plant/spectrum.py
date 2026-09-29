@@ -36,12 +36,13 @@ def render(path, out):
 PROGRESS = {}
 
 
-def job(folder):
-    """Spectrograms for every audio file of the job that has none, or one
-    older than the file or this code; stale ones removed."""
+def job(folder, names=None):
+    """Spectrograms for every audio file of the job — or only the ones in
+    names (the page's managed files) — that has none, or one older than
+    the file or this code; stale ones removed."""
     out = folder / "spectrum"
     audio = [p for p in sorted(folder.iterdir()) if p.is_file() and p.suffix.lower() in checks.AUDIO_EXT
-             and not p.name.startswith(".")]
+             and not p.name.startswith(".") and (names is None or p.name in names)]
     wanted = {out / f"{p.name}.png": p for p in audio}
     if wanted:
         out.mkdir(exist_ok=True)
@@ -66,8 +67,8 @@ RUNNING = set()
 RUNNING_LOCK = threading.Lock()
 
 
-def start(folder):
-    """job(folder) in a background thread, once at a time per folder."""
+def start(folder, names=None):
+    """job(folder, names) in a background thread, once at a time per folder."""
     with RUNNING_LOCK:
         if folder in RUNNING:
             return
@@ -75,7 +76,7 @@ def start(folder):
 
     def run():
         try:
-            job(folder)
+            job(folder, names)
         except OSError as error:  # e.g. the job was moved meanwhile
             print(f"spectrum {folder.name}: {error}", file=sys.stderr)
         finally:

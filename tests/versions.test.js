@@ -28,24 +28,26 @@ test("assignedName keeps a hand-saved version, renames anything else", () => {
   assert.equal(assignedName("X_labels_A_v1.pdf", "fix.pdf", names), "X_labels_A_v3.pdf");
 });
 
-test("jobFiles lists other versions per slot, newest first, and unassigned files", () => {
+test("jobFiles lists other versions per slot, newest first, and unmanaged files", () => {
   const files = ["X_A1_song_v1.wav", "X_labels_A_v1.pdf", "X_labels_A_v2.pdf", "X_labels_A_v3.pdf",
     "cover_final.pdf", "order_summary.txt"].map(name => ({name, size: 1}));
-  const {slots, unassigned} = jobFiles(project("X_labels_A_v2.pdf"), files);
+  const {slots, unmanaged} = jobFiles(project("X_labels_A_v2.pdf"), files);
   const label = slots.find(s => s.title === "Label A");
   assert.deepEqual(label.others, [{name: "X_labels_A_v3.pdf", newer: true}, {name: "X_labels_A_v1.pdf", newer: false}]);
   assert.equal(label.present, true);
   assert.deepEqual(slots.map(s => s.title), ["A1", "Label A"]);
-  assert.deepEqual(unassigned, {artwork: ["cover_final.pdf"], audio: []});
+  assert.deepEqual(unmanaged, [{name: "cover_final.pdf", size: 1}]);
 });
 
-test("jobFiles: section, index and modification time per slot; unassigned split by kind", () => {
+test("jobFiles: section, index and modification time per slot; every file off the naming convention is unmanaged", () => {
   const files = [{name: "X_A1_song_v1.wav", modified: "2026-09-29T10:00:00Z"}, {name: "X_labels_A_v2.pdf", modified: "t2"},
-    {name: "stray.aif"}, {name: "stray.tif"}];
-  const {slots, unassigned} = jobFiles(project("X_labels_A_v2.pdf"), files);
+    {name: "stray.aif", size: 5, modified: "t3"}, {name: "stray.tif"}, {name: "X_labels_B_v1.pdf"}];
+  const {slots, unmanaged} = jobFiles(project("X_labels_A_v2.pdf"), files);
   assert.deepEqual(slots.map(s => [s.title, s.index, s.section, s.modified]),
     [["A1", 0, "audio", "2026-09-29T10:00:00Z"], ["Label A", 1, "artwork", "t2"]]);
-  assert.deepEqual(unassigned, {artwork: ["stray.tif"], audio: ["stray.aif"]});
+  // X_labels_B_v1.pdf is well named, but no slot of project.json holds it
+  assert.deepEqual(unmanaged.map(f => f.name), ["stray.aif", "stray.tif", "X_labels_B_v1.pdf"]);
+  assert.deepEqual(unmanaged[0], {name: "stray.aif", size: 5, modified: "t3"});
 });
 
 test("mergeResend keeps unchanged files and the staff's choice, adds changed ones as versions", () => {

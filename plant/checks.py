@@ -177,14 +177,18 @@ def preview_base(name, digest):
 
 
 def audio(project_dir, out_dir, progress=lambda fraction: None, rescan=False,
-          step=lambda file, index, count, what: None):
-    """Facts for every audio file under project_dir, keyed by its name
-    relative to it; previews go to out_dir. progress(fraction) follows
+          step=lambda file, index, count, what: None, names=None):
+    """Facts for every audio file under project_dir — or only the
+    top-level files in names (the page's managed files; missing ones
+    skipped) — keyed by its name relative to it; previews go to out_dir. progress(fraction) follows
     the bytes read, across all files; step(file, index, count, what)
     names each file and what is done with it."""
     # Dot folders are the machine's: .checks/ holds MP3s of its own.
-    paths = [p for p in sorted(project_dir.rglob("*")) if p.is_file() and p.suffix.lower() in AUDIO_EXT
-             and not any(part.startswith(".") for part in p.relative_to(project_dir).parts)]
+    if names is not None:
+        paths = [p for p in (project_dir / plain for plain in sorted(set(names)) if "/" not in plain) if p.is_file()]
+    else:
+        paths = [p for p in sorted(project_dir.rglob("*")) if p.is_file() and p.suffix.lower() in AUDIO_EXT
+                 and not any(part.startswith(".") for part in p.relative_to(project_dir).parts)]
     total = sum(p.stat().st_size for p in paths) or 1
     done = 0
 
