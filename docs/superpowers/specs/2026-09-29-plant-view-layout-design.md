@@ -33,7 +33,9 @@ the change polling, spectrograms — and the customer page.
   nav marks the open job).
 - One stylesheet, `src/plant/structure.css`, structure only: the two
   columns and the positioning the pictures need (below). No fonts,
-  colours, borders, spacing, animation. It is where a plant's theme or
+  spacing or animation; lines and fills only where a picture needs them
+  (waveform markers and played part, artwork cut lines), in HTML's
+  named colours (black, white, gray) — no hex or rgb values. It is where a plant's theme or
   a reset hooks in later. `src/plant/index.html` has no `<style>` and no
   `style=` attributes except the computed positions of waveform markers
   and the artwork preview's aspect ratio.
@@ -71,6 +73,8 @@ A stage folder that has sub-stages (10_ORDERS with 10_PREPRESS and
   its sub-stages". It still opens, so staff can move it from its page.
 - In the nav a grouping stage is a heading with its sub-stages nested
   under it, no job list of its own.
+- The overview's problem list is computed on the page from
+  `/api/board` (the server only refuses such moves).
 
 ### Nav
 
@@ -121,8 +125,9 @@ idle
 ### Overview (`#/`)
 
 `main` holds only what needs attention: the problems list (a job in two
-stages, unreadable `project.json`) and the inbox items waiting, each
-linking to its inbox view. Nothing else — the jobs are in the nav.
+stages, a job in a grouping stage — linked, since the nav doesn't list
+it) and how many items wait in the inbox. Their names, like the jobs,
+are in the nav only.
 
 ### Inbox item (`#/inbox/<item>`)
 
@@ -140,7 +145,8 @@ Five sections, each `<section><h2 id="…">`:
    total) · Customer (billing name, email) · Products (labels: printed,
    whitelabel per side, big hole; inner sleeve, cover, inlay: product
    names) · Stage (stage name; move select + Move, Rescan, Download zip)
-   · Last change (last history entry: date, by, note) · Notes.
+   · Last change (date and who of the last history entry; its note is
+   in History) · Notes.
    Below the table: the gaps of groups Release and Quantity.
 2. **Artwork** — the gaps of groups Labels, Inner sleeve, Cover, Inlay.
    One table, a row per artwork slot: Slot · File · Other versions (each
@@ -160,7 +166,8 @@ Five sections, each `<section><h2 id="…">`:
    its audio extension (`checks.AUDIO_EXT`), every other one to
    Artwork's.
 4. **Shipping & billing** — the gaps of groups Billing and Shipping n.
-   A billing address table (field rows); per shipping address an
+   A billing address table (field rows; name and email are Basic's
+   Customer row, not repeated); per shipping address an
    `<h3>`, its address table and its quantities, residential flag and
    note.
 5. **History** — a table: Date · By · Note, oldest first.
@@ -197,8 +204,9 @@ header, the Files table and the old overview go away.
 - No duplicates: for a sample project, the job view contains the
   catalogue number exactly once and each file name exactly once; the
   nav contains each job's catalogue number exactly once.
-- `index.html` has no `<style>`; `structure.css` has no `color`,
-  `font`, `border`, `margin`, `padding` or `animation` declarations.
+- `index.html` has no `<style>`; `structure.css` has no `font`,
+  `margin`, `padding` or `animation` declarations and no hex or rgb
+  colour values.
 - Server: audio stream lines carry file/step, artwork stream ends in a
   result, stamp returns spectrum progress while it runs.
 - Stages: the move select and `jobs.move` refuse 10_ORDERS; a job put
