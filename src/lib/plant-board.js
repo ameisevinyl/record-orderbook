@@ -1,79 +1,68 @@
-// Plant view HTML for the jobs tree: the board (stage folders as
-// columns), a job's stage bar and file versions, and a zip or folder in
-// the inbox. Pure, like plant-overview.js: every value is escaped here.
+// Plant view HTML around the jobs: the nav (the jobs tree — the
+// overview — and the open job's section links), the overview's main
+// (what needs attention) and a zip or folder in the inbox. Pure, like
+// plant-overview.js: every value is escaped here.
 
-import { escapeHtml } from "./plant-overview.js";
-
-// "10_ORDERS/20_PRESS" → "ORDERS › PRESS"
-export function stageLabel(stage){
-  return stage.split("/").map(part => part.replace(/^\d\d_/, "")).join(" › ");
-}
+import { escapeHtml, stageLabel, SECTIONS, listTable } from "./plant-overview.js";
 
 const jobLink = job => `#/job/${encodeURIComponent(job)}`;
 
-// A parent stage whose sub-stages hold the jobs (10_ORDERS) shows only
-// when a job sits in it directly.
-export function renderBoard({stages, inbox, problems}){
-  const parents = new Set(stages.map(s => s.stage.split("/")[0]).filter((p, i, all) => all.indexOf(p) !== i));
-  const columns = stages.filter(s => s.jobs.length || !parents.has(s.stage)).map(({stage, jobs}) => {
-    const received = stage === "00_INBOX" ? inbox.map(item =>
-      `<li><a href="#/inbox/${encodeURIComponent(item)}">${escapeHtml(item)}</a> `
-      + `<span class="ident">new ${/\.zip$/i.test(item) ? "zip" : "folder"}</span></li>`) : [];
-    const cards = jobs.map(job => `<li><a href="${jobLink(job.job)}">`
-      + (job.error ? `${escapeHtml(job.job)}</a> <span class="missing">${escapeHtml(job.error)}</span>`
-        : `<b>${escapeHtml(job.catalogue || job.job)}</b></a> ${escapeHtml([job.title, job.artist].filter(Boolean).join(" — "))}`)
-      + `</li>`);
-    const items = received.concat(cards);
-    return `<section class="column"><h2>${escapeHtml(stageLabel(stage))} <span class="ident">${items.length}</span></h2>`
-      + (items.length ? `<ul>${items.join("")}</ul>` : "<p>—</p>") + `</section>`;
-  });
-  const warn = problems.length ? `<ul class="gaps">${problems.map(p => `<li>${escapeHtml(p)}</li>`).join("")}</ul>` : "";
-  return warn + `<div class="board">${columns.join("")}</div>`;
-}
+// A stage's own name: "10_ORDERS/20_PRESS" → "PRESS".
+const ownName = stage => stage.split("/").at(-1).replace(/^\d\d_/, "");
 
-// Stage, a move select, rescan and the zip download for the job view.
-export function renderJobBar(job, stage, stages){
-  const options = stages.map(s => `<option value="${escapeHtml(s)}"${s === stage ? " selected" : ""}>${escapeHtml(stageLabel(s))}</option>`);
-  return `<p class="jobbar"><a href="#/">← Board</a> · <b>${escapeHtml(stageLabel(stage))}</b> · `
-    + `move to <select id="moveTo">${options.join("")}</select> <button type="button" id="move">Move</button> · `
-    + `<button type="button" id="rescan" title="check every file again by its content">Rescan</button> · `
-    + `<a href="/api/zip?job=${encodeURIComponent(job)}" download>Download zip</a></p>`;
-}
+// Stages that only group sub-stages (10_ORDERS); no job belongs in them.
+const groupingStages = stages => stages.filter(s => stages.some(t => t.stage.startsWith(s.stage + "/")));
 
-// jobFiles() result: per slot its current file and other versions (any
-// can be made current, newer ones marked); unassigned files get a slot
-// select.
-// files: the job's [{name, modified}], for the dates.
-export function renderFiles({slots, unassigned}, files){
-  const modified = new Map(files.map(f => [f.name, f.modified]));
-  const date = name => modified.has(name) ? `<td class="ident">${escapeHtml(modified.get(name).replace("T", " ").replace("Z", " UTC"))}</td>` : "<td></td>";
-  const slotOptions = slots.map((slot, i) => `<option value="${i}">${escapeHtml(slot.title)}</option>`).join("");
-  const use = (name, slot) => `<button type="button" class="use" data-file="${escapeHtml(name)}" data-slot="${slot}">use</button>`;
-  let body = `<table><tr><th>Slot</th><th>File</th><th>Modified</th><th>Other versions</th></tr>`
-    + slots.map((slot, i) => `<tr><td>${escapeHtml(slot.title)}</td><td class="ident">${escapeHtml(slot.name)}`
-      + (slot.present ? "" : ` <span class="missing">missing</span>`) + `</td>${date(slot.name)}<td>`
-      + slot.others.map(o => `<span class="ident">${escapeHtml(o.name)}</span>`
-        + (o.newer ? " <b>newer</b>" : "") + ` ${use(o.name, i)}`).join("<br>")
-      + `</td></tr>`).join("") + `</table>`;
-  if(unassigned.length){
-    body += `<h3>Not assigned</h3><table>` + unassigned.map(name =>
-      `<tr><td class="ident">${escapeHtml(name)}</td>${date(name)}<td>for <select class="slot">${slotOptions}</select> `
-      + `<button type="button" class="use" data-file="${escapeHtml(name)}">use</button></td></tr>`).join("") + `</table>`;
+// board: /api/board; openJob: the job shown, or null. Sub-stages nest
+// under their grouping stage, which lists no jobs of its own (one put
+// there by hand is on the overview's list, linked).
+export function renderNav({stages, inbox}, openJob){
+  const grouping = new Set(groupingStages(stages).map(s => s.stage));
+  const jobItem = job => {
+    const text = job.error ? `${escapeHtml(job.job)} (unreadable)`
+      : escapeHtml([job.catalogue || job.job, job.title].filter(Boolean).join(" — "));
+    return job.job === openJob
+      ? `<li><a href="${jobLink(job.job)}" aria-current="page"><b>${text}</b></a></li>`
+      : `<li><a href="${jobLink(job.job)}">${text}</a></li>`;
+  };
+  const stageItem = ({stage, jobs}) => {
+    if(grouping.has(stage)){
+      return `<li>${escapeHtml(ownName(stage))}<ul>`
+        + stages.filter(s => s.stage.startsWith(stage + "/")).map(stageItem).join("") + `</ul></li>`;
+    }
+    const received = stage === "00_INBOX" ? inbox.map(item => `<li><a href="#/inbox/${encodeURIComponent(item)}">`
+      + `${escapeHtml(item)}</a> (new ${/\.zip$/i.test(item) ? "zip" : "folder"})</li>`) : [];
+    const items = received.concat(jobs.map(jobItem));
+    return `<li>${escapeHtml(ownName(stage))} (${items.length})${items.length ? `<ul>${items.join("")}</ul>` : ""}</li>`;
+  };
+  let html = `<h2>Jobs</h2><ul>${stages.filter(s => !s.stage.includes("/")).map(stageItem).join("")}</ul>`;
+  if(openJob){
+    html += `<h2>Sections</h2><ul>` + SECTIONS.map(([id, title]) =>
+      `<li><a href="${jobLink(openJob)}/${id}">${escapeHtml(title)}</a></li>`).join("") + `</ul>`;
   }
-  return `<section><h2>Files</h2>${body}</section>`;
+  return html;
 }
 
-// A zip or folder in the inbox: its release, and per job with the same catalogue
-// number what a merge would copy in (mergeResend's plan).
+// The overview's main: what needs attention — problems the server found,
+// jobs put by hand into a grouping stage (linked: the nav doesn't list
+// them), and how many items wait in the inbox. The jobs are in the nav.
+export function renderHome({stages, inbox, problems}){
+  const items = problems.map(p => `<li>${escapeHtml(p)}</li>`).concat(groupingStages(stages).flatMap(({stage, jobs}) =>
+    jobs.map(job => `<li><a href="${jobLink(job.job)}">${escapeHtml(job.job)}</a> is in ${escapeHtml(stage)}`
+      + ` — move it to one of its sub-stages</li>`)));
+  return `<h2>Attention</h2>` + (items.length ? `<ul>${items.join("")}</ul>` : "<p>Nothing needs attention.</p>")
+    + `<p>${inbox.length} new in the inbox.</p>`;
+}
+
+// A zip or folder in the inbox: what it holds, and per job with the same
+// catalogue number what a merge would copy in (mergeResend's plan).
 export function renderInbox(item, info, plans){
   const p = info.project;
-  let body = `<p><a href="#/">← Board</a></p><h2>${escapeHtml(item)}</h2>`
-    + `<p><b>${escapeHtml(p.catalogue)}</b> ${escapeHtml([p.albumTitle, p.albumArtist].filter(Boolean).join(" — "))}`
-    + ` · ${info.files.length} files</p>`;
-  body += plans.map(({job, stage, changed}) => `<section><h2>Resend of ${escapeHtml(job)} `
-    + `<span class="ident">${escapeHtml(stageLabel(stage))}</span></h2>`
-    + (changed.length ? `<ul>${changed.map(c => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "<p>No file changes; form fields are taken over.</p>")
-    + `<button type="button" class="merge" data-job="${escapeHtml(job)}">Merge into ${escapeHtml(job)}</button></section>`).join("");
-  return body + `<section><h2>New job ${escapeHtml(info.job)}</h2>`
-    + `<button type="button" id="accept">Accept as new job</button></section>`;
+  let html = `<h2>Received</h2>` + listTable(["Item", "Catalogue #", "Title", "Artist", "Files"],
+    [[escapeHtml(item), escapeHtml(p.catalogue), escapeHtml(p.albumTitle), escapeHtml(p.albumArtist), String(info.files.length)]]);
+  html += plans.map(({job, stage, changed}) => `<h2>Resend of ${escapeHtml(job)} (${escapeHtml(stageLabel(stage))})</h2>`
+    + (changed.length ? `<ul>${changed.map(c => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`
+      : "<p>No file changes; form fields are taken over.</p>")
+    + `<p><button type="button" class="merge" data-job="${escapeHtml(job)}">Merge</button></p>`).join("");
+  return html + `<h2>New job ${escapeHtml(info.job)}</h2><p><button type="button" id="accept">Accept as new job</button></p>`;
 }
