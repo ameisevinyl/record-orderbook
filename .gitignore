@@ -21,6 +21,8 @@
 # Plant view working copies of opened project zips, and Python caches.
 /plant/work/
 /plant/.venv/
+# Separation profiles kept locally for manual checking.
+/plant/profiles/
 __pycache__/
 
 # Sample project zips dropped in for testing (customer data, huge).
