@@ -265,7 +265,11 @@ export function renderAudio(project, files, facts, findings, base, gaps){
       return cells.concat([escapeHtml(gap), fileCell(slot), versionsCell(slot), spectrum(track.fileName)]);
     }));
   }
-  if(project.notes.trim()) body += `<h3>Notes to the mastering engineer</h3><pre>${escapeHtml(project.notes)}</pre>`;
+  // A paragraph with the customer's line breaks: <pre> would switch to a
+  // monospaced font and not wrap.
+  if(project.notes.trim()){
+    body += `<h3>Notes to the mastering engineer</h3><p>${escapeHtml(project.notes.trim()).replace(/\r?\n/g, "<br>")}</p>`;
+  }
   for(const sideId of facts ? ["A", "B"] : []){
     const side = project.sides[sideId];
     const formStarts = side.continuous ? formTrackStarts(side, sideId) : [];

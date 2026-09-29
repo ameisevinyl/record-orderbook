@@ -124,9 +124,16 @@ test("audio: side table, track table with files and spectrum links, a block per 
   assert.ok(html.includes("&lt;One&gt;"));
   assert.ok(html.includes('data-src="/jobs/j1/one.mp3" data-duration="180"'));
   assert.ok(html.includes("<h3>Side B</h3><p>Blank</p>"));
-  const notes = html.indexOf("<h3>Notes to the mastering engineer</h3><pre>call first</pre>");
+  const notes = html.indexOf("<h3>Notes to the mastering engineer</h3><p>call first</p>");
   assert.ok(notes > html.indexOf("<h3>Side B</h3>"), "notes below the tracklist of both sides");
   assert.ok(notes < html.indexOf('<div class="audio-file">'), "and above the files' checks");
+});
+
+test("audio: notes keep their line breaks in body text, not <pre>", () => {
+  const p = prepareProject({format: "12", notes: "cut hot\n<loud> B side", sides: {A: {blank: true}, B: {blank: true}}}, CONFIG);
+  const html = renderAudio(p, jobFiles(p, []), null, [], "/w/", []);
+  assert.ok(html.includes("<p>cut hot<br>&lt;loud&gt; B side</p>"));
+  assert.ok(!html.includes("<pre"));
 });
 
 test("audio: while checking, no file blocks yet; continuous side lists its side file", () => {
