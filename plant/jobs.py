@@ -64,6 +64,18 @@ def stages(root):
     return found
 
 
+def grouping(root):
+    """Stages that only group sub-stages (10_ORDERS): no job belongs in them."""
+    all_ = stages(root)
+    return {s for s in all_ if any(t.startswith(s + "/") for t in all_)}
+
+
+def places(root):
+    """The stages a job may sit in: all but the grouping ones."""
+    group = grouping(root)
+    return [s for s in stages(root) if s not in group]
+
+
 def jobs_in(root, stage):
     """Job folders in a stage; in the inbox only accepted ones (see inbox())."""
     folder = root / stage
@@ -198,8 +210,8 @@ def remember_received(folder):
 def move(root, job, to):
     with LOCK:
         stage, folder = find(root, job)
-        if to not in stages(root):
-            raise JobError(f"no stage {to}")
+        if to not in places(root):
+            raise JobError(f"{to} only groups its sub-stages" if to in stages(root) else f"no stage {to}")
         target = root / to / job
         if target.exists():
             raise Conflict(f"{to} already holds {job}")

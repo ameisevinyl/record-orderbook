@@ -183,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
     def get_job(self):
         stage, folder = jobs.find(JOBS, self.query("job"))
         project, digest = jobs.read_project(folder)
-        self.json({"job": folder.name, "stage": stage, "stages": jobs.stages(JOBS),
+        self.json({"job": folder.name, "stage": stage, "stages": jobs.places(JOBS),
                    "project": project, "projectHash": digest, "files": jobs.files(folder),
                    "stamp": jobs.stamp(folder)})
 

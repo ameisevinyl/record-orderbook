@@ -72,6 +72,7 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(self.get("/api/board")[1]["inbox"], ["p x.zip"])
         self.assertEqual(self.post("/api/accept", {"item": "p x.zip"}), (200, {"job": "p"}))
         status, job = self.get("/api/job?job=p")
+        self.assertNotIn("10_ORDERS", job["stages"])
         self.assertEqual((job["stage"], [f["name"] for f in job["files"]]), ("00_INBOX", ["A1.wav"]))
         self.assertEqual(self.get("/api/job/stamp?job=p")[1], {"stamp": job["stamp"]})
         self.assertEqual(self.post("/api/move", {"job": "p", "to": "20_DONE"}), (200, {"job": "p"}))

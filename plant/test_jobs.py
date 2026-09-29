@@ -98,6 +98,17 @@ class JobsTest(Tree):
         with self.assertRaises(Conflict):
             jobs.move(self.root, "k2", "20_DONE")
 
+    def test_a_grouping_stage_takes_no_jobs(self):
+        self.assertEqual(jobs.grouping(self.root), {"10_ORDERS"})
+        self.assertEqual(jobs.places(self.root), ["00_INBOX", "10_ORDERS/10_PREPRESS", "10_ORDERS/20_PRESS",
+                                                  "20_DONE", "99_ARCHIVE"])
+        self.job("10_ORDERS/10_PREPRESS", "j")
+        with self.assertRaisesRegex(JobError, "only groups"):
+            jobs.move(self.root, "j", "10_ORDERS")
+        self.job("10_ORDERS", "k")  # put there by hand: still found, so it can be moved out
+        self.assertEqual(jobs.find(self.root, "k")[0], "10_ORDERS")
+        jobs.move(self.root, "k", "10_ORDERS/20_PRESS")
+
     def test_names_from_the_page_are_plain(self):
         for bad in ("", ".", "..", "a/b", "..\\x", ".checks", None):
             with self.subTest(bad), self.assertRaises(JobError):
