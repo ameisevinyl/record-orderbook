@@ -8,6 +8,7 @@ from PIL import Image
 import artwork
 
 MM = 72 / 25.4
+GENERIC_CMYK = "/System/Library/ColorSync/Profiles/Generic CMYK Profile.icc"
 
 
 def pdf(path, size_mm=106, trim_mm=None, fills=(), text=False, image_dpi=None, pages=1):
@@ -122,6 +123,14 @@ class MeasureTest(unittest.TestCase):
         pdf(path, fills=[((0, 0, 106, 106), (0, 0, 0, 1))])
         f = self.facts(path)
         self.assertLess(f["ink"]["overPct"], 0.5)
+        self.assertLess(f["black"]["richPct"], 0.5)
+
+    @unittest.skipUnless(Path(GENERIC_CMYK).is_file(), "needs a CMYK ICC profile (macOS)")
+    def test_cmyk_jpeg_with_profile_is_read_as_its_own_numbers(self):
+        path = self.dir / "k.jpg"
+        Image.new("CMYK", (300, 300), (0, 0, 0, 255)).save(path, icc_profile=Path(GENERIC_CMYK).read_bytes(), dpi=(72, 72))
+        f = self.facts(path)
+        self.assertAlmostEqual(f["ink"]["maxPct"], 100, delta=2)
         self.assertLess(f["black"]["richPct"], 0.5)
 
     def test_round_label_trimmed_to_the_circle(self):

@@ -5,6 +5,7 @@ customer page's rules (buildChecklistRows) judge it unchanged.
 """
 import io
 import re
+import threading
 
 import numpy
 import pymupdf
@@ -14,6 +15,7 @@ MM_PER_PT = 25.4 / 72
 # The plant trusts its customers' files: a print-size cover TIFF at
 # 1200 dpi is ~470 MP, far over Pillow's "decompression bomb" limit.
 Image.MAX_IMAGE_PIXELS = None
+ICC_LOCK = threading.Lock()
 
 
 class ArtworkError(Exception):
@@ -213,10 +215,19 @@ def page_geometry(doc_page, kind, parsed, params):
     return clip, page_mm, {"x": (page_mm["w"] - trim["w"]) / 2, "y": (page_mm["h"] - trim["h"]) / 2, **trim}
 
 
-def render(doc_page, clip, page_mm, dpi, colorspace):
+def render(doc_page, clip, page_mm, dpi, colorspace, managed=True):
+    """managed=False: no colour management, so CMYK comes out as the file's
+    own numbers. With it, MuPDF converts through the embedded profile and
+    re-separates (pure K → rich black), and a fixed file measures like the
+    unfixed one. The switch is global in MuPDF, hence the lock."""
     sx = page_mm["w"] / 25.4 * dpi / clip.width
     sy = page_mm["h"] / 25.4 * dpi / clip.height
-    return doc_page.get_pixmap(matrix=pymupdf.Matrix(sx, sy), clip=clip, colorspace=colorspace, alpha=False)
+    with ICC_LOCK:
+        pymupdf.TOOLS.set_icc(managed)
+        try:
+            return doc_page.get_pixmap(matrix=pymupdf.Matrix(sx, sy), clip=clip, colorspace=colorspace, alpha=False)
+        finally:
+            pymupdf.TOOLS.set_icc(True)
 
 
 def bands(shape, trim, bleed_mm, round_, dpi):
@@ -255,7 +266,8 @@ def facts(path, params, out_dir, base):
     clip, page_mm, trim = page_geometry(doc_page, kind, parsed, params)
 
     dpi = measure_dpi(page_mm)
-    cmyk = render(doc_page, clip, page_mm, dpi, pymupdf.csCMYK)
+    # RGB (or mixed) must be separated to be measured; CMYK and grey are read as they are.
+    cmyk = render(doc_page, clip, page_mm, dpi, pymupdf.csCMYK, managed=parsed["colorMode"] not in ("CMYK", "Gray"))
     ink = numpy.frombuffer(cmyk.samples, numpy.uint8).reshape(cmyk.height, cmyk.width, 4).astype(numpy.float32) * (100 / 255)
     total = ink.sum(axis=2)
     c, m, y, k = (ink[..., i] for i in range(4))
