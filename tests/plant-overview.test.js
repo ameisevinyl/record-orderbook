@@ -65,6 +65,8 @@ test("audio: facts, findings and a waveform per file", () => {
   assert.ok(html.includes("&lt;One&gt;"));
   assert.ok(html.includes('data-src="/work/p.checks/A1%20x.wav.mp3" data-duration="180"'));
   assert.ok(html.includes('<img src="/work/p.checks/A1%20x.wav.png"'));
+  assert.ok(html.includes('<a href="/work/p.checks/spectrum/A1.wav.png" target="_blank">spectrum</a>'));
+  assert.ok(!html.includes("spectrum/A2.wav.png"), "no spectrum for a file that can't be read");
   assert.match(html, /<b>A2<\/b>.*Invalid data/);
 });
 

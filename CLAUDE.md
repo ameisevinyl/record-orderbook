@@ -151,6 +151,12 @@ configured on purpose — keep it that way unless asked.
   changes). Preview names carry the content hash, so a fix saved over a
   file never shows a stale image. The open job page polls
   `/api/job/stamp` and reloads on any save in the job folder.
+  `plant/spectrum.py`: a spectrogram per audio file for the mastering
+  engineer in `<job>/spectrum/` (ffmpeg `showspectrumpic`: L above R,
+  linear frequency, magma, 50 dB from -20 dBFS, with scales), started in the
+  background by the page after all its checks (`/api/spectrum`), not
+  shown in the plant view. Job files are top level only, so
+  `spectrum/` stays out of listings and zips.
   Python only reads facts; the rules live in `src/lib/audio-checks.js`.
   Spec: `docs/superpowers/specs/2026-09-24-audio-checks-design.md`.
   Piece 2 (artwork, `plant/artwork.py`): PyMuPDF/Pillow/numpy facts,

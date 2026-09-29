@@ -157,10 +157,11 @@ def board(root):
 
 
 def job_paths(folder):
-    """Every file in the job but project.json; dot names (.checks/,
-    .DS_Store) are the machine's, not the job's."""
-    return [p for p in sorted(folder.rglob("*")) if p.is_file() and p != folder / "project.json"
-            and not any(part.startswith(".") for part in p.relative_to(folder).parts)]
+    """Every file in the job but project.json: top level only, like the
+    customer package (subfolders such as spectrum/ are the plant's own),
+    and no dot names (.checks/, .DS_Store)."""
+    return [p for p in sorted(folder.iterdir()) if p.is_file() and p.name != "project.json"
+            and not p.name.startswith(".")]
 
 
 def files(folder):

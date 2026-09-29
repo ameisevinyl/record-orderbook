@@ -297,7 +297,7 @@ class FolderTest(Tree):
 
     def test_uploaded_folder_appears_when_done(self):
         jobs.upload_file(self.root, "p", "project.json", io.BytesIO(b"{}"), 2)
-        jobs.upload_file(self.root, "p", "sub/a.pdf", io.BytesIO(b"abc"), 3)
+        jobs.upload_file(self.root, "p", "sub/a.pdf", io.BytesIO(b"abc"), 3)  # kept, though not a job file
         self.assertEqual(jobs.inbox(self.root), [])
         jobs.upload_done(self.root, "p")
         self.assertEqual(jobs.inbox(self.root), ["p"])

@@ -95,6 +95,7 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(self.get("/api/job?job=nope"), (400, "no job nope"))
         self.assertEqual(self.get("/api/job?job=../x")[0], 400)
         self.assertEqual(self.post("/api/move", {"job": "nope"})[0], 400)
+        self.assertEqual(self.post("/api/spectrum", {"job": "nope"}), (400, "no job nope"))
         status, text = self.request("POST", "/api/move", b"{nope", JSON)
         self.assertEqual((status, text.decode()), (400, "request is not valid JSON"))
         status, text = self.request("POST", "/api/upload", b"", {"X-Filename": "x.zip", "Content-Length": "abc"})
@@ -105,6 +106,11 @@ class HttpTest(unittest.TestCase):
             status, text = self.request("POST", "/api/move", b'{"job": "p", "to": "20_DONE"}', {"Content-Type": kind})
             self.assertEqual((status, text.decode()), (415, "JSON requests only"))
         self.assertEqual(self.request("OPTIONS", "/api/move")[0], 501)
+
+    def test_spectrum_starts_in_the_background(self):
+        self.upload("p.zip", [("p/project.json", b"{}")])
+        self.post("/api/accept", {"item": "p.zip"})
+        self.assertEqual(self.post("/api/spectrum", {"job": "p"}), (200, {}))
 
     def test_download_zip_leaves_out_the_plant_state(self):
         self.upload("p.zip", [("p/project.json", b'{"catalogue": "X"}'), ("p/a.pdf", b"1")])
@@ -193,6 +199,11 @@ class HelpersTest(unittest.TestCase):
                 (folder / "a.pdf").write_bytes(b"1")
                 (folder / ".checks" / "a.png").write_bytes(b"1")
                 self.assertEqual(static_target("/jobs/p/a.png"), folder / ".checks" / "a.png")
+                (folder / "spectrum").mkdir()
+                (folder / "spectrum" / "A1.wav.png").write_bytes(b"1")
+                self.assertEqual(static_target("/jobs/p/spectrum/A1.wav.png"), folder / "spectrum" / "A1.wav.png")
+                self.assertIsNone(static_target("/jobs/p/other/A1.wav.png"))
+                self.assertIsNone(static_target("/jobs/p/spectrum/..%2Fa.pdf"))
                 self.assertIsNone(static_target("/jobs/p/../p/a.pdf"))
                 self.assertIsNone(static_target("/jobs/p/%2e%2e%2fa.pdf"))
                 self.assertIsNone(static_target("/jobs/p/nope.png"))

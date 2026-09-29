@@ -117,8 +117,11 @@ function formTrackStarts(side, sideId){
   return starts;
 }
 
+// The spectrogram plant/spectrum.py makes once the page's checks are done.
 function audioFileHtml(file, name, label, formStarts, base){
-  return `<div class="audio-file"><p><b>${escapeHtml(label)}</b> <span class="ident">${escapeHtml(name)}</span></p>`
+  const spectrum = file && !file.error
+    ? ` <a href="${escapeHtml(base + "spectrum/" + encodeURIComponent(name + ".png"))}" target="_blank">spectrum</a>` : "";
+  return `<div class="audio-file"><p><b>${escapeHtml(label)}</b> <span class="ident">${escapeHtml(name)}</span>${spectrum}</p>`
     + audioFactsHtml(file, formStarts, base) + "</div>";
 }
 

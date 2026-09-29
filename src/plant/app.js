@@ -108,6 +108,9 @@ async function showJob(job, id){
     if(id !== latest) return;
     document.getElementById("artwork").innerHTML =
       renderArtwork(slots, artworkFacts, getFormat(CONFIG, project.format).printCheck, base);
+    // Last: the mastering engineer's spectrograms, made in the background
+    // into the job's spectrum/ folder (not shown here).
+    await postJson("/api/spectrum", {job});
   }catch(err){
     throw new Error(`Couldn't ${step} ${job}: ${err.message}`);
   }
