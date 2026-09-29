@@ -344,5 +344,12 @@ setInterval(async ()=>{
   }
 }, 3000);
 
+// A section link clicked again keeps the page's hash, so no hashchange
+// fires: scroll here.
+nav.addEventListener("click", e => {
+  const link = e.target.closest("a");
+  if(link && link.hash === location.hash) scrollToSection(parseHash().section);
+});
+
 window.addEventListener("hashchange", ()=> route(false));
 route();
