@@ -12,11 +12,12 @@ test("board: a column per stage, empty parent hidden, inbox zips first, escaped"
     {stage: "10_ORDERS", jobs: []},
     {stage: "10_ORDERS/10_PREPRESS", jobs: [{job: "bad", error: "not valid JSON"}]},
     {stage: "20_DONE", jobs: []}
-  ], inbox: ["new.zip"], problems: ["j is in more than one stage"]});
+  ], inbox: ["new.zip", "Download"], problems: ["j is in more than one stage"]});
   assert.ok(!html.includes("<h2>ORDERS <"), "empty parent stage hidden");
   assert.ok(html.includes("ORDERS › PREPRESS"));
   assert.ok(html.includes("X&lt;1&gt;"));
   assert.ok(html.indexOf("#/inbox/new.zip") < html.indexOf("#/job/j1"));
+  assert.match(html, /Download<\/a> <span class="ident">new folder/);
   assert.ok(html.includes("not valid JSON"));
   assert.ok(html.includes("more than one stage"));
 });
@@ -27,9 +28,11 @@ test("job bar selects the current stage", () => {
   assert.ok(html.includes("/api/zip?job=j"));
 });
 
-test("files: newer versions and unassigned files get a use button", () => {
+test("files: other versions and unassigned files get a use button", () => {
   const html = renderFiles({slots: [{title: "Label A", name: "X_labels_A_v1.pdf", present: true,
-    others: [{name: "X_labels_A_v2.pdf", newer: true}]}], unassigned: ["fix.pdf"]});
+    others: [{name: "X_labels_A_v2.pdf", newer: true}]}], unassigned: ["fix.pdf"]},
+    [{name: "X_labels_A_v1.pdf", modified: "2026-09-29T10:00:00Z"}]);
+  assert.ok(html.includes("2026-09-29 10:00:00 UTC"));
   assert.ok(html.includes('data-file="X_labels_A_v2.pdf" data-slot="0"'));
   assert.ok(html.includes('data-file="fix.pdf"'));
   assert.ok(html.includes("Not assigned"));

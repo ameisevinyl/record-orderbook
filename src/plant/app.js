@@ -1,5 +1,5 @@
 // Plant view page: the board of job folders (plant/server.py, jobs.py),
-// a zip in the inbox (new job or resend), and a job: stage, file
+// a zip or folder in the inbox (new job or resend), and a job: stage, file
 // versions, completeness, overview, then the audio and artwork checks —
 // the server re-reads only files that changed, the rules here run on
 // every load. Reloading the page reloads the job from disk.
@@ -13,7 +13,8 @@ import { jobFiles, assignedName, mergeResend } from "../lib/versions.js";
 import { renderHeader, renderGaps, renderOverview, renderAudio, renderArtwork } from "../lib/plant-overview.js";
 import { renderBoard, renderJobBar, renderFiles, renderInbox } from "../lib/plant-board.js";
 
-const input = document.getElementById("zipInput");
+const zipInput = document.getElementById("zipInput");
+const folderInput = document.getElementById("folderInput");
 const out = document.getElementById("out");
 const error = document.getElementById("error");
 const status = document.getElementById("status");
@@ -22,10 +23,13 @@ const status = document.getElementById("status");
 let latest = 0;
 // What the shown view's buttons act on.
 let view = null;
+// Rescan: the next job load checks every file by its content.
+let rescan = false;
 
+// body: JSON to post, or {raw, headers} for an upload.
 async function api(path, body){
-  const res = await fetch(path, body === undefined ? {} : {method: "POST",
-    headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const res = await fetch(path, body === undefined ? {} : body.raw ? {method: "POST", ...body, body: body.raw}
+    : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
   if(!res.ok) throw new Error(await res.text());
   return res;
 }
@@ -56,14 +60,14 @@ async function showBoard(id){
   if(id === latest) out.innerHTML = renderBoard(board);
 }
 
-async function showInbox(zip, id){
-  busy(`Reading ${zip}…`);
-  const info = await getJson(`/api/inbox?zip=${encodeURIComponent(zip)}`);
+async function showInbox(item, id){
+  busy(`Reading ${item}…`);
+  const info = await getJson(`/api/inbox?item=${encodeURIComponent(item)}`);
   if(id !== latest) return;
   const plans = info.matches.map(m => ({job: m.job, stage: m.stage, basedOn: m.projectHash,
     ...mergeResend(m.project, m.files, info.project, info.files)}));
-  view = {zip, plans};
-  out.innerHTML = renderInbox(zip, info, plans);
+  view = {item, plans};
+  out.innerHTML = renderInbox(item, info, plans);
 }
 
 async function showJob(job, id){
@@ -72,11 +76,14 @@ async function showJob(job, id){
   if(id !== latest) return;
   const project = prepareProject(data.project, CONFIG);
   const files = jobFiles(project, data.files);
-  view = {job, raw: data.project, hash: data.projectHash, names: data.files.map(f => f.name), slots: files.slots};
+  view = {job, raw: data.project, hash: data.projectHash, stamp: data.stamp,
+    names: data.files.map(f => f.name), slots: files.slots};
+  const full = rescan;
+  rescan = false;
   out.innerHTML = renderJobBar(job, data.stage, data.stages)
     + renderHeader(job, project)
     + renderGaps(projectGaps(project, CONFIG, data.files))
-    + renderFiles(files)
+    + renderFiles(files, data.files)
     + '<div id="audio"></div><div id="artwork"></div>'
     + renderOverview(project, CONFIG, data.files);
 
@@ -85,7 +92,7 @@ async function showJob(job, id){
   let step = "check the audio of";
   try{
     busy("Checking audio… 0 %");
-    const audioRes = await api("/api/check/audio", {job});
+    const audioRes = await api("/api/check/audio", {job, rescan: full});
     const facts = await readStream(audioRes, pct => {
       if(id === latest) busy(`Checking audio… ${pct} %`);
     });
@@ -97,7 +104,7 @@ async function showJob(job, id){
     busy("Checking artwork…");
     const slots = artworkSlots(project, CONFIG);
     const artworkFacts = await postJson("/api/check/artwork",
-      {job, artwork: Object.fromEntries(slots.map(s => [s.name, s.params]))});
+      {job, rescan: full, artwork: Object.fromEntries(slots.map(s => [s.name, s.params]))});
     if(id !== latest) return;
     document.getElementById("artwork").innerHTML =
       renderArtwork(slots, artworkFacts, getFormat(CONFIG, project.format).printCheck, base);
@@ -110,9 +117,13 @@ async function showJob(job, id){
 // A 409 (someone changed the job meanwhile) shows its message; the next
 // reload shows their change.
 out.addEventListener("click", async e => {
-  const button = e.target.closest(".use, #move, .merge, #accept");
+  const button = e.target.closest(".use, #move, #rescan, .merge, #accept");
   if(!button || !view || status.classList.contains("busy")) return;
   error.textContent = "";
+  if(button.id === "rescan"){
+    rescan = true;
+    return route();
+  }
   try{
     busy("Saving…");
     if(button.id === "move"){
@@ -128,12 +139,12 @@ out.addEventListener("click", async e => {
       await postJson("/api/assign", {job: view.job, file, newName, project, basedOn: view.hash});
     } else if(button.matches(".merge")){
       const plan = view.plans.find(p => p.job === button.dataset.job);
-      await postJson("/api/merge", {zip: view.zip, job: plan.job, copies: plan.copies,
+      await postJson("/api/merge", {item: view.item, job: plan.job, copies: plan.copies,
         project: plan.project, basedOn: plan.basedOn});
       location.hash = `#/job/${encodeURIComponent(plan.job)}`;
       return;
     } else {
-      const {job} = await postJson("/api/accept", {zip: view.zip});
+      const {job} = await postJson("/api/accept", {item: view.item});
       location.hash = `#/job/${encodeURIComponent(job)}`;
       return;
     }
@@ -238,24 +249,56 @@ for(const [event, text] of [["play", "pause"], ["pause", "play"]]){
   player.addEventListener(event, ()=>{ if(playing) playButton(playing).textContent = text; });
 }
 
-// Load project: the zip goes to the inbox, like one synced in.
-document.getElementById("btnLoad").addEventListener("click", ()=> input.click());
-input.addEventListener("change", async ()=>{
-  const file = input.files[0];
-  input.value = "";
-  if(!file) return;
+// Load: a zip, or a folder (e.g. one Safari unzipped), goes to the inbox
+// like one synced in; the browser uploads a copy, the original stays.
+async function upload(label, send){
   error.textContent = "";
   try{
-    busy(`Uploading ${file.name}…`);
-    // Header values must be ASCII; the server unquotes it.
-    const res = await fetch("/api/upload", {method: "POST", headers: {"X-Filename": encodeURIComponent(file.name)}, body: file});
-    if(!res.ok) throw new Error(await res.text());
-    location.hash = `#/inbox/${encodeURIComponent((await res.json()).zip)}`;
+    busy(`Uploading ${label}…`);
+    location.hash = `#/inbox/${encodeURIComponent(await send())}`;
   }catch(err){
     busy("");
-    error.textContent = `Couldn't upload ${file.name}: ${err.message}`;
+    error.textContent = `Couldn't upload ${label}: ${err.message}`;
   }
+}
+
+document.getElementById("btnLoad").addEventListener("click", ()=> zipInput.click());
+zipInput.addEventListener("change", ()=>{
+  const file = zipInput.files[0];
+  zipInput.value = "";
+  // Header values must be ASCII; the server unquotes them.
+  if(file) upload(file.name, async ()=> (await (await api("/api/upload",
+    {raw: file, headers: {"X-Filename": encodeURIComponent(file.name)}})).json()).item);
 });
+
+document.getElementById("btnLoadFolder").addEventListener("click", ()=> folderInput.click());
+folderInput.addEventListener("change", ()=>{
+  // Dot names (.DS_Store) are the machine's, not the project's.
+  const files = [...folderInput.files].filter(f => !f.webkitRelativePath.split("/").some(part => part.startsWith(".")));
+  folderInput.value = "";
+  if(!files.length) return;
+  const folder = files[0].webkitRelativePath.split("/")[0];
+  upload(folder, async ()=>{
+    for(const [i, file] of files.entries()){
+      busy(`Uploading ${folder}… ${i + 1}/${files.length}`);
+      await api("/api/upload/file", {raw: file, headers: {"X-Folder": encodeURIComponent(folder),
+        "X-Path": encodeURIComponent(file.webkitRelativePath.split("/").slice(1).join("/"))}});
+    }
+    return (await postJson("/api/upload/done", {folder})).item;
+  });
+});
+
+// While a job is open, any save on disk (a fix over a file, a new
+// version, a hand edit of project.json) reloads and re-checks it.
+setInterval(async ()=>{
+  if(!view || !view.stamp || status.classList.contains("busy") || document.hidden) return;
+  try{
+    const {stamp} = await getJson(`/api/job/stamp?job=${encodeURIComponent(view.job)}`);
+    if(view && view.stamp && stamp !== view.stamp) route();
+  }catch{
+    // gone or moved: the next click shows why
+  }
+}, 3000);
 
 window.addEventListener("hashchange", route);
 route();

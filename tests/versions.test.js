@@ -53,7 +53,7 @@ test("mergeResend keeps unchanged files and the staff's choice, adds changed one
   assert.deepEqual(r.copies, []);
   assert.equal(r.project.labels.sides.A.fileName, "X_labels_A_v2.pdf");
   assert.equal(r.project.albumTitle, "New title");
-  assert.deepEqual(r.project.plant, old.plant);
+  assert.deepEqual(r.project.plant, {...old.plant, received: {}});
   assert.deepEqual(r.project.history.map(h => h.note), ["earlier", "resend: no file changes"]);
 
   r = mergeResend(old, oldFiles, resent,
@@ -62,4 +62,19 @@ test("mergeResend keeps unchanged files and the staff's choice, adds changed one
   assert.equal(r.project.labels.sides.A.fileName, "X_labels_A_v3.pdf");
   assert.equal(r.project.history.at(-1).note, "resend: Label A → X_labels_A_v3.pdf");
   assert.equal(old.labels.sides.A.fileName, "X_labels_A_v2.pdf"); // inputs untouched
+});
+
+test("mergeResend keeps a fix saved over the received file under the same name", () => {
+  const old = project("X_labels_A_v1.pdf");
+  old.plant.received = {"X_labels_A_v1.pdf": "orig"};
+  const oldFiles = [{name: "X_A1_song_v1.wav", sha256: "wav"}, {name: "X_labels_A_v1.pdf", sha256: "fixed"}];
+  const again = [{name: "X_A1_song_v1.wav", sha256: "wav"}, {name: "X_labels_A_v1.pdf", sha256: "orig"}];
+  let r = mergeResend(old, oldFiles, project("X_labels_A_v1.pdf"), again, new Date(0));
+  assert.deepEqual(r.copies, []);
+  assert.equal(r.project.labels.sides.A.fileName, "X_labels_A_v1.pdf");
+
+  r = mergeResend(old, oldFiles, project("X_labels_A_v1.pdf"),
+    [{name: "X_labels_A_v1.pdf", sha256: "customer v2"}], new Date(0));
+  assert.deepEqual(r.copies, [{from: "X_labels_A_v1.pdf", to: "X_labels_A_v2.pdf"}]);
+  assert.deepEqual(r.project.plant.received, {"X_labels_A_v1.pdf": "orig", "X_labels_A_v2.pdf": "customer v2"});
 });

@@ -51,35 +51,42 @@ export function jobFiles(project, files){
   };
 }
 
-// A resend (new zip from the customer) into an existing job. Per slot of
-// the new project: content already in the job as a version of that name
-// → the job's choice stays (a staff fix is kept); else it's copied in
-// as the next version. Form fields come from the new project, plant
-// state and history from the job. oldFiles/newFiles: [{name, sha256}].
+// A resend (new zip or folder from the customer) into an existing job.
+// Per slot of the new project: content the job has, or had when it came
+// in (plant.received — a fix may have been saved over it), is no change
+// → the job's choice stays; else it's copied in as the next version.
+// Form fields come from the new project, plant state and history from
+// the job. oldFiles/newFiles: [{name, sha256}].
 export function mergeResend(oldProject, oldFiles, newProject, newFiles, date = new Date()){
   const project = structuredClone(newProject);
   const names = oldFiles.map(f => f.name);
   const hashOf = new Map(newFiles.map(f => [f.name, f.sha256]));
+  const plant = oldProject.plant || {};
+  const received = {...plant.received};
   const oldSlots = fileSlots(oldProject).filter(slot => slot.name);
   const copies = [];
   const changed = [];
   for(const slot of fileSlots(project)){
     const own = versionOf(slot.name);
     if(!own || !hashOf.has(slot.name)) continue;
+    const hash = hashOf.get(slot.name);
     const family = name => (versionOf(name) || {}).base === own.base;
-    const same = oldFiles.find(f => family(f.name) && f.sha256 === hashOf.get(slot.name));
-    if(same){
-      const chosen = oldSlots.find(s => family(s.name));
-      setAt(project, slot.path, chosen ? chosen.name : same.name);
+    const same = oldFiles.find(f => family(f.name) && f.sha256 === hash);
+    const came = Object.keys(received).some(name => family(name) && received[name] === hash);
+    const chosen = oldSlots.find(s => family(s.name));
+    const keep = (same || came) && (chosen ? chosen.name : same && same.name);
+    if(keep){
+      setAt(project, slot.path, keep);
       continue;
     }
     const to = nextVersionName(own.base, own.ext, names);
     names.push(to);
+    received[to] = hash;
     copies.push({from: slot.name, to});
     setAt(project, slot.path, to);
     changed.push(`${slot.title} → ${to}`);
   }
-  project.plant = oldProject.plant;
+  project.plant = {...plant, received};
   project.history = [...(Array.isArray(oldProject.history) ? oldProject.history : []),
     historyEntry(`resend: ${changed.join(", ") || "no file changes"}`, date)];
   return {project, copies, changed};

@@ -70,9 +70,10 @@ class HttpTest(unittest.TestCase):
                                                    ("p/A1.wav", b"1")])[0], 200)
         self.assertEqual(self.upload("p%20x.zip", [("project.json", b"{}")])[0], 409)
         self.assertEqual(self.get("/api/board")[1]["inbox"], ["p x.zip"])
-        self.assertEqual(self.post("/api/accept", {"zip": "p x.zip"}), (200, {"job": "p"}))
+        self.assertEqual(self.post("/api/accept", {"item": "p x.zip"}), (200, {"job": "p"}))
         status, job = self.get("/api/job?job=p")
-        self.assertEqual((job["stage"], job["files"]), ("00_INBOX", [{"name": "A1.wav", "size": 1}]))
+        self.assertEqual((job["stage"], [f["name"] for f in job["files"]]), ("00_INBOX", ["A1.wav"]))
+        self.assertEqual(self.get("/api/job/stamp?job=p")[1], {"stamp": job["stamp"]})
         self.assertEqual(self.post("/api/move", {"job": "p", "to": "20_DONE"}), (200, {"job": "p"}))
         board = self.get("/api/board")[1]
         done = next(c for c in board["stages"] if c["stage"] == "20_DONE")
@@ -85,7 +86,7 @@ class HttpTest(unittest.TestCase):
         (folder / "project.json").write_text('{"catalogue": "X"}')
         (folder / "a.pdf").write_bytes(b"abc")
         self.upload("r.zip", [("project.json", b'{"catalogue": "X"}')])
-        status, info = self.get("/api/inbox?zip=r.zip")
+        status, info = self.get("/api/inbox?item=r.zip")
         self.assertEqual(status, 200)
         self.assertEqual([(m["job"], m["stage"]) for m in info["matches"]], [("old", "20_DONE")])
         self.assertEqual(info["matches"][0]["files"][0]["sha256"][:6], "ba7816")
@@ -105,17 +106,27 @@ class HttpTest(unittest.TestCase):
             self.assertEqual((status, text.decode()), (415, "JSON requests only"))
         self.assertEqual(self.request("OPTIONS", "/api/move")[0], 501)
 
-    def test_download_zip(self):
-        self.upload("p.zip", [("p/project.json", b"{}"), ("p/a.pdf", b"1")])
-        self.post("/api/accept", {"zip": "p.zip"})
+    def test_download_zip_leaves_out_the_plant_state(self):
+        self.upload("p.zip", [("p/project.json", b'{"catalogue": "X"}'), ("p/a.pdf", b"1")])
+        self.post("/api/accept", {"item": "p.zip"})
         status, data = self.request("GET", "/api/zip?job=p")
         self.assertEqual(status, 200)
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             self.assertEqual(sorted(zf.namelist()), ["p/a.pdf", "p/project.json"])
+            project = json.loads(zf.read("p/project.json"))
+        self.assertNotIn("plant", project)
+        self.assertEqual(project["history"][0]["note"], "received p.zip")
+
+    def test_folder_upload_then_accept(self):
+        for path, data in (("project.json", b"{}"), ("A%201.wav", b"12")):
+            self.assertEqual(self.request("POST", "/api/upload/file", data, {"X-Folder": "f", "X-Path": path})[0], 200)
+        self.assertEqual(self.post("/api/upload/done", {"folder": "f"}), (200, {"item": "f"}))
+        self.assertEqual(self.post("/api/accept", {"item": "f"}), (200, {"job": "f"}))
+        self.assertEqual([(f["name"], f["size"]) for f in self.get("/api/job?job=f")[1]["files"]], [("A 1.wav", 2)])
 
     def test_artwork_check_body_must_be_a_json_object(self):
         self.upload("p.zip", [("p/project.json", b"{}")])
-        self.post("/api/accept", {"zip": "p.zip"})
+        self.post("/api/accept", {"item": "p.zip"})
         for body in (b"{nope", b"[]", b'{"job": "p", "artwork": []}'):
             self.assertEqual(self.request("POST", "/api/check/artwork", body, JSON)[0], 400)
         self.assertEqual(self.post("/api/check/artwork", {"job": "p"}), (200, {}))
@@ -125,7 +136,7 @@ class HttpTest(unittest.TestCase):
         subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=d=20", "-c:a", "pcm_s24le",
                         str(wav)], check=True)
         self.upload("p.zip", [("p/project.json", b"{}"), ("p/A1.wav", wav.read_bytes())])
-        self.post("/api/accept", {"zip": "p.zip"})
+        self.post("/api/accept", {"item": "p.zip"})
         status, data = self.request("POST", "/api/check/audio", b'{"job": "p"}', JSON)
         self.assertEqual(status, 200)
         lines = [json.loads(line) for line in data.decode().splitlines()]
@@ -176,7 +187,7 @@ class HelpersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             saved, server.JOBS = server.JOBS, Path(tmp)
             try:
-                folder = Path(tmp) / "00_INBOX" / "p"
+                folder = Path(tmp) / "20_DONE" / "p"
                 (folder / ".checks").mkdir(parents=True)
                 (folder / "project.json").write_text("{}")
                 (folder / "a.pdf").write_bytes(b"1")

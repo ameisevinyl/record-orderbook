@@ -1,5 +1,5 @@
 // Plant view HTML for the jobs tree: the board (stage folders as
-// columns), a job's stage bar and file versions, and a zip waiting in
+// columns), a job's stage bar and file versions, and a zip or folder in
 // the inbox. Pure, like plant-overview.js: every value is escaped here.
 
 import { escapeHtml } from "./plant-overview.js";
@@ -16,13 +16,14 @@ const jobLink = job => `#/job/${encodeURIComponent(job)}`;
 export function renderBoard({stages, inbox, problems}){
   const parents = new Set(stages.map(s => s.stage.split("/")[0]).filter((p, i, all) => all.indexOf(p) !== i));
   const columns = stages.filter(s => s.jobs.length || !parents.has(s.stage)).map(({stage, jobs}) => {
-    const zips = stage === "00_INBOX" ? inbox.map(zip =>
-      `<li><a href="#/inbox/${encodeURIComponent(zip)}">${escapeHtml(zip)}</a> <span class="ident">new zip</span></li>`) : [];
+    const received = stage === "00_INBOX" ? inbox.map(item =>
+      `<li><a href="#/inbox/${encodeURIComponent(item)}">${escapeHtml(item)}</a> `
+      + `<span class="ident">new ${/\.zip$/i.test(item) ? "zip" : "folder"}</span></li>`) : [];
     const cards = jobs.map(job => `<li><a href="${jobLink(job.job)}">`
       + (job.error ? `${escapeHtml(job.job)}</a> <span class="missing">${escapeHtml(job.error)}</span>`
         : `<b>${escapeHtml(job.catalogue || job.job)}</b></a> ${escapeHtml([job.title, job.artist].filter(Boolean).join(" — "))}`)
       + `</li>`);
-    const items = zips.concat(cards);
+    const items = received.concat(cards);
     return `<section class="column"><h2>${escapeHtml(stageLabel(stage))} <span class="ident">${items.length}</span></h2>`
       + (items.length ? `<ul>${items.join("")}</ul>` : "<p>—</p>") + `</section>`;
   });
@@ -30,38 +31,43 @@ export function renderBoard({stages, inbox, problems}){
   return warn + `<div class="board">${columns.join("")}</div>`;
 }
 
-// Stage, a move select and the zip download for the job view.
+// Stage, a move select, rescan and the zip download for the job view.
 export function renderJobBar(job, stage, stages){
   const options = stages.map(s => `<option value="${escapeHtml(s)}"${s === stage ? " selected" : ""}>${escapeHtml(stageLabel(s))}</option>`);
   return `<p class="jobbar"><a href="#/">← Board</a> · <b>${escapeHtml(stageLabel(stage))}</b> · `
     + `move to <select id="moveTo">${options.join("")}</select> <button type="button" id="move">Move</button> · `
+    + `<button type="button" id="rescan" title="check every file again by its content">Rescan</button> · `
     + `<a href="/api/zip?job=${encodeURIComponent(job)}" download>Download zip</a></p>`;
 }
 
-// jobFiles() result: per slot its current file and other versions (a
-// newer one can be made current); unassigned files get a slot select.
-export function renderFiles({slots, unassigned}){
+// jobFiles() result: per slot its current file and other versions (any
+// can be made current, newer ones marked); unassigned files get a slot
+// select.
+// files: the job's [{name, modified}], for the dates.
+export function renderFiles({slots, unassigned}, files){
+  const modified = new Map(files.map(f => [f.name, f.modified]));
+  const date = name => modified.has(name) ? `<td class="ident">${escapeHtml(modified.get(name).replace("T", " ").replace("Z", " UTC"))}</td>` : "<td></td>";
   const slotOptions = slots.map((slot, i) => `<option value="${i}">${escapeHtml(slot.title)}</option>`).join("");
   const use = (name, slot) => `<button type="button" class="use" data-file="${escapeHtml(name)}" data-slot="${slot}">use</button>`;
-  let body = `<table><tr><th>Slot</th><th>File</th><th>Other versions</th></tr>`
+  let body = `<table><tr><th>Slot</th><th>File</th><th>Modified</th><th>Other versions</th></tr>`
     + slots.map((slot, i) => `<tr><td>${escapeHtml(slot.title)}</td><td class="ident">${escapeHtml(slot.name)}`
-      + (slot.present ? "" : ` <span class="missing">missing</span>`) + `</td><td>`
+      + (slot.present ? "" : ` <span class="missing">missing</span>`) + `</td>${date(slot.name)}<td>`
       + slot.others.map(o => `<span class="ident">${escapeHtml(o.name)}</span>`
-        + (o.newer ? ` <b>newer</b> ${use(o.name, i)}` : "")).join("<br>")
+        + (o.newer ? " <b>newer</b>" : "") + ` ${use(o.name, i)}`).join("<br>")
       + `</td></tr>`).join("") + `</table>`;
   if(unassigned.length){
     body += `<h3>Not assigned</h3><table>` + unassigned.map(name =>
-      `<tr><td class="ident">${escapeHtml(name)}</td><td>for <select class="slot">${slotOptions}</select> `
+      `<tr><td class="ident">${escapeHtml(name)}</td>${date(name)}<td>for <select class="slot">${slotOptions}</select> `
       + `<button type="button" class="use" data-file="${escapeHtml(name)}">use</button></td></tr>`).join("") + `</table>`;
   }
   return `<section><h2>Files</h2>${body}</section>`;
 }
 
-// A zip in the inbox: its release, and per job with the same catalogue
+// A zip or folder in the inbox: its release, and per job with the same catalogue
 // number what a merge would copy in (mergeResend's plan).
-export function renderInbox(zip, info, plans){
+export function renderInbox(item, info, plans){
   const p = info.project;
-  let body = `<p><a href="#/">← Board</a></p><h2>${escapeHtml(zip)}</h2>`
+  let body = `<p><a href="#/">← Board</a></p><h2>${escapeHtml(item)}</h2>`
     + `<p><b>${escapeHtml(p.catalogue)}</b> ${escapeHtml([p.albumTitle, p.albumArtist].filter(Boolean).join(" — "))}`
     + ` · ${info.files.length} files</p>`;
   body += plans.map(({job, stage, changed}) => `<section><h2>Resend of ${escapeHtml(job)} `

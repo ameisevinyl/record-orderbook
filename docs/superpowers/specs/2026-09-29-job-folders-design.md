@@ -42,7 +42,13 @@ links. So: few folders, and everything else in `project.json`.
   click makes it the slot's file. Files no slot knows (`cover_final.pdf`,
   sync conflict copies) are listed as not assigned, with a slot select;
   assigning renames to the slot's next version.
-- A customer resend arrives as a new zip in the inbox. Jobs with the
+- The inbox takes zips and unpacked folders alike (Safari unzips
+  downloads; a folder may sit in a wrapper folder). Copied in, synced in,
+  or loaded in the plant view (a zip, or a folder picked from Downloads —
+  the browser uploads a copy). An inbox folder counts as a job only once
+  `plant.stage` is set on accepting it; the customer page never writes
+  `plant`, and the plant's zip download strips it.
+- A customer resend arrives as a new zip or folder in the inbox. Jobs with the
   same catalogue number are offered for a merge (`mergeResend`): per
   slot, content already present as a version of that name keeps the
   job's choice (a staff fix survives an unchanged resend); changed
@@ -55,6 +61,12 @@ links. So: few folders, and everything else in `project.json`.
 
 ## Checks
 
+- A fix may also be saved over the file under its own name (staff sure
+  of it). The open job page polls a cheap fingerprint of the folder
+  (sizes + times) every 3 s and reloads on any change; Rescan re-hashes
+  every file. Preview names carry the content hash, so no stale image.
+  `plant.received` holds each file's sha256 as it came in: a resend of
+  that same content is no change and keeps the fix.
 - The browser rules run on every load. Python facts are cached per file
   in `.checks/audio.json` / `artwork.json`: size+mtime equal → reused;
   else sha256 decides (a sync touch costs a hash, not a check). Artwork

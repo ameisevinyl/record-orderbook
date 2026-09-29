@@ -184,7 +184,8 @@ class ArtworkWiringTest(unittest.TestCase):
                 (project / "L.pdf").write_bytes(b"%PDF")
                 result = run(project, Path(tmp) / "out", {"L.pdf": {"page": 2}, "gone.pdf": {"page": 1}})
             self.assertEqual(result["files"], {})
-            self.assertEqual(result["artwork"]["L.pdf"], {"page": 2, "base": "L.pdf"})
+            self.assertEqual(result["artwork"]["L.pdf"]["page"], 2)
+            self.assertRegex(result["artwork"]["L.pdf"]["base"], r"^L\.pdf\.[0-9a-f]{12}$")
             self.assertEqual(result["artwork"]["gone.pdf"], {"error": "not in the job"})
         finally:
             checks.artwork.facts = saved
@@ -215,10 +216,32 @@ class CacheTest(unittest.TestCase):
     def check(self, params=None):
         return self.checks.check_artwork(self.job, self.out, {"L.pdf": params or {"page": 1}})
 
+    def preview(self):
+        return self.check()["L.pdf"]["preview"]
+
     def test_unchanged_file_is_not_checked_again(self):
-        self.check()
-        self.assertEqual(self.check(), {"L.pdf": {"preview": "L.pdf.png"}})
+        first = self.preview()
+        self.assertEqual(self.preview(), first)
         self.assertEqual(self.calls, ["L.pdf"])
+
+    def test_changed_content_gets_a_new_preview_name_and_the_old_one_goes(self):
+        first = self.preview()
+        (self.job / "L.pdf").write_bytes(b"%PDF two")
+        second = self.preview()
+        self.assertNotEqual(second, first)
+        self.assertFalse((self.out / first).exists())
+        self.assertTrue((self.out / second).exists())
+
+    def test_rescan_catches_a_change_with_date_and_size_kept(self):
+        import os
+        self.check()
+        st = (self.job / "L.pdf").stat()
+        (self.job / "L.pdf").write_bytes(b"%PDF 1n3")  # same size
+        os.utime(self.job / "L.pdf", ns=(st.st_atime_ns, st.st_mtime_ns))
+        self.check()
+        self.assertEqual(len(self.calls), 1)
+        self.checks.check_artwork(self.job, self.out, {"L.pdf": {"page": 1}}, rescan=True)
+        self.assertEqual(len(self.calls), 2)
 
     def test_touched_file_with_same_content_is_not_checked_again(self):
         import os
@@ -231,8 +254,7 @@ class CacheTest(unittest.TestCase):
         self.check()
         (self.job / "L.pdf").write_bytes(b"%PDF two")
         self.check()
-        self.check({"page": 2})
-        (self.out / "L.pdf.png").unlink()
+        (self.out / self.check({"page": 2})["L.pdf"]["preview"]).unlink()
         self.check({"page": 2})
         self.assertEqual(self.calls, ["L.pdf"] * 4)
 
@@ -246,9 +268,9 @@ class CacheTest(unittest.TestCase):
         self.assertEqual(len(self.calls), 2)
 
     def test_previews_of_files_no_longer_asked_for_are_removed(self):
-        self.check()
+        preview = self.preview()
         self.checks.check_artwork(self.job, self.out, {})
-        self.assertFalse((self.out / "L.pdf.png").exists())
+        self.assertFalse((self.out / preview).exists())
 
     def test_audio_skips_the_checks_folder(self):
         from checks import audio

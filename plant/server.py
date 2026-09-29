@@ -137,7 +137,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         route = urlsplit(self.path).path
-        api = {"/api/board": self.get_board, "/api/job": self.get_job,
+        api = {"/api/board": self.get_board, "/api/job": self.get_job, "/api/job/stamp": self.get_stamp,
                "/api/inbox": self.get_inbox, "/api/zip": self.get_zip}.get(route)
         if api:
             return self.answer(api)
@@ -147,15 +147,16 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, target.read_bytes(), TYPES.get(target.suffix, "application/octet-stream"))
 
     def do_POST(self):
-        api = {"/api/upload": self.upload, "/api/accept": self.accept, "/api/merge": self.merge,
+        api = {"/api/upload": self.upload, "/api/upload/file": self.upload_file, "/api/upload/done": self.upload_done,
+               "/api/accept": self.accept, "/api/merge": self.merge,
                "/api/move": self.move, "/api/assign": self.assign,
                "/api/check/audio": self.check_audio, "/api/check/artwork": self.check_artwork}.get(self.path)
         if api is None:
             return self.reply(404, "not found")
         # A JSON content type makes browsers ask first (CORS preflight,
         # which this server doesn't answer), so other websites can't post
-        # here. The upload needs its X-Filename header for the same reason.
-        if api != self.upload and self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
+        # here. Uploads need their X- headers for the same reason.
+        if api not in (self.upload, self.upload_file) and self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
             return self.reply(415, "JSON requests only")
         self.answer(api)
 
@@ -178,12 +179,17 @@ class Handler(BaseHTTPRequestHandler):
         stage, folder = jobs.find(JOBS, self.query("job"))
         project, digest = jobs.read_project(folder)
         self.json({"job": folder.name, "stage": stage, "stages": jobs.stages(JOBS),
-                   "project": project, "projectHash": digest, "files": jobs.files(folder)})
+                   "project": project, "projectHash": digest, "files": jobs.files(folder),
+                   "stamp": jobs.stamp(folder)})
+
+    def get_stamp(self):
+        """Changes when any file of the job does: the open page polls it."""
+        self.json({"stamp": jobs.stamp(jobs.find(JOBS, self.query("job"))[1])})
 
     def get_inbox(self):
-        """A zip in the inbox, and the jobs with its catalogue number."""
-        zip_name = jobs.plain(self.query("zip"))
-        info = jobs.inspect_zip(JOBS / jobs.INBOX / zip_name)
+        """A zip or folder in the inbox, and the jobs with its catalogue number."""
+        item = jobs.plain(self.query("item"))
+        info = jobs.inspect(JOBS / jobs.INBOX / item)
         matches = []
         for stage in jobs.stages(JOBS):
             for job in jobs.jobs_in(JOBS, stage):
@@ -196,15 +202,18 @@ class Handler(BaseHTTPRequestHandler):
                     listing = [{**f, "sha256": jobs.sha256(folder / f["name"])} for f in jobs.files(folder)]
                     matches.append({"job": job, "stage": stage, "project": project,
                                     "projectHash": digest, "files": listing})
-        self.json({"zip": zip_name, **info, "matches": matches})
+        self.json({"item": item, **info, "matches": matches})
 
     def get_zip(self):
         folder = jobs.find(JOBS, self.query("job"))[1]
+        # Where the job sits is the plant's; a resend must not carry it.
+        project = jobs.read_project(folder)[0]
+        project.pop("plant", None)
         self.send_response(200)
         self.send_header("Content-Type", "application/zip")
         self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(folder.name)}.zip")
         self.end_headers()  # no length: HTTP/1.0 ends the body by closing
-        jobs.write_zip(folder, self.wfile)
+        jobs.write_zip(folder, self.wfile, project)
 
     def upload(self):
         """The zip in the body lands in the inbox, like a synced one."""
@@ -231,14 +240,29 @@ class Handler(BaseHTTPRequestHandler):
             tmp.rename(target)
         finally:
             tmp.unlink(missing_ok=True)
-        self.json({"zip": name})
+        self.json({"item": name})
+
+    def upload_file(self):
+        """One file of a folder picked in the page: X-Folder, X-Path."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            raise JobError("invalid Content-Length") from None
+        jobs.upload_file(JOBS, unquote(self.headers.get("X-Folder", "")), unquote(self.headers.get("X-Path", "")),
+                         self.rfile, length)
+        self.json({})
+
+    def upload_done(self):
+        folder = self.body()["folder"]
+        jobs.upload_done(JOBS, folder)
+        self.json({"item": folder})
 
     def accept(self):
-        self.json({"job": jobs.accept(JOBS, self.body()["zip"])})
+        self.json({"job": jobs.accept(JOBS, self.body()["item"])})
 
     def merge(self):
         r = self.body()
-        jobs.merge(JOBS, r["zip"], r["job"], r["copies"], r["project"], r["basedOn"])
+        jobs.merge(JOBS, r["item"], r["job"], r["copies"], r["project"], r["basedOn"])
         self.json({"job": r["job"]})
 
     def move(self):
@@ -255,7 +279,8 @@ class Handler(BaseHTTPRequestHandler):
         """Streams one JSON object per line: {"progress": percent} while
         the files are read, then {"result": facts} (or {"error": …})."""
         import checks  # needs the libraries main() verified
-        folder = jobs.find(JOBS, self.body()["job"])[1]
+        r = self.body()
+        folder = jobs.find(JOBS, r["job"])[1]
         out = folder / ".checks"
         out.mkdir(exist_ok=True)
         self.send_response(200)
@@ -273,7 +298,7 @@ class Handler(BaseHTTPRequestHandler):
                 shown = int(fraction * 100)
                 line({"progress": shown})
         try:
-            line({"result": checks.audio(folder, out, progress)})
+            line({"result": checks.audio(folder, out, progress, bool(r.get("rescan")))})
         except OSError as error:
             line({"error": f"couldn't check audio: {error}"})
 
@@ -285,7 +310,7 @@ class Handler(BaseHTTPRequestHandler):
         folder = jobs.find(JOBS, r["job"])[1]
         out = folder / ".checks"
         out.mkdir(exist_ok=True)
-        self.json(checks.check_artwork(folder, out, r.get("artwork", {})))
+        self.json(checks.check_artwork(folder, out, r.get("artwork", {}), bool(r.get("rescan"))))
 
 
 def make_server(port):

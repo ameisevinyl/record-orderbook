@@ -25,7 +25,7 @@ AUDIO_EXT = {".wav", ".wave", ".bwf", ".aif", ".aiff", ".aifc",
 SOFTWARE_TAGS = ("encoder", "encoded_by", "coding_history")
 WAVE_COLOUR = "#5c5c59"  # --ink-dim in src/plant/index.html
 # Bump when the facts read from a file change: cached facts then expire.
-CHECKS_VERSION = 1
+CHECKS_VERSION = 2  # 2: CMYK ink read unmanaged (artwork.render)
 
 
 def outputs(facts):
@@ -37,10 +37,11 @@ class Cache:
     and sha256. Size and mtime equal: reused. Else the sha256 decides, so
     a file a sync tool only touched isn't checked again. params (artwork:
     ink limit, sizes …) must match too; the JS rules judging the facts
-    always run fresh, so changing a rule needs no re-check."""
+    always run fresh, so changing a rule needs no re-check. rescan: the
+    sha256 decides always (a file changed with its date kept)."""
 
-    def __init__(self, out_dir, kind):
-        self.out, self.path = out_dir, out_dir / f"{kind}.json"
+    def __init__(self, out_dir, kind, rescan=False):
+        self.out, self.path, self.rescan = out_dir, out_dir / f"{kind}.json", rescan
         try:
             self.entries = json.loads(self.path.read_text())
         except (OSError, ValueError):
@@ -53,16 +54,16 @@ class Cache:
             return None
         if not all((self.out / f).is_file() for f in outputs(entry["facts"])):
             return None
-        if (entry["size"], entry["mtime"]) != (st.st_size, st.st_mtime_ns):
+        if self.rescan or (entry["size"], entry["mtime"]) != (st.st_size, st.st_mtime_ns):
             if entry["size"] != st.st_size or entry["sha256"] != sha256(path):
                 return None
             entry["mtime"] = st.st_mtime_ns
         self.used[name] = entry
         return entry["facts"]
 
-    def put(self, path, name, params, facts):
+    def put(self, path, name, params, facts, digest):
         st = path.stat()
-        self.used[name] = {"size": st.st_size, "mtime": st.st_mtime_ns, "sha256": sha256(path),
+        self.used[name] = {"size": st.st_size, "mtime": st.st_mtime_ns, "sha256": digest,
                            "code": CHECKS_VERSION, "params": params, "facts": facts}
 
     def save(self):
@@ -169,7 +170,13 @@ def render_previews(path, out_dir, base, read=lambda n: None):
     return mp3, png
 
 
-def audio(project_dir, out_dir, progress=lambda fraction: None):
+def preview_base(name, digest):
+    """Preview names carry the content: a changed file gets new ones, so
+    no browser shows a stale image of it."""
+    return f"{name.replace('/', '_')}.{digest[:12]}"
+
+
+def audio(project_dir, out_dir, progress=lambda fraction: None, rescan=False):
     """Facts for every audio file under project_dir, keyed by its name
     relative to it; previews go to out_dir. progress(fraction) follows
     the bytes read, across all files."""
@@ -184,7 +191,7 @@ def audio(project_dir, out_dir, progress=lambda fraction: None):
         done += n
         progress(min(done / total, 1.0))
 
-    cache = Cache(out_dir, "audio")
+    cache = Cache(out_dir, "audio", rescan)
     files = {}
     for path in paths:
         name = path.relative_to(project_dir).as_posix()
@@ -192,13 +199,14 @@ def audio(project_dir, out_dir, progress=lambda fraction: None):
         if facts is not None:
             read(path.stat().st_size)
         else:
+            digest = sha256(path)
             facts = probe_facts(path)
             if "error" not in facts:
                 try:
-                    facts["preview"], facts["waveform"] = render_previews(path, out_dir, name.replace("/", "_"), read)
+                    facts["preview"], facts["waveform"] = render_previews(path, out_dir, preview_base(name, digest), read)
                 except subprocess.CalledProcessError as error:
                     facts["previewError"] = error.stderr.decode(errors="replace").strip() or "ffmpeg failed"
-            cache.put(path, name, None, facts)
+            cache.put(path, name, None, facts, digest)
         files[name] = facts
     cache.save()
     done = total
@@ -206,9 +214,9 @@ def audio(project_dir, out_dir, progress=lambda fraction: None):
     return {"files": files}
 
 
-def check_artwork(project_dir, out_dir, params_by_name):
+def check_artwork(project_dir, out_dir, params_by_name, rescan=False):
     """Facts per artwork file the page asked for, with its part's params."""
-    cache = Cache(out_dir, "artwork")
+    cache = Cache(out_dir, "artwork", rescan)
     result = {}
     for name, params in params_by_name.items():
         # Names come from the page: only files inside the project count.
@@ -219,11 +227,12 @@ def check_artwork(project_dir, out_dir, params_by_name):
         facts = cache.get(path, name, params)
         if facts is None:
             try:
-                facts = artwork.facts(path, params, out_dir, name.replace("/", "_"))
+                digest = sha256(path)
+                facts = artwork.facts(path, params, out_dir, preview_base(name, digest))
             except Exception as error:  # one broken file must not end the whole check
                 result[name] = {"error": f"can't check: {error}"}
                 continue
-            cache.put(path, name, params, facts)
+            cache.put(path, name, params, facts, digest)
         result[name] = facts
     cache.save()
     return result

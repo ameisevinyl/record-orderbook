@@ -17,6 +17,7 @@ import stat
 import threading
 import zipfile
 import zlib
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
@@ -64,14 +65,16 @@ def stages(root):
 
 
 def jobs_in(root, stage):
+    """Job folders in a stage; in the inbox only accepted ones (see inbox())."""
     folder = root / stage
-    return sorted(p.name for p in folder.iterdir() if p.is_dir() and (p / "project.json").is_file())
+    return sorted(p.name for p in folder.iterdir() if p.is_dir() and not p.name.startswith(".")
+                  and (p / "project.json").is_file() and (stage != INBOX or accepted(p)))
 
 
 def find(root, job):
     """(stage, folder) of the job named `job`."""
     plain(job)
-    hits = [stage for stage in stages(root) if (root / stage / job / "project.json").is_file()]
+    hits = [stage for stage in stages(root) if job in jobs_in(root, stage)]
     if not hits:
         raise JobError(f"no job {job}")
     if len(hits) > 1:
@@ -133,7 +136,7 @@ def note_stage(folder, stage, by, note=None):
 
 
 def board(root):
-    """Every stage with its jobs, the zips waiting in the inbox, and
+    """Every stage with its jobs, the items waiting in the inbox, and
     problems found on the way. Logs moves made on disk."""
     columns, problems, seen = [], [], {}
     for stage in stages(root):
@@ -150,18 +153,45 @@ def board(root):
                 cards.append({"job": job, "error": str(error)})
         columns.append({"stage": stage, "jobs": cards})
     problems += [f"{job} is in more than one stage: {', '.join(where)}" for job, where in seen.items() if len(where) > 1]
-    inbox = root / INBOX
-    zips = sorted(p.name for p in inbox.iterdir() if p.is_file() and p.suffix.lower() == ".zip") if inbox.is_dir() else []
-    return {"stages": columns, "inbox": zips, "problems": problems}
+    return {"stages": columns, "inbox": inbox(root), "problems": problems}
+
+
+def job_paths(folder):
+    """Every file in the job but project.json; dot names (.checks/,
+    .DS_Store) are the machine's, not the job's."""
+    return [p for p in sorted(folder.rglob("*")) if p.is_file() and p != folder / "project.json"
+            and not any(part.startswith(".") for part in p.relative_to(folder).parts)]
 
 
 def files(folder):
-    """Every file in the job but project.json; dot names (.checks/,
-    .DS_Store) are the machine's, not the job's."""
-    return [{"name": p.relative_to(folder).as_posix(), "size": p.stat().st_size}
-            for p in sorted(folder.rglob("*"))
-            if p.is_file() and p != folder / "project.json"
-            and not any(part.startswith(".") for part in p.relative_to(folder).parts)]
+    """job_paths() with size and modification time (ISO, UTC)."""
+    listing = []
+    for p in job_paths(folder):
+        st = p.stat()
+        modified = datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+        listing.append({"name": p.relative_to(folder).as_posix(), "size": st.st_size, "modified": modified})
+    return listing
+
+
+def stamp(folder):
+    """A fingerprint of the job's files and project.json from their sizes
+    and times: cheap enough to poll, changes on any save."""
+    h = hashlib.sha256()
+    for p in [folder / "project.json"] + job_paths(folder):
+        st = p.stat()
+        h.update(f"{p.relative_to(folder)}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
+    return h.hexdigest()
+
+
+def remember_received(folder):
+    """plant.received: the sha256 of every file as it came in, so a later
+    resend of the same content doesn't undo a fix saved over it
+    (mergeResend in src/lib/versions.js keeps it up to date)."""
+    with LOCK:
+        project, digest = read_project(folder)
+        plant = project.get("plant") if isinstance(project.get("plant"), dict) else {}
+        project["plant"] = {**plant, "received": {p.relative_to(folder).as_posix(): sha256(p) for p in job_paths(folder)}}
+        write_project(folder, project, digest)
 
 
 def move(root, job, to):
@@ -195,7 +225,41 @@ def assign(folder, name, new_name, project, based_on):
             raise
 
 
-# --- Project zips --------------------------------------------------------
+# --- Inbox: received zips and folders -------------------------------------
+
+def project_dir(folder):
+    """The folder holding project.json: folder itself, or the one folder
+    inside it (unzipping may add a wrapper, e.g. "Download/<job>/")."""
+    if (folder / "project.json").is_file():
+        return folder
+    inner = [p for p in folder.iterdir() if p.is_dir() and not p.name.startswith(".") and (p / "project.json").is_file()]
+    return inner[0] if len(inner) == 1 else None
+
+
+def accepted(folder):
+    """A job the plant took in: its project.json names a stage. A received
+    folder doesn't — the customer page never writes plant.stage."""
+    try:
+        plant = read_project(folder)[0].get("plant")
+    except JobError:
+        return True  # shown as a job with its error
+    return isinstance(plant, dict) and bool(plant.get("stage"))
+
+
+def inbox(root):
+    """Received items in 00_INBOX, not yet a job: zips, and folders with a
+    project.json (at their top or one folder down) that no stage names."""
+    folder = root / INBOX
+    items = []
+    for p in sorted(folder.iterdir()) if folder.is_dir() else []:
+        if p.name.startswith("."):
+            continue
+        if p.is_file() and p.suffix.lower() == ".zip":
+            items.append(p.name)
+        elif p.is_dir() and (base := project_dir(p)) is not None and (base != p or not accepted(p)):
+            items.append(p.name)
+    return items
+
 
 def safe_names(zf):
     names = []
@@ -234,104 +298,176 @@ def zip_layout(zf):
     return jsons[0], entries
 
 
-def inspect_zip(path):
-    """What a zip in the inbox holds, without unpacking it: the project,
-    each file with its sha256, and the job name it would get."""
+@contextmanager
+def open_item(path):
+    """An inbox zip or folder as (job name, project, {file name: open()}):
+    names relative to the folder holding project.json."""
+    if path.is_dir():
+        base = project_dir(path)
+        if base is None:
+            raise JobError(f"{path.name}: no project.json in the folder")
+        yield base.name, read_project(base)[0], {f["name"]: (lambda p=base / f["name"]: open(p, "rb")) for f in files(base)}
+        return
     with open_zip(path) as zf:
         json_entry, entries = zip_layout(zf)
         try:
             project = json.loads(zf.read(json_entry))
         except ValueError:
             raise JobError("project.json is not valid JSON") from None
-        listing = []
-        for name, entry in sorted(entries.items()):
-            h = hashlib.sha256()
-            try:
-                with zf.open(entry) as f:
-                    while chunk := f.read(CHUNK):
-                        h.update(chunk)
-            except (zipfile.BadZipFile, zlib.error, EOFError) as error:
-                raise JobError(f"corrupt file in zip: {error}") from None
-            listing.append({"name": name, "size": zf.getinfo(entry).file_size, "sha256": h.hexdigest()})
-    parent = PurePosixPath(json_entry).parent.name
-    return {"job": parent or path.stem, "project": project, "files": listing}
+        yield (PurePosixPath(json_entry).parent.name or path.stem), project, {n: (lambda e=e: zf.open(e)) for n, e in entries.items()}
 
 
-def extract(zf, entry, target):
+def read_stream(opener, sink):
+    """Feeds every chunk of opener() to sink; a broken zip member is a JobError."""
     try:
-        with zf.open(entry) as src, open(target, "wb") as dst:
-            shutil.copyfileobj(src, dst, CHUNK)
+        with opener() as f:
+            while chunk := f.read(CHUNK):
+                sink(chunk)
     except (zipfile.BadZipFile, zlib.error, EOFError) as error:
-        target.unlink(missing_ok=True)
         raise JobError(f"corrupt file in zip: {error}") from None
 
 
-def accept(root, zip_name):
-    """A new job from an inbox zip: unpacked flat into 00_INBOX/<job>/,
-    the zip removed. Refuses a job name that exists anywhere."""
-    path = root / INBOX / plain(zip_name)
-    with LOCK:
-        info = inspect_zip(path)
-        job = plain(info["job"])
-        if any((root / stage / job).exists() for stage in stages(root)):
-            raise Conflict(f"job {job} exists already")
-        folder = root / INBOX / job
-        tmp = root / INBOX / f".{job}.tmp"
-        shutil.rmtree(tmp, ignore_errors=True)
-        tmp.mkdir()
-        try:
-            with open_zip(path) as zf:
-                json_entry, entries = zip_layout(zf)
-                extract(zf, json_entry, tmp / "project.json")
-                for name, entry in entries.items():
-                    (tmp / name).parent.mkdir(parents=True, exist_ok=True)
-                    extract(zf, entry, tmp / name)
-            tmp.rename(folder)
-        except BaseException:
-            shutil.rmtree(tmp, ignore_errors=True)
-            raise
-        note_stage(folder, INBOX, "plant", f"received {zip_name}")
+def copy_out(opener, target):
+    try:
+        with open(target, "wb") as dst:
+            read_stream(opener, dst.write)
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+
+
+def inspect(path):
+    """What an inbox item holds, without unpacking it: the project, each
+    file with its size and sha256, and the job name it would get."""
+    with open_item(path) as (job, project, entries):
+        listing = []
+        for name, opener in sorted(entries.items()):
+            h, size = hashlib.sha256(), 0
+
+            def sink(chunk):
+                nonlocal size
+                h.update(chunk)
+                size += len(chunk)
+            read_stream(opener, sink)
+            listing.append({"name": name, "size": size, "sha256": h.hexdigest()})
+    return {"job": job, "project": project, "files": listing}
+
+
+def remove_item(path):
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
         path.unlink()
+
+
+def accept(root, name):
+    """A new job from an inbox item, flat in 00_INBOX/<job>/: a zip is
+    unpacked and removed, a folder taken as it is (out of its wrapper).
+    Refuses a job name that exists anywhere."""
+    path = root / INBOX / plain(name)
+    with LOCK:
+        with open_item(path) as (job, project, entries):
+            job = plain(job)
+            folder = root / INBOX / job
+            in_place = path.is_dir() and project_dir(path) == folder
+            if any((root / stage / job).exists() for stage in stages(root) if not (path == folder and stage == INBOX)):
+                raise Conflict(f"job {job} exists already")
+            if path.is_dir() and not in_place:
+                # Out of its wrapper (which may carry the job's own name).
+                moved = root / INBOX / f".{job}.tmp"
+                project_dir(path).rename(moved)
+                if not any(not p.name.startswith(".") for p in path.iterdir()):
+                    shutil.rmtree(path)
+                if folder.exists():
+                    moved.rename(path / job)
+                    raise Conflict(f"{path.name} holds more than the job {job}")
+                moved.rename(folder)
+            elif path.is_file():
+                tmp = root / INBOX / f".{job}.tmp"
+                shutil.rmtree(tmp, ignore_errors=True)
+                tmp.mkdir()
+                try:
+                    (tmp / "project.json").write_text(json.dumps(project, indent=2, ensure_ascii=False))
+                    for entry, opener in entries.items():
+                        (tmp / entry).parent.mkdir(parents=True, exist_ok=True)
+                        copy_out(opener, tmp / entry)
+                    tmp.rename(folder)
+                except BaseException:
+                    shutil.rmtree(tmp, ignore_errors=True)
+                    raise
+        note_stage(folder, INBOX, "plant", f"received {name}")
+        remember_received(folder)
+        if path.is_file():
+            path.unlink()
     return job
 
 
-def merge(root, zip_name, job, copies, project, based_on):
+def merge(root, name, job, copies, project, based_on):
     """A resend into an existing job: copies [{from, to}] (from: name in
-    the zip, to: a new file in the job — never an existing one), the
-    zip's text files replace the job's, project saved, zip removed."""
-    path = root / INBOX / plain(zip_name)
+    the item, to: a new file in the job — never an existing one), the
+    item's text files replace the job's, project saved, item removed."""
+    path = root / INBOX / plain(name)
     with LOCK:
         folder = find(root, job)[1]
         if read_project(folder)[1] != based_on:
             raise Conflict("project.json changed meanwhile — reload and try again")
         written = []
         try:
-            with open_zip(path) as zf:
-                entries = zip_layout(zf)[1]
+            with open_item(path) as (_, _, entries):
                 for copy in copies:
                     source, target = copy["from"], folder / plain(copy["to"])
                     if source not in entries:
-                        raise JobError(f"{source} is not in the zip")
+                        raise JobError(f"{source} is not in {name}")
                     if target.exists():
                         raise Conflict(f"{copy['to']} exists already")
-                    extract(zf, entries[source], target)
+                    copy_out(entries[source], target)
                     written.append(target)
-                for name in TEXT_FILES:
-                    if name in entries:
-                        extract(zf, entries[name], folder / name)
+                for text in TEXT_FILES:
+                    if text in entries:
+                        copy_out(entries[text], folder / text)
             write_project(folder, project, based_on)
         except BaseException:
             for target in written:
                 target.unlink(missing_ok=True)
             raise
-        path.unlink()
+        remove_item(path)
 
 
-def write_zip(folder, out):
+def upload_file(root, folder, rel, stream, length):
+    """One file of a folder the page uploads, into 00_INBOX/.<folder>.part/
+    until upload_done; rel may hold subfolders."""
+    parts = [plain(part) for part in rel.split("/")]
+    target = root / INBOX / f".{plain(folder)}.part" / Path(*parts)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "wb") as f:
+        while length > 0:
+            chunk = stream.read(min(length, CHUNK))
+            if not chunk:
+                raise JobError("upload ended early")
+            f.write(chunk)
+            length -= len(chunk)
+
+
+def upload_done(root, folder):
+    part = root / INBOX / f".{plain(folder)}.part"
+    target = root / INBOX / folder
+    with LOCK:
+        if not part.is_dir():
+            raise JobError(f"nothing uploaded for {folder}")
+        if target.exists():
+            shutil.rmtree(part)
+            raise Conflict(f"{folder} is in the inbox already")
+        part.rename(target)
+
+
+def write_zip(folder, out, project=None):
     """The job as a customer-page package: every file but dot names,
-    nested under the job's folder name. out: a writable binary stream
-    (need not seek)."""
+    nested under the job's folder name; project replaces project.json when
+    given. out: a writable binary stream (need not seek)."""
     with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as zf:
-        zf.write(folder / "project.json", f"{folder.name}/project.json")
+        if project is None:
+            zf.write(folder / "project.json", f"{folder.name}/project.json")
+        else:
+            zf.writestr(f"{folder.name}/project.json", json.dumps(project, indent=2, ensure_ascii=False))
         for entry in files(folder):
             zf.write(folder / entry["name"], f"{folder.name}/{entry['name']}")

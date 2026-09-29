@@ -69,8 +69,14 @@ yourself. Be short and precise.
    state lives in its `project.json` (`plant.stage`, `history`), which
    stays hand-editable. Files are never overwritten: a fix or a resent
    file becomes the next `_v<N>`, and the slot in `project.json` points
-   at the version that counts. A customer resend (new zip) merges into
-   the job (`mergeResend` in `src/lib/versions.js`).
+   at the version that counts. A received zip or unpacked folder in
+   `00_INBOX` (copied in, synced, or loaded in the plant view) becomes a
+   new job or merges into the job with its catalogue number
+   (`mergeResend` in `src/lib/versions.js`); `plant.received` keeps the
+   sha256 of every file as it came in, so resending the same content
+   doesn't undo a fix saved over it under the same name. In the inbox, a folder is a
+   job only once `plant.stage` is set — the customer page never writes
+   it, and the plant's zip download leaves it out.
 
 ## File naming convention (`src/lib/package-naming.js` — applied when building the package, not on upload)
 
@@ -141,11 +147,16 @@ configured on purpose — keep it that way unless asked.
 - `plant/checks.py` — deep checks on disk, piece 1 (audio): ffprobe
   facts, AIFF `MARK` markers, MP3 + waveform PNG per file, written to
   the job's hidden `.checks/` with a per-file cache (size+mtime, else
-  sha256; bump `CHECKS_VERSION` when fact-reading changes).
+  sha256; Rescan: sha256 always; bump `CHECKS_VERSION` when fact-reading
+  changes). Preview names carry the content hash, so a fix saved over a
+  file never shows a stale image. The open job page polls
+  `/api/job/stamp` and reloads on any save in the job folder.
   Python only reads facts; the rules live in `src/lib/audio-checks.js`.
   Spec: `docs/superpowers/specs/2026-09-24-audio-checks-design.md`.
   Piece 2 (artwork, `plant/artwork.py`): PyMuPDF/Pillow/numpy facts,
-  ink/black/bleed measurements, preview + overlay PNG; rules in
+  ink/black/bleed measurements (CMYK/grey files read as their own
+  numbers, colour management off — see `render`), preview + overlay
+  PNG; rules in
   `src/lib/artwork-checks.js`. Spec:
   `docs/superpowers/specs/2026-09-25-artwork-checks-design.md`.
 - `src/plant.config.local.js` (gitignored, copied from the committed
