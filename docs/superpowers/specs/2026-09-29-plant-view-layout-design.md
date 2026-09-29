@@ -58,10 +58,24 @@ the change polling, spectrograms — and the customer page.
 the artwork preview box (image, overlay image and cut-line SVG stacked).
 Nothing else.
 
+### Stages with sub-stages
+
+A stage folder that has sub-stages (10_ORDERS with 10_PREPRESS and
+20_PRESS) only groups them: no job belongs in it directly.
+
+- The move select offers only stages without sub-stages (00_INBOX,
+  10_ORDERS/10_PREPRESS, 10_ORDERS/20_PRESS, 20_DONE, 99_ARCHIVE);
+  `/api/move` refuses a grouping stage (`jobs.move`).
+- A job found directly in a grouping stage (moved there by hand) is a
+  problem on the overview: "<job> is in 10_ORDERS — move it to one of
+  its sub-stages". It still opens, so staff can move it from its page.
+- In the nav a grouping stage is a heading with its sub-stages nested
+  under it, no job list of its own.
+
 ### Nav
 
 - **Jobs:** nested lists, stage folders as the page finds them
-  (sub-stages nested), each with its count; per job one link
+  (sub-stages nested under their grouping stage), each with its count; per job one link
   "CAT — Title" to `#/job/<job>`; the open job is marked with
   `aria-current="page"` (and shown bold by the browser via `<b>`);
   inbox items (zips, folders) under 00_INBOX as links to
@@ -187,6 +201,8 @@ header, the Files table and the old overview go away.
   `font`, `border`, `margin`, `padding` or `animation` declarations.
 - Server: audio stream lines carry file/step, artwork stream ends in a
   result, stamp returns spectrum progress while it runs.
+- Stages: the move select and `jobs.move` refuse 10_ORDERS; a job put
+  there by hand is reported on the overview and still opens.
 - Manual: open a job, watch the status line walk through audio,
   waveform, artwork, spectrum to idle; section links scroll without
   re-checking; reload keeps the section.
