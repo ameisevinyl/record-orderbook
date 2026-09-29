@@ -1,0 +1,26 @@
+/* Structure only: the two columns, and how the pictures stack. No
+   fonts, spacing or colours of the page's own — a plant's theme or a
+   CSS reset goes on top of this later. Lines on the pictures use HTML's
+   named colours. */
+
+body{ display:grid; grid-template-columns:max-content 1fr; }
+header{ grid-column:1 / -1; }
+
+/* Waveform: the played part and the markers lie on the picture. */
+.wave{ position:relative; }
+.wave img{ display:block; width:100%; }
+.played{ position:absolute; top:0; bottom:0; left:0; width:0; background:gray; opacity:.3; pointer-events:none; }
+.mark{ position:absolute; top:0; bottom:0; border-left:1px solid black; pointer-events:none; }
+.mark span{ position:absolute; left:2px; top:0; white-space:nowrap; }
+.mark.form{ border-left-style:dashed; }
+.mark.form span{ top:auto; bottom:0; }
+
+/* Artwork: the problem-area overlay and the cut lines lie on the preview. */
+.art{ position:relative; max-width:420px; }
+.art img{ display:block; width:100%; height:100%; }
+.art img[hidden]{ display:none; }
+.art .overlay, .art svg{ position:absolute; top:0; left:0; width:100%; height:100%; }
+.art svg *{ fill:none; stroke-width:1.5; vector-effect:non-scaling-stroke; }
+.art .under{ stroke:white; }
+.art .trim, .art .hole{ stroke:black; stroke-dasharray:5 4; }
+.art .bleed{ stroke:black; stroke-dasharray:1.5 3; }

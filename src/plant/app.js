@@ -1,8 +1,10 @@
-// Plant view page: the board of job folders (plant/server.py, jobs.py),
-// a zip or folder in the inbox (new job or resend), and a job: stage, file
-// versions, completeness, overview, then the audio and artwork checks —
-// the server re-reads only files that changed, the rules here run on
-// every load. Reloading the page reloads the job from disk.
+// Plant view page: a two-column page — the jobs tree and the open job's
+// section links in <nav>, the chosen view in <main> — under one CLI
+// status line. Views: the overview (what needs attention), a zip or
+// folder in the inbox (new job or resend), a job in five sections. A job
+// is checked on every load (the server re-reads only changed files, the
+// rules here always run), then its spectrograms are made in the
+// background.
 import { CONFIG } from "../config.js";
 import { prepareProject, setAt, historyEntry } from "../lib/project.js";
 import { projectGaps } from "../lib/completeness.js";
@@ -10,11 +12,12 @@ import { audioFindings } from "../lib/audio-checks.js";
 import { artworkSlots } from "../lib/artwork-checks.js";
 import { getFormat } from "../lib/format-catalogue.js";
 import { jobFiles, assignedName, mergeResend } from "../lib/versions.js";
-import { renderHeader, renderGaps, renderOverview, renderAudio, renderArtwork } from "../lib/plant-overview.js";
-import { renderBoard, renderJobBar, renderFiles, renderInbox } from "../lib/plant-board.js";
+import { renderBasic, renderArtwork, renderAudio, renderShipping, renderHistory } from "../lib/plant-overview.js";
+import { renderNav, renderHome, renderInbox } from "../lib/plant-board.js";
 
 const zipInput = document.getElementById("zipInput");
 const folderInput = document.getElementById("folderInput");
+const nav = document.getElementById("nav");
 const out = document.getElementById("out");
 const error = document.getElementById("error");
 const status = document.getElementById("status");
@@ -36,17 +39,86 @@ async function api(path, body){
 const getJson = async path => (await api(path)).json();
 const postJson = async (path, body) => (await api(path, body)).json();
 
-async function route(){
+// --- Status line: what the page does, else what the server does in the
+// background (spectrograms), else "idle"; a CLI spinner while anything
+// runs. Text only.
+const SPINNER = "|/-\\";
+let task = "", background = "", spin = 0, spinner = null;
+
+function show(){
+  const text = task || background;
+  if(text && !spinner) spinner = setInterval(show, 150);
+  if(!text && spinner){
+    clearInterval(spinner);
+    spinner = null;
+  }
+  status.textContent = text ? `${text}  ${SPINNER[spin++ % SPINNER.length]}` : "idle";
+}
+
+function busy(text){
+  task = text;
+  show();
+}
+
+// One step of a check: "checking audio     A1.wav  2/3  47 %".
+function stepText({step, file, index, count, progress}){
+  return `${step.padEnd(18)}${file}  ${index}/${count}` + (progress === undefined ? "" : `  ${progress} %`);
+}
+
+// A check streams one JSON object per line: its steps, then
+// {"result": …} or {"error": …}.
+async function readStream(res, onStep){
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for(;;){
+    const {done, value} = await reader.read();
+    buffer += value || "";
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+    for(const line of lines.filter(Boolean)){
+      const msg = JSON.parse(line);
+      if("result" in msg) return msg.result;
+      if(msg.error) throw new Error(msg.error);
+      onStep(msg);
+    }
+    if(done) throw new Error("the check ended without a result");
+  }
+}
+
+// --- Routes: #/ · #/inbox/<item> · #/job/<job>[/<section>]
+
+function parseHash(){
+  const [, kind, name, section] = /^#\/(job|inbox)\/([^/]+)(?:\/(\w+))?$/.exec(location.hash) || [];
+  return {kind, name: name && decodeURIComponent(name), section};
+}
+
+function scrollToSection(section){
+  const target = section && document.getElementById(section);
+  if(target) target.scrollIntoView();
+}
+
+// reload false: a link click — a section link of the job already shown
+// only scrolls, it doesn't load and check the job again.
+async function route(reload = true){
+  const {kind, name, section} = parseHash();
+  if(!reload && kind === "job" && view && view.job === name){
+    scrollToSection(section);
+    return;
+  }
   const id = ++latest;
   out.innerHTML = "";
   view = null;
+  background = "";
   resetPlayer();
   error.textContent = "";
-  const [, kind, name] = /^#\/(job|inbox)\/(.+)$/.exec(location.hash) || [];
   try{
-    if(kind === "job") await showJob(decodeURIComponent(name), id);
-    else if(kind === "inbox") await showInbox(decodeURIComponent(name), id);
-    else await showBoard(id);
+    busy("reading the jobs");
+    const board = await getJson("/api/board");
+    if(id !== latest) return;
+    nav.innerHTML = renderNav(board, kind === "job" ? name : null);
+    if(kind === "job") await showJob(name, section, id);
+    else if(kind === "inbox") await showInbox(name, id);
+    else out.innerHTML = renderHome(board);
   }catch(err){
     if(id === latest) error.textContent = err.message;
   }finally{
@@ -54,14 +126,8 @@ async function route(){
   }
 }
 
-async function showBoard(id){
-  busy("Reading the jobs…");
-  const board = await getJson("/api/board");
-  if(id === latest) out.innerHTML = renderBoard(board);
-}
-
 async function showInbox(item, id){
-  busy(`Reading ${item}…`);
+  busy(`reading ${item}`);
   const info = await getJson(`/api/inbox?item=${encodeURIComponent(item)}`);
   if(id !== latest) return;
   const plans = info.matches.map(m => ({job: m.job, stage: m.stage, basedOn: m.projectHash,
@@ -70,49 +136,47 @@ async function showInbox(item, id){
   out.innerHTML = renderInbox(item, info, plans);
 }
 
-async function showJob(job, id){
-  busy(`Opening ${job}…`);
+async function showJob(job, section, id){
+  busy(`opening ${job}`);
   const data = await getJson(`/api/job?job=${encodeURIComponent(job)}`);
   if(id !== latest) return;
   const project = prepareProject(data.project, CONFIG);
   const files = jobFiles(project, data.files);
+  const gaps = projectGaps(project, CONFIG, data.files);
+  const checkable = artworkSlots(project, CONFIG);
+  const printCheck = getFormat(CONFIG, project.format).printCheck;
+  // The job's check output and spectrum/ folder, served by the server.
+  const base = `/jobs/${encodeURIComponent(job)}/`;
   view = {job, raw: data.project, hash: data.projectHash, stamp: data.stamp,
     names: data.files.map(f => f.name), slots: files.slots};
   const full = rescan;
   rescan = false;
-  out.innerHTML = renderJobBar(job, data.stage, data.stages)
-    + renderHeader(job, project)
-    + renderGaps(projectGaps(project, CONFIG, data.files))
-    + renderFiles(files, data.files)
-    + '<div id="audio"></div><div id="artwork"></div>'
-    + renderOverview(project, CONFIG, data.files);
-
-  // The job's check output folder, served by the server.
-  const base = `/jobs/${encodeURIComponent(job)}/`;
-  let step = "check the audio of";
+  out.innerHTML = renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps)
+    + renderArtwork(files, checkable, null, printCheck, base, gaps)
+    + renderAudio(project, files, null, [], base, gaps)
+    + renderShipping(project, gaps)
+    + renderHistory(project);
+  scrollToSection(section);
+  const replace = (sectionId, html) => { document.getElementById(sectionId).outerHTML = html; };
+  const onStep = msg => { if(id === latest) busy(stepText(msg)); };
+  let what = "check the audio of";
   try{
-    busy("Checking audio… 0 %");
-    const audioRes = await api("/api/check/audio", {job, rescan: full});
-    const facts = await readStream(audioRes, pct => {
-      if(id === latest) busy(`Checking audio… ${pct} %`);
-    });
+    busy("checking audio");
+    const facts = await readStream(await api("/api/check/audio", {job, rescan: full}), onStep);
     if(id !== latest) return;
-    document.getElementById("audio").innerHTML =
-      renderAudio(project, facts, audioFindings(project, facts, CONFIG), base);
+    replace("audio", renderAudio(project, files, facts, audioFindings(project, facts, CONFIG), base, gaps));
 
-    step = "check the artwork of";
-    busy("Checking artwork…");
-    const slots = artworkSlots(project, CONFIG);
-    const artworkFacts = await postJson("/api/check/artwork",
-      {job, rescan: full, artwork: Object.fromEntries(slots.map(s => [s.name, s.params]))});
+    what = "check the artwork of";
+    busy("checking artwork");
+    const artworkFacts = await readStream(await api("/api/check/artwork",
+      {job, rescan: full, artwork: Object.fromEntries(checkable.map(s => [s.name, s.params]))}), onStep);
     if(id !== latest) return;
-    document.getElementById("artwork").innerHTML =
-      renderArtwork(slots, artworkFacts, getFormat(CONFIG, project.format).printCheck, base);
-    // Last: the mastering engineer's spectrograms, made in the background
-    // into the job's spectrum/ folder (not shown here).
+    replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps));
+    // Last: the mastering engineer's spectrograms, in the background; the
+    // change poll below shows their progress.
     await postJson("/api/spectrum", {job});
   }catch(err){
-    throw new Error(`Couldn't ${step} ${job}: ${err.message}`);
+    throw new Error(`Couldn't ${what} ${job}: ${err.message}`);
   }
 }
 
@@ -121,14 +185,14 @@ async function showJob(job, id){
 // reload shows their change.
 out.addEventListener("click", async e => {
   const button = e.target.closest(".use, #move, #rescan, .merge, #accept");
-  if(!button || !view || status.classList.contains("busy")) return;
+  if(!button || !view || task) return;
   error.textContent = "";
   if(button.id === "rescan"){
     rescan = true;
     return route();
   }
   try{
-    busy("Saving…");
+    busy("saving");
     if(button.id === "move"){
       await postJson("/api/move", {job: view.job, to: document.getElementById("moveTo").value});
     } else if(button.matches(".use")){
@@ -158,34 +222,8 @@ out.addEventListener("click", async e => {
   }
 });
 
-// Status line; while it has text, a spinner shows the page is working.
-function busy(text){
-  status.textContent = text;
-  status.classList.toggle("busy", !!text);
-}
-
-// The audio check streams one JSON object per line: {"progress": percent}
-// while the files are read, then {"result": facts} or {"error": message}.
-async function readStream(res, onProgress){
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = "";
-  for(;;){
-    const {done, value} = await reader.read();
-    buffer += value || "";
-    const lines = buffer.split("\n");
-    buffer = lines.pop();
-    for(const line of lines.filter(Boolean)){
-      const msg = JSON.parse(line);
-      if("progress" in msg) onProgress(msg.progress);
-      else if(msg.error) throw new Error(msg.error);
-      else return msg.result;
-    }
-    if(done) throw new Error("the check ended without a result");
-  }
-}
-
-// Prelisten: one shared <audio>. A preview is fetched once as a blob, so
-// seeking works although the server doesn't answer Range requests.
+// --- Prelisten: one shared <audio>. A preview is fetched once as a blob,
+// so seeking works although the server doesn't answer Range requests.
 const player = new Audio();
 let blobUrls = new Map();
 let playing = null; // the .wave the player is loaded with
@@ -252,12 +290,12 @@ for(const [event, text] of [["play", "pause"], ["pause", "play"]]){
   player.addEventListener(event, ()=>{ if(playing) playButton(playing).textContent = text; });
 }
 
-// Load: a zip, or a folder (e.g. one Safari unzipped), goes to the inbox
-// like one synced in; the browser uploads a copy, the original stays.
+// --- Load: a zip, or a folder (e.g. one Safari unzipped), goes to the
+// inbox like one synced in; the browser uploads a copy, the original stays.
 async function upload(label, send){
   error.textContent = "";
   try{
-    busy(`Uploading ${label}…`);
+    busy(`uploading ${label}`);
     location.hash = `#/inbox/${encodeURIComponent(await send())}`;
   }catch(err){
     busy("");
@@ -283,7 +321,7 @@ folderInput.addEventListener("change", ()=>{
   const folder = files[0].webkitRelativePath.split("/")[0];
   upload(folder, async ()=>{
     for(const [i, file] of files.entries()){
-      busy(`Uploading ${folder}… ${i + 1}/${files.length}`);
+      busy(`uploading ${folder}  ${i + 1}/${files.length}`);
       await api("/api/upload/file", {raw: file, headers: {"X-Folder": encodeURIComponent(folder),
         "X-Path": encodeURIComponent(file.webkitRelativePath.split("/").slice(1).join("/"))}});
     }
@@ -291,17 +329,20 @@ folderInput.addEventListener("change", ()=>{
   });
 });
 
-// While a job is open, any save on disk (a fix over a file, a new
-// version, a hand edit of project.json) reloads and re-checks it.
+// --- While a job is open: any save on disk (a fix over a file, a new
+// version, a hand edit of project.json) reloads and re-checks it, and the
+// background spectrum's progress goes to the status line.
 setInterval(async ()=>{
-  if(!view || !view.stamp || status.classList.contains("busy") || document.hidden) return;
+  if(!view || !view.stamp || task || document.hidden) return;
   try{
-    const {stamp} = await getJson(`/api/job/stamp?job=${encodeURIComponent(view.job)}`);
+    const {stamp, spectrum} = await getJson(`/api/job/stamp?job=${encodeURIComponent(view.job)}`);
+    background = spectrum ? stepText({step: "plotting spectrum", ...spectrum}) : "";
+    show();
     if(view && view.stamp && stamp !== view.stamp) route();
   }catch{
     // gone or moved: the next click shows why
   }
 }, 3000);
 
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", ()=> route(false));
 route();
