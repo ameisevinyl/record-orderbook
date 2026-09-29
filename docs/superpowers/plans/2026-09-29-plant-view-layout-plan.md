@@ -14,7 +14,7 @@
 
 - Plain HTML5 elements only: `header`, `nav`, `main`, `section`, `h1`–`h3`, `table`, `ul`, `pre`, `button`, `select`, `a`, `img`.
 - Every labelled field is a table row: label in `<th scope="row">`, value in `<td>`; lists are tables with `<th scope="col">` header cells.
-- A catalogue number appears once in the nav and once in a job's view (Basic); a file name once in a job's view (its slot's row); the job folder name is not shown in the job view.
+- A catalogue number appears once in the nav and once in a job's view (Basic); a file name once in a job's view (its slot's row); the job folder name is not shown in the job view. Exception: billing name and email show in Basic's Customer row and again in the complete Billing address (copy and paste).
 - `src/plant/index.html`: no `<style>`, no `style=` attributes; `style=` only in renderer output for waveform marker positions and the artwork preview's aspect ratio.
 - `src/plant/structure.css`: no `font`, `margin`, `padding`, `animation`; colours only as HTML named colours (black, white, gray) and only in picture overlay rules; no hex or rgb values.
 - Grouping stages (a stage with sub-stages, e.g. `10_ORDERS`) hold no jobs: not offered as move target, refused by `jobs.move`.
@@ -624,11 +624,13 @@ test("audio: while checking, no file blocks yet; continuous side lists its side 
   assert.ok(html.includes('class="mark form" style="left:30.000%" title="1:00 A2"'));
 });
 
-test("shipping & billing: billing without name and email (they're in Basic), shipping with quantities", () => {
+test("shipping & billing: the complete billing address, shipping with quantities", () => {
   const html = renderShipping(project, [{group: "Shipping 1", text: "postal code missing"}]);
   assert.ok(html.includes("<li>Shipping 1: postal code missing</li>"));
   assert.ok(html.includes('<tr><th scope="row">city</th><td>Berlin</td></tr>'));
-  assert.ok(!html.includes("Ann") && !html.includes("ann@example.com"));
+  // Name and email also stand in Basic: here too, to copy the address whole.
+  assert.ok(html.includes('<tr><th scope="row">name</th><td>Ann</td></tr>'));
+  assert.ok(html.includes('<tr><th scope="row">email</th><td>ann@example.com</td></tr>'));
   assert.ok(html.includes("<h3>Shipping 1</h3>") && html.includes("Bob") && html.includes("300 Black"));
 });
 
@@ -929,14 +931,14 @@ export function renderAudio(project, files, facts, findings, base, gaps){
 const ADDRESS_FIELDS = ["recipientName", "attention", "addressLine1", "addressLine2", "addressLine3",
   "postalCode", "city", "stateProvince", "countryCode", "email", "phone", "vat", "eori"];
 
-const addressRows = (address, skip = []) => ADDRESS_FIELDS.filter(f => !skip.includes(f))
-  .map(f => [ADDRESS_FIELD_LABELS[f], escapeHtml(address[f])]);
+const addressRows = address => ADDRESS_FIELDS.map(f => [ADDRESS_FIELD_LABELS[f], escapeHtml(address[f])]);
 
-// Billing name and email are Basic's "Customer" row, so not here again.
+// The billing address is complete here although name and email also
+// stand in Basic's Customer row: staff copy the address as a whole.
 export function renderShipping(project, gaps){
   const {billing, shipping} = project.shippingBilling;
   return section("shipping", gapsHtml(gaps, "shipping")
-    + `<h3>Billing</h3>` + fieldTable(addressRows(billing, ["recipientName", "email"]))
+    + `<h3>Billing</h3>` + fieldTable(addressRows(billing))
     + shipping.map((address, i) => `<h3>Shipping ${i + 1}</h3>` + fieldTable(addressRows(address).concat([
       ["quantities", escapeHtml(Object.entries(address.qtyByColor).filter(([, q]) => q.trim())
         .map(([color, q]) => `${q} ${colorLabel(color)}`).join(", "))],

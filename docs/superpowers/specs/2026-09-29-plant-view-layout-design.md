@@ -166,8 +166,9 @@ Five sections, each `<section><h2 id="…">`:
    its audio extension (`checks.AUDIO_EXT`), every other one to
    Artwork's.
 4. **Shipping & billing** — the gaps of groups Billing and Shipping n.
-   A billing address table (field rows; name and email are Basic's
-   Customer row, not repeated); per shipping address an
+   The complete billing address table (field rows) — name and email
+   stand in Basic's Customer row too, on purpose: staff copy the
+   address as a whole; per shipping address an
    `<h3>`, its address table and its quantities, residential flag and
    note.
 5. **History** — a table: Date · By · Note, oldest first.
