@@ -121,8 +121,7 @@ export function renderBasic(project, config, place, gaps){
       + `<button type="button" id="move">Move</button> <button type="button" id="rescan">Rescan</button> `
       + `<a href="/api/zip?job=${encodeURIComponent(place.job)}" download>Download zip</a>`],
     // Date and who only: the note is in History.
-    ["Last change", last ? `${when(last.savedAt)} ${escapeHtml(last.by)}` : ""],
-    ["Notes", project.notes.trim() ? `<pre>${escapeHtml(project.notes)}</pre>` : ""]
+    ["Last change", last ? `${when(last.savedAt)} ${escapeHtml(last.by)}` : ""]
   ]) + gapsHtml(gaps, "basic"));
 }
 
@@ -231,9 +230,11 @@ function audioFileHtml(file, label, formStarts, base){
   return `<div class="audio-file">${body}</div>`;
 }
 
-// files: jobFiles(); facts: the audio check's result, or null while it
-// runs; findings: audioFindings(). base: URL folder of the job's check
-// output; its spectrum/ holds the spectrograms (plant/spectrum.py).
+// Both sides' tracklists, the customer's notes to the mastering engineer
+// below them, then each file's check. files: jobFiles(); facts: the
+// audio check's result, or null while it runs; findings:
+// audioFindings(). base: URL folder of the job's check output; its
+// spectrum/ holds the spectrograms (plant/spectrum.py).
 export function renderAudio(project, files, facts, findings, base, gaps){
   const bySlot = new Map(files.slots.map(s => [s.name, s]));
   const spectrum = name => name && facts && facts.files[name] && !facts.files[name].error
@@ -263,10 +264,14 @@ export function renderAudio(project, files, facts, findings, base, gaps){
       const slot = bySlot.get(track.fileName);
       return cells.concat([escapeHtml(gap), fileCell(slot), versionsCell(slot), spectrum(track.fileName)]);
     }));
-    if(facts){
-      const formStarts = side.continuous ? formTrackStarts(side, sideId) : [];
-      body += sideAudio(side, sideId).map(({name, label}) => audioFileHtml(facts.files[name], label, formStarts, base)).join("");
-    }
+  }
+  if(project.notes.trim()) body += `<h3>Notes to the mastering engineer</h3><pre>${escapeHtml(project.notes)}</pre>`;
+  for(const sideId of facts ? ["A", "B"] : []){
+    const side = project.sides[sideId];
+    const formStarts = side.continuous ? formTrackStarts(side, sideId) : [];
+    // "Side file" alone: out of its side's table here, so name the side.
+    body += sideAudio(side, sideId).map(({name, label}) =>
+      audioFileHtml(facts.files[name], side.continuous ? `Side ${sideId} file` : label, formStarts, base)).join("");
   }
   body += unassignedHtml(files.unassigned.audio, files.slots);
   return section("audio", body);

@@ -185,3 +185,15 @@ test("summary names the page of a multi-page artwork file", () => {
   assert.match(summary, /Label A: printed — TEST001_labels_A_v1\.pdf \(was: labels\.pdf\)\n/);
   assert.match(summary, /Label B: printed — TEST001_labels_B_v1\.pdf \(was: labels\.pdf\), page 2\n/);
 });
+
+test("notes to the mastering engineer follow the tracklist in both documents", () => {
+  const p = project({notes:"please cut hot", sides:{A:side({tracks:[{title:"One", artist:"", length:"3:00", gap:"0", fileName:null}]}),
+    B:side({blank:true, matrixInscription:"TEST B"})}});
+  const summary = buildOrderSummaryText(p, config, date);
+  const tracklist = buildTracklistText(p, config, date);
+  for(const text of [summary, tracklist]){
+    assert.match(text, /NOTES TO MASTERING ENGINEER:\nplease cut hot\n/);
+    assert.ok(text.indexOf("SIDE B") < text.indexOf("NOTES TO MASTERING ENGINEER"), "notes below the tracklist");
+  }
+  assert.ok(summary.indexOf("NOTES TO MASTERING ENGINEER") < summary.indexOf("BILLING ADDRESS"));
+});

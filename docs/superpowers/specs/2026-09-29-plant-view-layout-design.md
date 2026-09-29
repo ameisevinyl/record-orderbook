@@ -146,7 +146,7 @@ Five sections, each `<section><h2 id="…">`:
    whitelabel per side, big hole; inner sleeve, cover, inlay: product
    names) · Stage (stage name; move select + Move, Rescan, Download zip)
    · Last change (date and who of the last history entry; its note is
-   in History) · Notes.
+   in History).
    Below the table: the gaps of groups Release and Quantity.
 2. **Artwork** — the gaps of groups Labels, Inner sleeve, Cover, Inlay.
    One table, a row per artwork slot: Slot · File · Other versions (each
@@ -158,7 +158,9 @@ Five sections, each `<section><h2 id="…">`:
    side a table Side · RPM · Matrix · Total (with soundsystem cut when
    set); then the track table: Pos · Title · Artist · Length · Gap ·
    File · Other versions · Spectrum (link); a continuous side lists its
-   side file and tracklist file as rows of the side table instead. Then
+   side file and tracklist file as rows of the side table instead.
+   Below both sides' tracklists: the customer's notes to the mastering
+   engineer (as in order_summary.txt and tracklist.txt). Then
    per audio file an `<h3>` with its position (A1, Side A): the facts
    table (format, duration, software, tags), play button, waveform with
    the file's and the form's markers. Last, if any: "Not assigned" —

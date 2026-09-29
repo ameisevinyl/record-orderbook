@@ -30,7 +30,7 @@ export const CONFIG = {
 
   // Audio master file requirements — format-agnostic (same regardless
   // of 7"/10"/12"), shown in the Specifications box under Notes to the
-  // Cutting Engineer and in the Specs document, and checked inline per
+  // Mastering Engineer and in the Specs document, and checked inline per
   // track/continuous-side file the same way compressionWarning already
   // flags a non-WAV/AIFF extension (see audioSpecWarning in
   // lib/audio-duration.js). minBitDepth/minSampleRateHz are read

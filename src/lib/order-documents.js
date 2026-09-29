@@ -156,7 +156,7 @@ function packagingSection(project, config){
 
 function notesSection(project){
   const notes = String(project.notes || "").trim();
-  return notes ? `NOTES TO CUTTING ENGINEER:\n${notes}\n` : "";
+  return notes ? `NOTES TO MASTERING ENGINEER:\n${notes}\n` : "";
 }
 
 function shippingBillingSection(project){

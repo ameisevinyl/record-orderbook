@@ -68,7 +68,7 @@ test("basic: field rows, quantity total, customer, products, stage controls, las
   assert.ok(html.includes('<option value="10_ORDERS/10_PREPRESS" selected>ORDERS › PREPRESS</option>'));
   assert.ok(html.includes('id="move"') && html.includes('id="rescan"') && html.includes('href="/api/zip?job=j1"'));
   assert.ok(html.includes("2026-09-24 12:00 plant"));
-  assert.ok(html.includes("<pre>call first</pre>"));
+  assert.ok(!html.includes("call first"), "the notes are the mastering engineer's: in Audio");
   assert.ok(html.includes("<li>Quantity: below &lt;min&gt;</li>"));
   assert.ok(!html.includes("Billing: x"), "a billing gap belongs to Shipping & billing");
 });
@@ -124,6 +124,9 @@ test("audio: side table, track table with files and spectrum links, a block per 
   assert.ok(html.includes("&lt;One&gt;"));
   assert.ok(html.includes('data-src="/jobs/j1/one.mp3" data-duration="180"'));
   assert.ok(html.includes("<h3>Side B</h3><p>Blank</p>"));
+  const notes = html.indexOf("<h3>Notes to the mastering engineer</h3><pre>call first</pre>");
+  assert.ok(notes > html.indexOf("<h3>Side B</h3>"), "notes below the tracklist of both sides");
+  assert.ok(notes < html.indexOf('<div class="audio-file">'), "and above the files' checks");
 });
 
 test("audio: while checking, no file blocks yet; continuous side lists its side file", () => {
