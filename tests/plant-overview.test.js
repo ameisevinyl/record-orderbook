@@ -102,10 +102,11 @@ test("artwork: after the check, verdict and a preview block per checked slot", (
   assert.ok(html.includes("max 330 %"));
 });
 
-test("not assigned: a select of the section's slots, or none when it has no slots", () => {
+test("not assigned: a select of every slot — a PDF may be a side's tracklist — or none when there are no slots", () => {
   const loose = {slots: files.slots, unassigned: {artwork: ["stray.tif"], audio: []}};
   const html = renderArtwork(loose, [], null, printCheck, "/jobs/j1/", []);
   assert.ok(html.includes('<option value="2">Label A</option>'));
+  assert.ok(html.includes('<option value="0">A1</option>'), "slots of the other section too");
   const none = renderArtwork({slots: [], unassigned: {artwork: ["stray.tif"], audio: []}}, [], null, printCheck, "/w/", []);
   assert.ok(none.includes("stray.tif") && none.includes("no slot to use it for") && !none.includes("<select"));
 });

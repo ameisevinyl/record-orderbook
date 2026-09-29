@@ -73,7 +73,8 @@ function versionsCell(slot){
     + `<button type="button" class="use" data-file="${escapeHtml(o.name)}" data-slot="${slot.index}">use</button>`).join("<br>");
 }
 
-// Files no slot knows, each with a select of the section's slots.
+// Files no slot knows, each with a select of every slot: the section
+// goes by the file's kind, but a PDF may be a side's tracklist.
 function unassignedHtml(names, slots){
   if(!names.length) return "";
   const options = slots.map(s => `<option value="${s.index}">${escapeHtml(s.title)}</option>`).join("");
@@ -176,7 +177,7 @@ export function renderArtwork(files, checkable, facts, printCheck, base, gaps){
   if(slots.length) body += listTable(["Slot", "File", "Other versions", "Verdict"],
     slots.map(s => [escapeHtml(s.title) + page(s), fileCell(s), versionsCell(s), verdict(s)]));
   if(facts) body += checkable.map(c => artFileHtml(c, facts[c.name] || {error: "not checked"}, printCheck, base)).join("");
-  body += unassignedHtml(files.unassigned.artwork, slots);
+  body += unassignedHtml(files.unassigned.artwork, files.slots);
   return section("artwork", body || "<p>No artwork.</p>");
 }
 
@@ -235,7 +236,6 @@ function audioFileHtml(file, label, formStarts, base){
 // output; its spectrum/ holds the spectrograms (plant/spectrum.py).
 export function renderAudio(project, files, facts, findings, base, gaps){
   const bySlot = new Map(files.slots.map(s => [s.name, s]));
-  const slots = files.slots.filter(s => s.section === "audio");
   const spectrum = name => name && facts && facts.files[name] && !facts.files[name].error
     ? `<a href="${escapeHtml(base + "spectrum/" + encodeURIComponent(name + ".png"))}" target="_blank">spectrum</a>` : "";
   const sideFile = name => name ? [fileCell(bySlot.get(name)), versionsCell(bySlot.get(name)), spectrum(name)]
@@ -268,7 +268,7 @@ export function renderAudio(project, files, facts, findings, base, gaps){
       body += sideAudio(side, sideId).map(({name, label}) => audioFileHtml(facts.files[name], label, formStarts, base)).join("");
     }
   }
-  body += unassignedHtml(files.unassigned.audio, slots);
+  body += unassignedHtml(files.unassigned.audio, files.slots);
   return section("audio", body);
 }
 
