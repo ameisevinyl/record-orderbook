@@ -158,7 +158,7 @@ async function showJob(job, section, id){
     + renderHistory(project);
   scrollToSection(section);
   const replace = (sectionId, html) => { document.getElementById(sectionId).outerHTML = html; };
-  const onStep = msg => { if(id === latest) busy(stepText(msg)); };
+  const onStep = msg => { if(id === latest && msg.step) busy(stepText(msg)); };
   let what = "check the audio of";
   try{
     busy("checking audio");

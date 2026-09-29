@@ -312,7 +312,8 @@ class Handler(BaseHTTPRequestHandler):
 
         def progress(fraction):
             nonlocal shown
-            if int(fraction * 100) != shown:
+            # Before the first step (a job without audio) there is nothing to name.
+            if state and int(fraction * 100) != shown:
                 shown = int(fraction * 100)
                 line({**state, "progress": shown})
         try:
