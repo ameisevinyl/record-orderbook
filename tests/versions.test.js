@@ -36,7 +36,16 @@ test("jobFiles lists other versions per slot, newest first, and unassigned files
   assert.deepEqual(label.others, [{name: "X_labels_A_v3.pdf", newer: true}, {name: "X_labels_A_v1.pdf", newer: false}]);
   assert.equal(label.present, true);
   assert.deepEqual(slots.map(s => s.title), ["A1", "Label A"]);
-  assert.deepEqual(unassigned, ["cover_final.pdf"]);
+  assert.deepEqual(unassigned, {artwork: ["cover_final.pdf"], audio: []});
+});
+
+test("jobFiles: section, index and modification time per slot; unassigned split by kind", () => {
+  const files = [{name: "X_A1_song_v1.wav", modified: "2026-09-29T10:00:00Z"}, {name: "X_labels_A_v2.pdf", modified: "t2"},
+    {name: "stray.aif"}, {name: "stray.tif"}];
+  const {slots, unassigned} = jobFiles(project("X_labels_A_v2.pdf"), files);
+  assert.deepEqual(slots.map(s => [s.title, s.index, s.section, s.modified]),
+    [["A1", 0, "audio", "2026-09-29T10:00:00Z"], ["Label A", 1, "artwork", "t2"]]);
+  assert.deepEqual(unassigned, {artwork: ["stray.tif"], audio: ["stray.aif"]});
 });
 
 test("mergeResend keeps unchanged files and the staff's choice, adds changed ones as versions", () => {

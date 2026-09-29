@@ -31,23 +31,32 @@ export function assignedName(slotName, fileName, names){
   return nextVersionName(slot.base, fileExt(fileName), names);
 }
 
-// Per filled slot: its other versions in the folder, newer ones marked;
-// plus the files no slot knows (hand-dropped, sync conflict copies).
+// Same list as AUDIO_EXT in plant/checks.py: files no slot knows go to
+// the Audio section by it, all others to Artwork.
+const AUDIO_EXT = [".wav", ".wave", ".bwf", ".aif", ".aiff", ".aifc", ".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus"];
+
+// Per filled slot: its section (tracks and side files → audio, printed
+// parts → artwork), its position, other versions in the folder (newer
+// ones marked) and modification time; plus the files no slot knows
+// (hand-dropped, sync conflict copies), split by kind.
 export function jobFiles(project, files){
   const names = files.map(f => f.name);
+  const modified = new Map(files.map(f => [f.name, f.modified || null]));
   const slots = fileSlots(project).filter(slot => slot.name);
   const bases = new Set(slots.map(slot => (versionOf(slot.name) || {}).base).filter(Boolean));
   const referenced = new Set(slots.map(slot => slot.name));
+  const loose = names.filter(n => !referenced.has(n) && !TEXT_FILES.includes(n) && !bases.has((versionOf(n) || {}).base));
+  const isAudio = name => AUDIO_EXT.includes(fileExt(name).toLowerCase());
   return {
-    slots: slots.map(slot => {
+    slots: slots.map((slot, index) => {
       const own = versionOf(slot.name);
       const others = own ? names.filter(n => n !== slot.name && (versionOf(n) || {}).base === own.base) : [];
-      return {...slot, present: names.includes(slot.name),
+      return {...slot, index, section: slot.path[0] === "sides" ? "audio" : "artwork",
+        present: names.includes(slot.name), modified: modified.get(slot.name) ?? null,
         others: others.map(name => ({name, newer: versionOf(name).version > own.version}))
           .sort((a, b) => versionOf(b.name).version - versionOf(a.name).version)};
     }),
-    unassigned: names.filter(n => !referenced.has(n) && !TEXT_FILES.includes(n)
-      && !bases.has((versionOf(n) || {}).base))
+    unassigned: {artwork: loose.filter(n => !isAudio(n)), audio: loose.filter(isAudio)}
   };
 }
 
