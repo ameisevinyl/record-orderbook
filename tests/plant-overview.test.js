@@ -2,126 +2,156 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
 import { prepareProject } from "../src/lib/project.js";
-import { renderOverview, renderGaps, renderHeader, renderAudio, renderArtwork, escapeHtml } from "../src/lib/plant-overview.js";
+import { jobFiles } from "../src/lib/versions.js";
+import { artworkSlots } from "../src/lib/artwork-checks.js";
 import { getFormat } from "../src/lib/format-catalogue.js";
+import { escapeHtml, stageLabel, gapSection, renderBasic, renderArtwork, renderAudio, renderShipping, renderHistory }
+  from "../src/lib/plant-overview.js";
 
 const project = prepareProject({
-  projectVersion:1, format:"12", catalogue:"PNKRCK007", albumTitle:"<b>Loud</b>", albumArtist:"Band",
-  sides:{A:{rpm:"33", tracks:[{title:"One", length:"3:00", fileName:"A1.wav"}, {title:"Two", length:"2:00", fileName:"A2.wav"}]}, B:{blank:true}},
-  vinylColor:[{color:"black", qty:"300"}],
-  history:[{savedAt:"2026-09-24T12:00:00.000Z", by:"plant", note:"qty 300"}]
+  projectVersion: 1, format: "12", catalogue: "PNKRCK007", albumTitle: "<b>Loud</b>", albumArtist: "Band",
+  notes: "call first",
+  sides: {A: {rpm: "33", tracks: [{title: "One", length: "3:00", fileName: "one_v1.wav"},
+    {title: "Two", length: "2:00", fileName: "two_v1.wav"}]}, B: {blank: true}},
+  labels: {sides: {A: {fileName: "lab_a_v1.pdf"}, B: {whitelabel: true}}},
+  vinylColor: [{color: "black", qty: "300"}],
+  shippingBilling: {billing: {recipientName: "Ann", email: "ann@example.com", city: "Berlin"},
+    shipping: [{recipientName: "Bob", city: "Hamburg", qtyByColor: {black: "300"}}]},
+  history: [{savedAt: "2026-09-24T12:00:00.000Z", by: "plant", note: "qty 300"}]
 }, CONFIG);
+const fileList = [{name: "one_v1.wav", size: 1, modified: "2026-09-24T10:00:00Z"},
+  {name: "two_v1.wav", size: 1, modified: "2026-09-24T10:00:00Z"},
+  {name: "lab_a_v1.pdf", size: 1, modified: "2026-09-24T10:00:00Z"},
+  {name: "lab_a_v2.pdf", size: 1, modified: "2026-09-25T10:00:00Z"}];
+const files = jobFiles(project, fileList);
+const printCheck = getFormat(CONFIG, "12").printCheck;
+const place = {job: "j1", stage: "10_ORDERS/10_PREPRESS", stages: ["00_INBOX", "10_ORDERS/10_PREPRESS", "20_DONE"]};
 
-test("overview shows values in form order, escaped", () => {
-  const html = renderOverview(project, CONFIG, [{name:"A1.wav", size:52428800}]);
-  assert.ok(html.includes("PNKRCK007"));
-  assert.ok(html.includes("&lt;b&gt;Loud&lt;/b&gt;"));
-  assert.ok(!html.includes("<b>Loud"));
-  const order = ["Release", "Side A", "Side B", "Labels", "Inner sleeve", "Cover", "Inlay", "Vinyl colour", "Billing", "Shipping", "History"]
-    .map(h => html.indexOf(`<h2>${h}`));
-  assert.ok(order.every(i => i >= 0), "every group present");
+function wavFacts(duration, more = {}){
+  return {codec: "pcm_s24le", sampleRate: 44100, bitsPerSample: 24, channels: 2, duration,
+    software: ["WaveLab 11"], title: "", artist: "", comment: "", markers: [],
+    preview: "one.mp3", waveform: "one.png", ...more};
+}
+
+function whole(facts = null){
+  const checkable = artworkSlots(project, CONFIG);
+  return renderBasic(project, CONFIG, place, [])
+    + renderArtwork(files, checkable, null, printCheck, "/jobs/j1/", [])
+    + renderAudio(project, files, facts, [], "/jobs/j1/", [])
+    + renderShipping(project, []) + renderHistory(project);
+}
+
+// How often text shows on the page: tags and attributes don't count.
+const count = (html, text) => html.replace(/<[^>]*>/g, " ").split(text).length - 1;
+
+test("five sections in order, each an id'd section with its heading", () => {
+  const html = whole();
+  const order = ["basic", "artwork", "audio", "shipping", "history"].map(id => html.indexOf(`<section id="${id}">`));
+  assert.ok(order.every(i => i >= 0));
   assert.deepEqual([...order].sort((a, b) => a - b), order);
 });
 
-test("files show size or are marked missing; side total shown", () => {
-  const html = renderOverview(project, CONFIG, [{name:"A1.wav", size:52428800}]);
-  assert.ok(html.includes("A1.wav (50.0 MB)"));
-  assert.match(html, /A2\.wav <span class="missing">missing<\/span>/);
-  assert.ok(html.includes("Total 5:02 — 33 rpm</p>"), "normal cut goes unnamed");
-  const loud = prepareProject({format:"12", soundsystem:true, sides:{A:{rpm:"33"}}}, CONFIG);
-  assert.ok(renderOverview(loud, CONFIG, []).includes("Total 0:00 — 33 rpm, soundsystem cut</p>"));
-  assert.ok(renderOverview(loud, CONFIG, []).includes("<dt>Cut</dt><dd>soundsystem</dd>"));
-  assert.ok(!html.includes("<dt>Cut</dt>"), "no Cut row for a normal cut");
-  assert.ok(!html.includes("recommended"), "limits are specs, not part of the order");
-  assert.ok(html.includes("Blank"));
+test("each fact once: catalogue number, file names", () => {
+  const html = whole({files: {"one_v1.wav": wavFacts(180), "two_v1.wav": wavFacts(120)}});
+  assert.equal(count(html, "PNKRCK007"), 1);
+  for(const name of ["one_v1.wav", "two_v1.wav", "lab_a_v1.pdf", "lab_a_v2.pdf"]) assert.equal(count(html, name), 1, name);
+  assert.ok(!html.includes("<dl"), "labels are table rows, not definition lists");
 });
 
-test("an older, minimal project renders without throwing", () => {
-  const minimal = prepareProject({format:"7"}, CONFIG);
-  assert.ok(renderOverview(minimal, CONFIG, []).includes("<h2>Release"));
+test("basic: field rows, quantity total, customer, products, stage controls, last change, notes", () => {
+  const html = renderBasic(project, CONFIG, place, [{group: "Quantity", text: "below <min>"}, {group: "Billing", text: "x"}]);
+  assert.ok(html.includes('<tr><th scope="row">Catalogue #</th><td>PNKRCK007</td></tr>'));
+  assert.ok(html.includes("&lt;b&gt;Loud&lt;/b&gt;"));
+  assert.ok(html.includes("300 Black — total 300"));
+  assert.ok(html.includes("Ann, ann@example.com"));
+  assert.ok(html.includes("labels: A printed, B whitelabel"));
+  assert.ok(html.includes('<option value="10_ORDERS/10_PREPRESS" selected>ORDERS › PREPRESS</option>'));
+  assert.ok(html.includes('id="move"') && html.includes('id="rescan"') && html.includes('href="/api/zip?job=j1"'));
+  assert.ok(html.includes("2026-09-24 12:00 plant"));
+  assert.ok(html.includes("<pre>call first</pre>"));
+  assert.ok(html.includes("<li>Quantity: below &lt;min&gt;</li>"));
+  assert.ok(!html.includes("Billing: x"), "a billing gap belongs to Shipping & billing");
 });
 
-test("gaps list and header", () => {
-  assert.equal(renderGaps([]), '<p class="complete">Complete — ready for checks</p>');
-  assert.equal(renderGaps([{group:"Release", text:"no <x>"}]),
-    '<ul class="gaps"><li><b>Release</b> no &lt;x&gt;</li></ul>');
-  assert.ok(renderHeader("260924_X.zip", project).includes("260924_X.zip"));
-  assert.equal(escapeHtml(`a&"'`), "a&amp;&quot;&#39;");
+test("gaps go to their section by group", () => {
+  assert.deepEqual(["Release", "Quantity", "Side A", "Labels", "Inner sleeve", "Cover", "Inlay", "Billing", "Shipping 2"]
+    .map(gapSection), ["basic", "basic", "audio", "artwork", "artwork", "artwork", "artwork", "shipping", "shipping"]);
 });
 
-function wavFacts(duration, more = {}){
-  return {codec:"pcm_s24le", sampleRate:44100, bitsPerSample:24, channels:2, duration,
-    software:["WaveLab 11"], title:"", artist:"", comment:"", markers:[],
-    preview:"A1 x.wav.mp3", waveform:"A1 x.wav.png", ...more};
-}
+test("artwork: a row per slot with file, versions and use, verdict while checking", () => {
+  const html = renderArtwork(files, artworkSlots(project, CONFIG), null, printCheck, "/jobs/j1/", []);
+  assert.ok(html.includes('<th scope="col">Slot</th><th scope="col">File</th><th scope="col">Other versions</th><th scope="col">Verdict</th>'));
+  assert.ok(html.includes("lab_a_v1.pdf (2026-09-24 10:00)"));
+  assert.ok(html.includes('lab_a_v2.pdf (newer) <button type="button" class="use" data-file="lab_a_v2.pdf" data-slot="2">use</button>'));
+  assert.ok(html.includes("<td>checking</td>"));
+});
 
-test("audio: facts, findings and a waveform per file", () => {
-  const facts = {files:{"A1.wav": wavFacts(180, {title:"<One>"}), "A2.wav": {error:"Invalid data"}}};
-  const html = renderAudio(project, facts, [{group:"Side A", text:"A1.wav is 3:02"}], "/work/p.checks/");
-  assert.ok(html.startsWith("<section><h2>Audio"));
-  assert.ok(html.includes("<b>Side A</b> A1.wav is 3:02"));
+test("artwork: after the check, verdict and a preview block per checked slot", () => {
+  const checkable = [{title: "Label A", name: "lab_a_v1.pdf", params: {targetMm: {w: 106, h: 106}, trimMm: {w: 100, h: 100},
+    bleedMm: 3, round: true, page: 1, inkLimitPct: 220, holeMm: 7.4}}];
+  const facts = {"lab_a_v1.pdf": {kind: "pdf", parsed: {pageSizeMm: {w: 106, h: 106}, imagePx: null, declaredDpi: null,
+    colorMode: "CMYK", spotColors: [], iccProfileName: null, trimBoxMm: null, encrypted: false, hasUnembeddedFonts: false,
+    pdfVersion: "1.4", pageCount: 1, effectiveDpi: null}, pageMm: {w: 106, h: 106}, trimRectMm: {x: 3, y: 3, w: 100, h: 100},
+    ink: {maxPct: 330, overPct: 10}, black: {richPct: 0}, bleed: {outerInkPct: 90, innerInkPct: 90},
+    preview: "lab <a>.png", overlay: "lab <a>.overlay.png"}};
+  const html = renderArtwork(files, checkable, facts, printCheck, "/jobs/j1/", []);
+  assert.ok(html.includes("<td>review</td>"));
+  assert.ok(html.includes('<div class="art-file"><h3>Label A</h3>'));
+  assert.ok(html.includes('src="/jobs/j1/lab%20%3Ca%3E.png"'));
+  assert.ok(html.includes('<circle class="trim" cx="53" cy="53" r="50"'));
+  assert.ok(html.includes("max 330 %"));
+});
+
+test("not assigned: a select of the section's slots, or none when it has no slots", () => {
+  const loose = {slots: files.slots, unassigned: {artwork: ["stray.tif"], audio: []}};
+  const html = renderArtwork(loose, [], null, printCheck, "/jobs/j1/", []);
+  assert.ok(html.includes('<option value="2">Label A</option>'));
+  const none = renderArtwork({slots: [], unassigned: {artwork: ["stray.tif"], audio: []}}, [], null, printCheck, "/w/", []);
+  assert.ok(none.includes("stray.tif") && none.includes("no slot to use it for") && !none.includes("<select"));
+});
+
+test("audio: side table, track table with files and spectrum links, a block per file", () => {
+  const facts = {files: {"one_v1.wav": wavFacts(180, {title: "<One>"}), "two_v1.wav": {error: "Invalid data"}}};
+  const html = renderAudio(project, files, facts, [{group: "Side A", text: "one is short"}], "/jobs/j1/", []);
+  assert.ok(html.includes('<tr><th scope="row">RPM</th><td>33</td></tr>'));
+  assert.ok(html.includes('<tr><th scope="row">Total</th><td>5:02</td></tr>'));
+  assert.ok(html.includes("<li>Side A: one is short</li>"));
+  assert.ok(html.includes('<a href="/jobs/j1/spectrum/one_v1.wav.png" target="_blank">spectrum</a>'));
+  assert.ok(!html.includes("spectrum/two_v1.wav.png"), "no spectrum for a file that can't be read");
+  assert.ok(html.includes('<div class="audio-file"><h3>A1</h3>'));
   assert.ok(html.includes("pcm_s24le, 44.1 kHz, 24 bit, 2 ch"));
-  assert.ok(html.includes("<dd>WaveLab 11</dd>"));
   assert.ok(html.includes("&lt;One&gt;"));
-  assert.ok(html.includes('data-src="/work/p.checks/A1%20x.wav.mp3" data-duration="180"'));
-  assert.ok(html.includes('<img src="/work/p.checks/A1%20x.wav.png"'));
-  assert.ok(html.includes('<a href="/work/p.checks/spectrum/A1.wav.png" target="_blank">spectrum</a>'));
-  assert.ok(!html.includes("spectrum/A2.wav.png"), "no spectrum for a file that can't be read");
-  assert.match(html, /<b>A2<\/b>.*Invalid data/);
+  assert.ok(html.includes('data-src="/jobs/j1/one.mp3" data-duration="180"'));
+  assert.ok(html.includes("<h3>Side B</h3><p>Blank</p>"));
 });
 
-test("audio: continuous side shows file markers and the form's track starts", () => {
-  // gap "2" is ignored: a continuous side's pauses are in the file
-  const side = prepareProject({format:"12", sides:{A:{rpm:"33", continuous:true, continuousFileName:"A.wav",
-    tracks:[{title:"One", length:"1:00"}, {title:"Two", length:"1:00", gap:"2"}]}, B:{blank:true}}}, CONFIG);
-  const facts = {files:{"A.wav": wavFacts(200, {markers:[{seconds:50, label:"Two"}]})}};
-  const html = renderAudio(side, facts, [], "/work/p.checks/");
-  assert.ok(html.includes("No audio findings"));
-  assert.ok(html.includes("<b>Side file</b>"));
+test("audio: while checking, no file blocks yet; continuous side lists its side file", () => {
+  const side = prepareProject({format: "12", sides: {A: {rpm: "33", continuous: true, continuousFileName: "side_v1.wav",
+    tracks: [{title: "One", length: "1:00"}, {title: "Two", length: "1:00"}]}, B: {blank: true}}}, CONFIG);
+  const sideFiles = jobFiles(side, [{name: "side_v1.wav", modified: "t"}]);
+  let html = renderAudio(side, sideFiles, null, [], "/w/", []);
+  assert.ok(!html.includes("audio-file"));
+  assert.ok(html.includes('<th scope="row">Side file</th><td>side_v1.wav (t)'));
+  html = renderAudio(side, sideFiles, {files: {"side_v1.wav": wavFacts(200, {markers: [{seconds: 50, label: "Two"}]})}}, [], "/w/", []);
   assert.ok(html.includes('class="mark file" style="left:25.000%"'));
   assert.ok(html.includes('class="mark form" style="left:30.000%" title="1:00 A2"'));
 });
 
-test("audio: form track starts stop at the first empty length", () => {
-  const side = prepareProject({format:"12", sides:{A:{rpm:"33", continuous:true, continuousFileName:"A.wav",
-    tracks:[{title:"One", length:"1:00"}, {title:"Two", length:""}, {title:"Three", length:"1:00"}]}, B:{blank:true}}}, CONFIG);
-  const html = renderAudio(side, {files:{"A.wav": wavFacts(200)}}, [], "/w/");
-  assert.ok(html.includes('title="1:00 A2"'));
-  assert.ok(!html.includes("A3"));
+test("shipping & billing: the complete billing address, shipping with quantities", () => {
+  const html = renderShipping(project, [{group: "Shipping 1", text: "postal code missing"}]);
+  assert.ok(html.includes("<li>Shipping 1: postal code missing</li>"));
+  assert.ok(html.includes('<tr><th scope="row">city</th><td>Berlin</td></tr>'));
+  // Name and email also stand in Basic: here too, to copy the address whole.
+  assert.ok(html.includes('<tr><th scope="row">name</th><td>Ann</td></tr>'));
+  assert.ok(html.includes('<tr><th scope="row">email</th><td>ann@example.com</td></tr>'));
+  assert.ok(html.includes("<h3>Shipping 1</h3>") && html.includes("Bob") && html.includes("300 Black"));
 });
 
-
-test("artwork files show their page when it isn't 1", () => {
-  const p = prepareProject({format:"12", labels:{sides:{A:{fileName:"L.pdf"}, B:{fileName:"L2.pdf", page:2}}}}, CONFIG);
-  const html = renderOverview(p, CONFIG, [{name:"L.pdf", size:1024}, {name:"L2.pdf", size:1024}]);
-  assert.ok(html.includes("L2.pdf (1 KB), page 2"));
-  assert.ok(!html.includes("L.pdf (1 KB), page"));
+test("history: a table, oldest first", () => {
+  assert.ok(renderHistory(project).includes('<tr><td>2026-09-24 12:00</td><td>plant</td><td>qty 300</td></tr>'));
 });
 
-test("artwork: verdict, preview with trim/bleed lines, overlay, rows", () => {
-  const slots = [{title: "Label A", name: "L <A>.pdf", params: {targetMm: {w: 106, h: 106}, trimMm: {w: 100, h: 100},
-    bleedMm: 3, round: true, page: 1, inkLimitPct: 220, holeMm: 7.4}}];
-  const facts = {"L <A>.pdf": {kind: "pdf", parsed: {pageSizeMm: {w: 106, h: 106}, imagePx: null, declaredDpi: null,
-    colorMode: "CMYK", spotColors: [], iccProfileName: null, trimBoxMm: null, encrypted: false, hasUnembeddedFonts: false,
-    pdfVersion: "1.4", pageCount: 1, effectiveDpi: null}, pageMm: {w: 106, h: 106}, trimRectMm: {x: 3, y: 3, w: 100, h: 100},
-    ink: {maxPct: 330, overPct: 10}, black: {richPct: 0}, bleed: {outerInkPct: 90, innerInkPct: 90},
-    preview: "L <A>.pdf.png", overlay: "L <A>.pdf.overlay.png"}};
-  const html = renderArtwork(slots, facts, getFormat(CONFIG, "12").printCheck, "/work/p.checks/");
-  assert.ok(html.startsWith("<section><h2>Artwork"));
-  assert.ok(html.includes("L &lt;A&gt;.pdf"));
-  assert.ok(html.includes('class="verdict review">review'));
-  assert.ok(html.includes('src="/work/p.checks/L%20%3CA%3E.pdf.png"'));
-  assert.ok(html.includes('viewBox="0 0 106 106"'));
-  assert.ok(html.includes('<circle class="trim" cx="53" cy="53" r="50"'));
-  assert.ok(html.includes('<circle class="bleed" cx="53" cy="53" r="53"'));
-  assert.ok(html.includes('<circle class="hole" cx="53" cy="53" r="3.7"'));
-  // every line lies on a white line at the same place, so its gaps show white
-  assert.ok(html.includes('<circle class="under" cx="53" cy="53" r="50"/><circle class="trim" cx="53" cy="53" r="50"/>'));
-  assert.ok(html.includes('<circle class="under" cx="53" cy="53" r="3.7"/><circle class="hole"'));
-  assert.ok(html.includes("max 330 %"));
-});
-
-test("artwork: nothing to show without slots", () => {
-  const printCheck = getFormat(CONFIG, "12").printCheck;
-  assert.equal(renderArtwork([], {}, printCheck, "/w/"), "");
+test("helpers", () => {
+  assert.equal(stageLabel("10_ORDERS/20_PRESS"), "ORDERS › PRESS");
+  assert.equal(escapeHtml(`a&"'`), "a&amp;&quot;&#39;");
 });
