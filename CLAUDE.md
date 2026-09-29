@@ -28,7 +28,7 @@ yourself. Be short and precise.
    label owners/artists, not beginners: the default UI stays terse;
    deeper explanations sit behind a per-field info icon for whoever
    needs them (`CONFIG.infoText`), not inline for everyone.
-3. A "project" is always a single .zip — not a bare JSON file, and not a
+3. For the customer, a "project" is always a single .zip — not a bare JSON file, and not a
    live folder on disk. This is a deliberate, cross-browser-driven choice
    (see git history / the design discussion this came out of): writing
    into and reading back a real OS folder needs the File System Access
@@ -61,10 +61,16 @@ yourself. Be short and precise.
 6. The page is printable to PDF (see the `@media print` rules in
    `src/index.html`) for the rare customer who wants a paper copy —
    not a primary flow, don't design around it.
-7. The plant reopens the same tool and loads the project zip back to
-   review or edit an order (e.g. a phone-in quantity change), and saves
-   it again as a new zip — either resending the same files, or swapping
-   one out first.
+7. At the plant a project is a job folder in a jobs tree on any
+   filesystem (local, NAS, Nextcloud): stage folders `00_INBOX`,
+   `10_ORDERS/10_PREPRESS`, `10_ORDERS/20_PRESS`, `20_DONE`,
+   `99_ARCHIVE` (any `NN_NAME` folder counts; numbers leave room). A job
+   moves by moving its folder — plant view, Finder or `mv`. All workflow
+   state lives in its `project.json` (`plant.stage`, `history`), which
+   stays hand-editable. Files are never overwritten: a fix or a resent
+   file becomes the next `_v<N>`, and the slot in `project.json` points
+   at the version that counts. A customer resend (new zip) merges into
+   the job (`mergeResend` in `src/lib/versions.js`).
 
 ## File naming convention (`src/lib/package-naming.js` — applied when building the package, not on upload)
 
@@ -79,8 +85,9 @@ yourself. Be short and precise.
   e.g. `PNKRCK007_labels_A_v1.pdf`
 - Project folder / zip name: `<YYMMDD>_<catalogue#>_<customer-email>`
 
-Versioning isn't tracked yet — every name above gets a fixed `v1` for
-now; revisit if/when the plant needs to tell file revisions apart.
+The customer page always writes `v1`. Higher versions are made at the
+plant only (`src/lib/versions.js`): staff fixes, files assigned by hand,
+changed files of a resend.
 
 ## Hard constraints — do not relax these without asking
 
@@ -103,7 +110,8 @@ now; revisit if/when the plant needs to tell file revisions apart.
 ```
 node --test tests/            # run all unit tests
 node build/build.js           # build dist/index.html from src/
-uv run --project plant plant/server.py   # plant view on http://127.0.0.1:8765/ (won't start below the versions in plant/pyproject.toml)
+uv run --project plant plant/server.py [--jobs <folder>]   # plant view on http://127.0.0.1:8765/, jobs tree default plant/jobs/ (won't start below the versions in plant/pyproject.toml)
+uv run --project plant plant/archive.py --jobs <folder> --days 60   # cron: zip long-done jobs into 99_ARCHIVE
 uv run --project plant python -m unittest discover plant   # plant server + checks tests
 brew install ffmpeg uv        # plant checks need ffprobe/ffmpeg; uv installs the Python libs
 ```
@@ -123,13 +131,17 @@ configured on purpose — keep it that way unless asked.
 - `tests/*.test.js` mirrors `src/lib/`. New pure logic needs a test.
 - `plant/server.py` + `src/plant/` — the plant (staff) view: a stdlib
   Python server on 127.0.0.1 that serves `src/plant/` and `src/`
-  unbuilt and unpacks opened project zips into `plant/work/`
-  (gitignored). The page renders `project.json` itself
-  (`src/lib/plant-overview.js`, `src/lib/completeness.js`), not the
-  customer form (god-mode editing may reuse the form later).
+  unbuilt and works on the jobs tree (`plant/jobs.py`: scan, move,
+  accept/merge inbox zips, safe `project.json` writes — refused with 409
+  when the file changed since the page read it). Python does the disk,
+  the page decides (`src/lib/versions.js`). The page renders the board
+  and `project.json` itself (`src/lib/plant-board.js`,
+  `src/lib/plant-overview.js`, `src/lib/completeness.js`), not the
+  customer form. Spec: `docs/superpowers/specs/2026-09-29-job-folders-design.md`.
 - `plant/checks.py` — deep checks on disk, piece 1 (audio): ffprobe
   facts, AIFF `MARK` markers, MP3 + waveform PNG per file, written to
-  `plant/work/<stem>.checks/` (beside the unpacked zip, never inside).
+  the job's hidden `.checks/` with a per-file cache (size+mtime, else
+  sha256; bump `CHECKS_VERSION` when fact-reading changes).
   Python only reads facts; the rules live in `src/lib/audio-checks.js`.
   Spec: `docs/superpowers/specs/2026-09-24-audio-checks-design.md`.
   Piece 2 (artwork, `plant/artwork.py`): PyMuPDF/Pillow/numpy facts,

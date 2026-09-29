@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROJECT_VERSION, includeSideFile, prepareProject, referencedProjectFiles, assertProjectFiles, historyEntry } from "../src/lib/project.js";
+import { PROJECT_VERSION, includeSideFile, prepareProject, referencedProjectFiles, assertProjectFiles, historyEntry, fileSlots, setAt } from "../src/lib/project.js";
 
 const config = {
   formats: [
@@ -183,4 +183,19 @@ test("prepareProject rejects a page that isn't a positive integer", () => {
   for(const page of [0, -1, 2.5, "2", null]){
     assert.throws(() => prepareProject({format:"12", coverSleeve:{cover:{page}}}, config), /page must be a positive integer/);
   }
+});
+
+test("prepareProject carries the plant stage and rejects a malformed one", () => {
+  assert.deepEqual(prepareProject({projectVersion:1, format:"12"}, config).plant, {stage: ""});
+  assert.deepEqual(prepareProject({projectVersion:1, format:"12", plant:{stage:"20_DONE"}}, config).plant, {stage: "20_DONE"});
+  assert.throws(() => prepareProject({projectVersion:1, format:"12", plant:[]}, config), /project\.plant must be an object/);
+});
+
+test("fileSlots gives a path per slot that setAt writes through", () => {
+  const project = {sides:{A:{tracks:[{fileName:"A1.wav"}]}}, labels:{sides:{A:{fileName:null}}}};
+  const slots = fileSlots(project);
+  assert.deepEqual(slots.map(s => [s.title, s.name]),
+    [["Side A file", null], ["Side A tracklist", null], ["A1", "A1.wav"], ["Label A", null]]);
+  setAt(project, slots[2].path, "A1_v2.wav");
+  assert.equal(project.sides.A.tracks[0].fileName, "A1_v2.wav");
 });

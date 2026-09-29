@@ -62,12 +62,20 @@
   .verdict.review, tr.warn{ color:#8a5a00; }
   .verdict.customer, tr.error{ color:var(--danger); }
   .verdict.ok{ font-weight:700; }
+  /* Board: one column per stage folder, scrolling sideways when narrow. */
+  .board{ display:flex; gap:6px; overflow-x:auto; align-items:flex-start; }
+  .column{ flex:1 0 170px; margin:0; }
+  .column ul{ list-style:none; margin:0; padding:0; }
+  .column li{ padding:3px 0; border-top:1px solid var(--edge); }
+  .jobbar select, .jobbar button, .use, .slot{ font:inherit; }
+  main:has(.board){ max-width:none; }
+  h1 a{ color:inherit; text-decoration:none; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Plant view</h1>
-  <button type="button" id="btnLoad">Load project</button>
+  <h1><a href="#/">Plant view</a></h1>
+  <button type="button" id="btnLoad">Load project zip</button>
   <input type="file" id="zipInput" accept=".zip,application/zip" hidden>
   <p id="status"></p>
   <p id="error"></p>

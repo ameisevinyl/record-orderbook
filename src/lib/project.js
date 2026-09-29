@@ -194,8 +194,11 @@ export function prepareProject(raw, config){
     address.isResidential = bool(address.isResidential, `${path}.isResidential`);
   }
 
-  // Plant edit notes (see src/plant.js); no form field shows them, the
-  // tool just carries them through load/save.
+  // Plant workflow state (the stage folder the job was last seen in, see
+  // plant/jobs.py) and edit notes; no form field shows them, the tool
+  // just carries them through load/save.
+  const plant = objectOrEmpty(project.plant, "project.plant");
+  project.plant = {...plant, stage: text(plant.stage, "project.plant.stage")};
   project.history = arrayOrEmpty(project.history, "project.history").map((entry, i) => {
     const path = `project.history[${i}]`;
     entry = objectOrEmpty(entry, path);
@@ -218,25 +221,36 @@ export function historyEntry(note, date){
   return {savedAt: date.toISOString(), by: "plant", note: note.trim()};
 }
 
+// Every file slot of a project, in form order: {path, title, name} —
+// path: the keys leading to the slot's fileName (see setAt); name: null
+// when empty. Slots whose parent object is missing are left out.
+export function fileSlots(project){
+  const slots = [];
+  const add = (path, title) => {
+    let parent = project;
+    for(const key of path.slice(0, -1)) parent = parent && typeof parent === "object" ? parent[key] : undefined;
+    if(parent && typeof parent === "object") slots.push({path, title, name: parent[path.at(-1)] ?? null});
+  };
+  for(const side of ["A", "B"]){
+    add(["sides", side, "continuousFileName"], `Side ${side} file`);
+    add(["sides", side, "tracklistFileName"], `Side ${side} tracklist`);
+    const tracks = project.sides && project.sides[side] && project.sides[side].tracks;
+    (Array.isArray(tracks) ? tracks : []).forEach((track, i) => add(["sides", side, "tracks", i, "fileName"], `${side}${i + 1}`));
+  }
+  for(const side of ["A", "B"]) add(["labels", "sides", side, "fileName"], `Label ${side}`);
+  add(["coverSleeve", "cover", "fileName"], "Cover");
+  add(["coverSleeve", "innerSleeve", "fileName"], "Inner sleeve");
+  add(["coverSleeve", "inlay", "front", "fileName"], "Inlay front");
+  add(["coverSleeve", "inlay", "back", "fileName"], "Inlay back");
+  return slots;
+}
+
+export function setAt(object, path, value){
+  path.slice(0, -1).reduce((parent, key) => parent[key], object)[path.at(-1)] = value;
+}
+
 export function referencedProjectFiles(project){
-  const names = [];
-  const add = name => { if(name != null) names.push(name); };
-  for(const side of ["A", "B"]){
-    const data = project.sides && project.sides[side];
-    if(!data) continue;
-    add(data.continuousFileName);
-    add(data.tracklistFileName);
-    for(const track of data.tracks || []) add(track && track.fileName);
-  }
-  for(const side of ["A", "B"]){
-    add(project.labels && project.labels.sides && project.labels.sides[side] && project.labels.sides[side].fileName);
-  }
-  const sleeve = project.coverSleeve || {};
-  add(sleeve.cover && sleeve.cover.fileName);
-  add(sleeve.innerSleeve && sleeve.innerSleeve.fileName);
-  add(sleeve.inlay && sleeve.inlay.front && sleeve.inlay.front.fileName);
-  add(sleeve.inlay && sleeve.inlay.back && sleeve.inlay.back.fileName);
-  return names;
+  return fileSlots(project).map(slot => slot.name).filter(name => name != null);
 }
 
 function baseName(name){

@@ -1,6 +1,8 @@
 """Audio facts for the plant view: probes every audio file of an unpacked
 project with ffprobe, reads AIFF markers itself, and renders a prelisten
-MP3 and a waveform PNG per file into a separate output folder.
+MP3 and a waveform PNG per file into a separate output folder
+(the job's .checks/). Facts are cached there per file and reused while
+the file is unchanged (see Cache).
 
 Needs ffmpeg on the PATH and the libraries in plant/pyproject.toml
 (plant/server.py checks both before it starts). The rules that judge
@@ -8,13 +10,13 @@ these facts live in src/lib/audio-checks.js and artwork-checks.js.
 Run: python3 plant/checks.py <project folder> [<output folder>]
 """
 import json
-import shutil
 import struct
 import subprocess
 import sys
 from pathlib import Path
 
 import artwork
+from jobs import sha256
 
 AUDIO_EXT = {".wav", ".wave", ".bwf", ".aif", ".aiff", ".aifc",
              ".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus"}
@@ -22,6 +24,55 @@ AUDIO_EXT = {".wav", ".wave", ".bwf", ".aif", ".aiff", ".aifc",
 # BWF bext originator (encoded_by) and coding history.
 SOFTWARE_TAGS = ("encoder", "encoded_by", "coding_history")
 WAVE_COLOUR = "#5c5c59"  # --ink-dim in src/plant/index.html
+# Bump when the facts read from a file change: cached facts then expire.
+CHECKS_VERSION = 1
+
+
+def outputs(facts):
+    return [facts[key] for key in ("preview", "waveform", "overlay") if facts.get(key)]
+
+
+class Cache:
+    """Facts per file in out_dir/<kind>.json, with the file's size, mtime
+    and sha256. Size and mtime equal: reused. Else the sha256 decides, so
+    a file a sync tool only touched isn't checked again. params (artwork:
+    ink limit, sizes …) must match too; the JS rules judging the facts
+    always run fresh, so changing a rule needs no re-check."""
+
+    def __init__(self, out_dir, kind):
+        self.out, self.path = out_dir, out_dir / f"{kind}.json"
+        try:
+            self.entries = json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            self.entries = {}
+        self.used = {}
+
+    def get(self, path, name, params=None):
+        entry, st = self.entries.get(name), path.stat()
+        if not entry or entry.get("code") != CHECKS_VERSION or entry.get("params") != params:
+            return None
+        if not all((self.out / f).is_file() for f in outputs(entry["facts"])):
+            return None
+        if (entry["size"], entry["mtime"]) != (st.st_size, st.st_mtime_ns):
+            if entry["size"] != st.st_size or entry["sha256"] != sha256(path):
+                return None
+            entry["mtime"] = st.st_mtime_ns
+        self.used[name] = entry
+        return entry["facts"]
+
+    def put(self, path, name, params, facts):
+        st = path.stat()
+        self.used[name] = {"size": st.st_size, "mtime": st.st_mtime_ns, "sha256": sha256(path),
+                           "code": CHECKS_VERSION, "params": params, "facts": facts}
+
+    def save(self):
+        """Keeps what this run used; previews of the rest are removed."""
+        keep = {f for entry in self.used.values() for f in outputs(entry["facts"])}
+        for entry in self.entries.values():
+            for f in outputs(entry.get("facts", {})):
+                if f not in keep:
+                    (self.out / f).unlink(missing_ok=True)
+        self.path.write_text(json.dumps(self.used, indent=1))
 
 
 def aiff_markers(f):
@@ -122,7 +173,9 @@ def audio(project_dir, out_dir, progress=lambda fraction: None):
     """Facts for every audio file under project_dir, keyed by its name
     relative to it; previews go to out_dir. progress(fraction) follows
     the bytes read, across all files."""
-    paths = [p for p in sorted(project_dir.rglob("*")) if p.is_file() and p.suffix.lower() in AUDIO_EXT]
+    # Dot folders are the machine's: .checks/ holds MP3s of its own.
+    paths = [p for p in sorted(project_dir.rglob("*")) if p.is_file() and p.suffix.lower() in AUDIO_EXT
+             and not any(part.startswith(".") for part in p.relative_to(project_dir).parts)]
     total = sum(p.stat().st_size for p in paths) or 1
     done = 0
 
@@ -131,16 +184,23 @@ def audio(project_dir, out_dir, progress=lambda fraction: None):
         done += n
         progress(min(done / total, 1.0))
 
+    cache = Cache(out_dir, "audio")
     files = {}
     for path in paths:
         name = path.relative_to(project_dir).as_posix()
-        facts = probe_facts(path)
-        if "error" not in facts:
-            try:
-                facts["preview"], facts["waveform"] = render_previews(path, out_dir, name.replace("/", "_"), read)
-            except subprocess.CalledProcessError as error:
-                facts["previewError"] = error.stderr.decode(errors="replace").strip() or "ffmpeg failed"
+        facts = cache.get(path, name)
+        if facts is not None:
+            read(path.stat().st_size)
+        else:
+            facts = probe_facts(path)
+            if "error" not in facts:
+                try:
+                    facts["preview"], facts["waveform"] = render_previews(path, out_dir, name.replace("/", "_"), read)
+                except subprocess.CalledProcessError as error:
+                    facts["previewError"] = error.stderr.decode(errors="replace").strip() or "ffmpeg failed"
+            cache.put(path, name, None, facts)
         files[name] = facts
+    cache.save()
     done = total
     progress(1.0)
     return {"files": files}
@@ -148,26 +208,31 @@ def audio(project_dir, out_dir, progress=lambda fraction: None):
 
 def check_artwork(project_dir, out_dir, params_by_name):
     """Facts per artwork file the page asked for, with its part's params."""
+    cache = Cache(out_dir, "artwork")
     result = {}
     for name, params in params_by_name.items():
         # Names come from the page: only files inside the project count.
         path = (project_dir / name).resolve()
         if not path.is_relative_to(project_dir.resolve()) or not path.is_file():
-            result[name] = {"error": "not in the zip"}
+            result[name] = {"error": "not in the job"}
             continue
-        try:
-            result[name] = artwork.facts(path, params, out_dir, name.replace("/", "_"))
-        except Exception as error:  # one broken file must not end the whole check
-            result[name] = {"error": f"can't check: {error}"}
+        facts = cache.get(path, name, params)
+        if facts is None:
+            try:
+                facts = artwork.facts(path, params, out_dir, name.replace("/", "_"))
+            except Exception as error:  # one broken file must not end the whole check
+                result[name] = {"error": f"can't check: {error}"}
+                continue
+            cache.put(path, name, params, facts)
+        result[name] = facts
+    cache.save()
     return result
 
 
 def run(project_dir, out_dir, artwork_params=None):
     """Audio facts plus artwork facts for the files named in
-    artwork_params; previews and facts.json go to out_dir (replaced)."""
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True)
+    artwork_params; previews, caches and facts.json go to out_dir."""
+    out_dir.mkdir(parents=True, exist_ok=True)
     result = audio(project_dir, out_dir)
     result["artwork"] = check_artwork(project_dir, out_dir, artwork_params or {})
     (out_dir / "facts.json").write_text(json.dumps(result, indent=1))
@@ -178,5 +243,5 @@ if __name__ == "__main__":
     if len(sys.argv) not in (2, 3):
         sys.exit(__doc__.strip().splitlines()[-1])
     project = Path(sys.argv[1])
-    out = Path(sys.argv[2]) if len(sys.argv) == 3 else project.parent / (project.name + ".checks")
+    out = Path(sys.argv[2]) if len(sys.argv) == 3 else project / ".checks"
     print(json.dumps(run(project, out), indent=1))

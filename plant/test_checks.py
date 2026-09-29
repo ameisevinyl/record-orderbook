@@ -168,8 +168,8 @@ class ArtworkWiringTest(unittest.TestCase):
                     "bad.pdf": {}, "good.pdf": {}, "../outside.pdf": {}, str(Path(tmp) / "outside.pdf"): {}})
             self.assertEqual(result["bad.pdf"], {"error": "can't check: boom"})
             self.assertEqual(result["good.pdf"], {"ok": True})
-            self.assertEqual(result["../outside.pdf"], {"error": "not in the zip"})
-            self.assertEqual(result[str(Path(tmp) / "outside.pdf")], {"error": "not in the zip"})
+            self.assertEqual(result["../outside.pdf"], {"error": "not in the job"})
+            self.assertEqual(result[str(Path(tmp) / "outside.pdf")], {"error": "not in the job"})
         finally:
             checks.artwork.facts = saved
 
@@ -185,9 +185,75 @@ class ArtworkWiringTest(unittest.TestCase):
                 result = run(project, Path(tmp) / "out", {"L.pdf": {"page": 2}, "gone.pdf": {"page": 1}})
             self.assertEqual(result["files"], {})
             self.assertEqual(result["artwork"]["L.pdf"], {"page": 2, "base": "L.pdf"})
-            self.assertEqual(result["artwork"]["gone.pdf"], {"error": "not in the zip"})
+            self.assertEqual(result["artwork"]["gone.pdf"], {"error": "not in the job"})
         finally:
             checks.artwork.facts = saved
+
+
+class CacheTest(unittest.TestCase):
+    """Artwork facts stubbed with a call counter; the cache is shared code."""
+
+    def setUp(self):
+        import checks
+        self.checks, self.saved, self.calls = checks, checks.artwork.facts, []
+
+        def facts(path, params, out_dir, base):
+            self.calls.append(path.name)
+            (out_dir / (base + ".png")).write_bytes(b"png")
+            return {"preview": base + ".png"}
+        checks.artwork.facts = facts
+        self.tmp = tempfile.TemporaryDirectory()
+        self.job = Path(self.tmp.name)
+        self.out = self.job / ".checks"
+        self.out.mkdir()
+        (self.job / "L.pdf").write_bytes(b"%PDF one")
+
+    def tearDown(self):
+        self.checks.artwork.facts = self.saved
+        self.tmp.cleanup()
+
+    def check(self, params=None):
+        return self.checks.check_artwork(self.job, self.out, {"L.pdf": params or {"page": 1}})
+
+    def test_unchanged_file_is_not_checked_again(self):
+        self.check()
+        self.assertEqual(self.check(), {"L.pdf": {"preview": "L.pdf.png"}})
+        self.assertEqual(self.calls, ["L.pdf"])
+
+    def test_touched_file_with_same_content_is_not_checked_again(self):
+        import os
+        self.check()
+        os.utime(self.job / "L.pdf", ns=(1, 1))
+        self.check()
+        self.assertEqual(self.calls, ["L.pdf"])
+
+    def test_changed_file_or_params_or_lost_preview_is_checked_again(self):
+        self.check()
+        (self.job / "L.pdf").write_bytes(b"%PDF two")
+        self.check()
+        self.check({"page": 2})
+        (self.out / "L.pdf.png").unlink()
+        self.check({"page": 2})
+        self.assertEqual(self.calls, ["L.pdf"] * 4)
+
+    def test_new_check_code_expires_the_cache(self):
+        self.check()
+        saved, self.checks.CHECKS_VERSION = self.checks.CHECKS_VERSION, self.checks.CHECKS_VERSION + 1
+        try:
+            self.check()
+        finally:
+            self.checks.CHECKS_VERSION = saved
+        self.assertEqual(len(self.calls), 2)
+
+    def test_previews_of_files_no_longer_asked_for_are_removed(self):
+        self.check()
+        self.checks.check_artwork(self.job, self.out, {})
+        self.assertFalse((self.out / "L.pdf.png").exists())
+
+    def test_audio_skips_the_checks_folder(self):
+        from checks import audio
+        (self.out / "old.mp3").write_bytes(b"1")
+        self.assertEqual(audio(self.job, self.out)["files"], {})
 
 
 if __name__ == "__main__":

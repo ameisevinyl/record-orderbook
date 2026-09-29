@@ -18,7 +18,8 @@
 # Personal Claude Code settings — per-user, not shared.
 /.claude/settings.local.json
 
-# Plant view working copies of opened project zips, and Python caches.
+# Plant view default jobs tree (real ones live elsewhere, --jobs), and Python caches.
+/plant/jobs/
 /plant/work/
 /plant/.venv/
 # Separation profiles kept locally for manual checking.

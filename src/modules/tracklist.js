@@ -838,8 +838,10 @@ function serializeSide(side, forSend = false){
   return data;
 }
 
-// Plant edit notes (see project.json history). No field shows them; they
-// ride along from the loaded project.json to the next save.
+// Plant workflow state and edit notes (see project.json plant, history).
+// No field shows them; they ride along from the loaded project.json to
+// the next save.
+let projectPlant = {};
 let projectHistory = [];
 
 function buildProjectObject(forSend = false){
@@ -856,6 +858,7 @@ function buildProjectObject(forSend = false){
     shippingBilling: collectShippingBilling(),
     labels: collectLabels(forSend),
     coverSleeve: { cover: collectCover(), innerSleeve: collectInnerSleeve(), inlay: collectInlay() },
+    plant: projectPlant,
     history: projectHistory
   };
 }
@@ -1030,6 +1033,7 @@ async function loadProject(file){
     fileMap.set(name, new File([e.data], name, {type: mimeType(fileExt(name))}));
   }
 
+  projectPlant = p.plant;
   projectHistory = p.history;
   document.getElementById("catalogue").value = p.catalogue || "";
   ensureFormatOption(p.format);

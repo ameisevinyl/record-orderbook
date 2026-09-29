@@ -2,178 +2,140 @@ import http.client
 import io
 import json
 import subprocess
-import stat
 import tempfile
 import threading
 import unittest
-import warnings
 import zipfile
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
+import jobs
 import server
-from server import Handler, OpenError, ROOT, missing, static_target, unpack, zip_stem
+from jobs import JobError
+from server import Handler, ROOT, missing, static_target, upload_name
+
+
+JSON = {"Content-Type": "application/json"}
 
 
 def make_zip(entries):
-    """entries: (name, data) pairs or (ZipInfo, data) pairs."""
     buf = io.BytesIO()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # duplicate-name warning
-        with zipfile.ZipFile(buf, "w") as zf:
-            for name, data in entries:
-                zf.writestr(name, data)
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, data in entries:
+            zf.writestr(name, data)
     buf.seek(0)
     return buf
 
 
-class UnpackTest(unittest.TestCase):
+class HttpTest(unittest.TestCase):
+    """A server on a fresh jobs tree."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.dest = Path(self.tmp.name) / "work" / "p"
-
-    def tearDown(self):
-        self.tmp.cleanup()
-
-    def test_foldered_zip_lists_files_relative_to_project_json(self):
-        z = make_zip([("p/project.json", b'{"catalogue": "X"}'), ("p/A1.wav", b"12345")])
-        project, files = unpack(z, self.dest)
-        self.assertEqual(project, {"catalogue": "X"})
-        self.assertEqual(files, [{"name": "A1.wav", "size": 5}])
-        self.assertTrue((self.dest / "p" / "A1.wav").is_file())
-
-    def test_root_level_zip(self):
-        z = make_zip([("project.json", b"{}"), ("labA.pdf", b"1")])
-        self.assertEqual(unpack(z, self.dest)[1], [{"name": "labA.pdf", "size": 1}])
-
-    def test_replaces_existing_work_folder(self):
-        self.dest.mkdir(parents=True)
-        (self.dest / "stale.txt").write_text("old")
-        unpack(make_zip([("project.json", b"{}")]), self.dest)
-        self.assertFalse((self.dest / "stale.txt").exists())
-
-    def test_removes_stale_check_output(self):
-        stale = self.dest.with_name("p.checks")
-        stale.mkdir(parents=True)
-        unpack(make_zip([("project.json", b"{}")]), self.dest)
-        self.assertFalse(stale.exists())
-
-    def test_rejects_unsafe_and_invalid_zips(self):
-        link = zipfile.ZipInfo("p/link")
-        link.external_attr = (stat.S_IFLNK | 0o777) << 16
-        cases = {
-            "not a zip file": io.BytesIO(b"nope"),
-            "unsafe path": make_zip([("project.json", b"{}"), ("../x", b"1")]),
-            "unsafe path ": make_zip([("project.json", b"{}"), ("/abs", b"1")]),
-            "symlink": make_zip([("project.json", b"{}"), (link, b"target")]),
-            "duplicate filename": make_zip([("project.json", b"{}"), ("a", b"1"), ("a", b"2")]),
-            "no project.json": make_zip([("a", b"1")]),
-            "more than one project.json": make_zip([("a/project.json", b"{}"), ("b/project.json", b"{}")]),
-            "not valid JSON": make_zip([("project.json", b"{")]),
-        }
-        for message, z in cases.items():
-            with self.subTest(message):
-                with self.assertRaisesRegex(OpenError, message.strip()):
-                    unpack(z, self.dest)
-
-
-    def test_corrupt_member_is_an_open_error(self):
-        z = make_zip([("project.json", b"{}"), ("A1.wav", b"x" * 100)])
-        data = bytearray(z.getvalue())
-        data[data.index(b"x" * 100)] = ord("y")  # breaks the CRC of A1.wav
-        with self.assertRaisesRegex(OpenError, "corrupt"):
-            unpack(io.BytesIO(bytes(data)), self.dest)
-
-    def test_concurrent_opens_of_the_same_name_all_succeed(self):
-        errors = []
-
-        def run():
-            try:
-                files = unpack(make_zip([("p/project.json", b"{}"), ("p/A1.wav", b"1" * 50000)]), self.dest)[1]
-                self.assertEqual(files, [{"name": "A1.wav", "size": 50000}])
-            except Exception as error:  # collected, asserted below
-                errors.append(error)
-
-        threads = [threading.Thread(target=run) for _ in range(8)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-        self.assertEqual(errors, [])
-
-
-class HttpTest(unittest.TestCase):
-    def setUp(self):
+        self.root = Path(self.tmp.name)
+        jobs.ensure_stages(self.root)
+        self.saved, server.JOBS = server.JOBS, self.root
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
     def tearDown(self):
         self.server.shutdown()
         self.server.server_close()
+        server.JOBS = self.saved
+        self.tmp.cleanup()
 
-    def post(self, headers, body=b"", path="/api/open"):
+    def request(self, method, path, body=b"", headers=None):
         conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=30)
-        conn.putrequest("POST", path)
-        for key, value in headers.items():
+        conn.putrequest(method, path)
+        for key, value in {"Content-Length": str(len(body)), **(headers or {})}.items():
             conn.putheader(key, value)
         conn.endheaders(body)
         res = conn.getresponse()
-        return res.status, res.read().decode()
+        return res.status, res.read()
 
-    def test_bad_content_length_gets_a_reply(self):
-        status, text = self.post({"X-Filename": "x.zip", "Content-Length": "abc"})
-        self.assertEqual(status, 400)
-        self.assertIn("Content-Length", text)
+    def post(self, path, obj):
+        status, data = self.request("POST", path, json.dumps(obj).encode(), JSON)
+        return status, json.loads(data) if status == 200 else data.decode()
 
-    def test_overlong_name_gets_a_reply(self):
-        body = make_zip([("project.json", b"{}")]).getvalue()
-        status, text = self.post({"X-Filename": "a" * 300 + ".zip", "Content-Length": str(len(body))}, body)
-        self.assertEqual(status, 500)
-        self.assertTrue(text)
+    def get(self, path):
+        status, data = self.request("GET", path)
+        return status, json.loads(data) if status == 200 else data.decode()
 
-    def open_project(self, entries):
+    def upload(self, name, entries):
         body = make_zip(entries).getvalue()
-        self.assertEqual(self.post({"X-Filename": "p.zip", "Content-Length": str(len(body))}, body)[0], 200)
+        return self.request("POST", "/api/upload", body, {"X-Filename": name})
+
+    def test_upload_accept_move_and_board(self):
+        self.assertEqual(self.upload("p%20x.zip", [("p/project.json", b'{"catalogue": "X"}'),
+                                                   ("p/A1.wav", b"1")])[0], 200)
+        self.assertEqual(self.upload("p%20x.zip", [("project.json", b"{}")])[0], 409)
+        self.assertEqual(self.get("/api/board")[1]["inbox"], ["p x.zip"])
+        self.assertEqual(self.post("/api/accept", {"zip": "p x.zip"}), (200, {"job": "p"}))
+        status, job = self.get("/api/job?job=p")
+        self.assertEqual((job["stage"], job["files"]), ("00_INBOX", [{"name": "A1.wav", "size": 1}]))
+        self.assertEqual(self.post("/api/move", {"job": "p", "to": "20_DONE"}), (200, {"job": "p"}))
+        board = self.get("/api/board")[1]
+        done = next(c for c in board["stages"] if c["stage"] == "20_DONE")
+        self.assertEqual(done["jobs"][0]["job"], "p")
+        self.assertEqual(board["inbox"], [])
+
+    def test_inbox_lists_jobs_with_the_same_catalogue(self):
+        folder = self.root / "20_DONE" / "old"
+        folder.mkdir()
+        (folder / "project.json").write_text('{"catalogue": "X"}')
+        (folder / "a.pdf").write_bytes(b"abc")
+        self.upload("r.zip", [("project.json", b'{"catalogue": "X"}')])
+        status, info = self.get("/api/inbox?zip=r.zip")
+        self.assertEqual(status, 200)
+        self.assertEqual([(m["job"], m["stage"]) for m in info["matches"]], [("old", "20_DONE")])
+        self.assertEqual(info["matches"][0]["files"][0]["sha256"][:6], "ba7816")
+
+    def test_refusals_are_plain_text(self):
+        self.assertEqual(self.get("/api/job?job=nope"), (400, "no job nope"))
+        self.assertEqual(self.get("/api/job?job=../x")[0], 400)
+        self.assertEqual(self.post("/api/move", {"job": "nope"})[0], 400)
+        status, text = self.request("POST", "/api/move", b"{nope", JSON)
+        self.assertEqual((status, text.decode()), (400, "request is not valid JSON"))
+        status, text = self.request("POST", "/api/upload", b"", {"X-Filename": "x.zip", "Content-Length": "abc"})
+        self.assertEqual(status, 400)
+
+    def test_posts_from_other_websites_are_refused(self):
+        for kind in ("", "text/plain", "application/x-www-form-urlencoded"):
+            status, text = self.request("POST", "/api/move", b'{"job": "p", "to": "20_DONE"}', {"Content-Type": kind})
+            self.assertEqual((status, text.decode()), (415, "JSON requests only"))
+        self.assertEqual(self.request("OPTIONS", "/api/move")[0], 501)
+
+    def test_download_zip(self):
+        self.upload("p.zip", [("p/project.json", b"{}"), ("p/a.pdf", b"1")])
+        self.post("/api/accept", {"zip": "p.zip"})
+        status, data = self.request("GET", "/api/zip?job=p")
+        self.assertEqual(status, 200)
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            self.assertEqual(sorted(zf.namelist()), ["p/a.pdf", "p/project.json"])
 
     def test_artwork_check_body_must_be_a_json_object(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            saved, server.WORK = server.WORK, Path(tmp)
-            try:
-                self.open_project([("p/project.json", b"{}")])
-                for body in (b"{nope", b"[]", b'{"artwork": []}'):
-                    status, text = self.post({"X-Filename": "p.zip", "Content-Length": str(len(body))}, body,
-                                             path="/api/check/artwork")
-                    self.assertEqual((status, text), (400, "check request is not valid JSON"))
-                status, text = self.post({"X-Filename": "p.zip", "Content-Length": "0"}, path="/api/check/artwork")
-                self.assertEqual((status, json.loads(text)), (200, {}))
-            finally:
-                server.WORK = saved
-
-    def test_check_before_open_is_refused(self):
-        for path in ("/api/check/audio", "/api/check/artwork"):
-            status, text = self.post({"X-Filename": "never-opened-xyz.zip"}, path=path)
-            self.assertEqual((status, text), (400, "project not open"))
+        self.upload("p.zip", [("p/project.json", b"{}")])
+        self.post("/api/accept", {"zip": "p.zip"})
+        for body in (b"{nope", b"[]", b'{"job": "p", "artwork": []}'):
+            self.assertEqual(self.request("POST", "/api/check/artwork", body, JSON)[0], 400)
+        self.assertEqual(self.post("/api/check/artwork", {"job": "p"}), (200, {}))
 
     def test_audio_check_streams_progress_then_the_result(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            saved, server.WORK = server.WORK, Path(tmp)
-            try:
-                wav = Path(tmp) / "A1.wav"
-                subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=d=20", "-c:a", "pcm_s24le",
-                                str(wav)], check=True)
-                self.open_project([("p/project.json", b"{}"), ("p/A1.wav", wav.read_bytes())])
-                status, text = self.post({"X-Filename": "p.zip"}, path="/api/check/audio")
-                self.assertEqual(status, 200)
-                lines = [json.loads(line) for line in text.splitlines()]
-                progress = [line["progress"] for line in lines[:-1]]
-                self.assertEqual(progress, sorted(progress))
-                self.assertEqual(progress[-1], 100)
-                facts = lines[-1]["result"]["files"]["A1.wav"]
-                self.assertEqual(static_target(f"/work/p.checks/{facts['preview']}"),
-                                 (Path(tmp) / "p.checks" / facts["preview"]).resolve())
-                self.assertTrue((Path(tmp) / "p.checks" / facts["waveform"]).is_file())
-            finally:
-                server.WORK = saved
+        wav = self.root / "A1.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=d=20", "-c:a", "pcm_s24le",
+                        str(wav)], check=True)
+        self.upload("p.zip", [("p/project.json", b"{}"), ("p/A1.wav", wav.read_bytes())])
+        self.post("/api/accept", {"zip": "p.zip"})
+        status, data = self.request("POST", "/api/check/audio", b'{"job": "p"}', JSON)
+        self.assertEqual(status, 200)
+        lines = [json.loads(line) for line in data.decode().splitlines()]
+        progress = [line["progress"] for line in lines[:-1]]
+        self.assertEqual(progress, sorted(progress))
+        self.assertEqual(progress[-1], 100)
+        facts = lines[-1]["result"]["files"]["A1.wav"]
+        checks = self.root / "00_INBOX" / "p" / ".checks"
+        self.assertEqual(static_target(f"/jobs/p/{facts['preview']}"), checks / facts["preview"])
+        self.assertTrue((checks / facts["waveform"]).is_file())
 
 
 class StartupTest(unittest.TestCase):
@@ -210,25 +172,29 @@ class HelpersTest(unittest.TestCase):
         self.assertIsNone(static_target("/plant/server.py"))
         self.assertIsNone(static_target("/src/nope.js"))
 
-    def test_static_target_serves_only_check_output_from_work(self):
+    def test_static_target_serves_only_check_output_of_jobs(self):
         with tempfile.TemporaryDirectory() as tmp:
-            saved, server.WORK = server.WORK, Path(tmp)
+            saved, server.JOBS = server.JOBS, Path(tmp)
             try:
-                for folder in ("p.checks", "p/p"):
-                    (Path(tmp) / folder).mkdir(parents=True)
-                    (Path(tmp) / folder / "a.mp3").write_bytes(b"1")
-                self.assertEqual(static_target("/work/p.checks/a.mp3"), (Path(tmp) / "p.checks" / "a.mp3").resolve())
-                self.assertIsNone(static_target("/work/p/p/a.mp3"))
-                self.assertIsNone(static_target("/work/p.checks/../p/p/a.mp3"))
-                self.assertIsNone(static_target("/work/p.checks/nope.mp3"))
+                folder = Path(tmp) / "00_INBOX" / "p"
+                (folder / ".checks").mkdir(parents=True)
+                (folder / "project.json").write_text("{}")
+                (folder / "a.pdf").write_bytes(b"1")
+                (folder / ".checks" / "a.png").write_bytes(b"1")
+                self.assertEqual(static_target("/jobs/p/a.png"), folder / ".checks" / "a.png")
+                self.assertIsNone(static_target("/jobs/p/../p/a.pdf"))
+                self.assertIsNone(static_target("/jobs/p/%2e%2e%2fa.pdf"))
+                self.assertIsNone(static_target("/jobs/p/nope.png"))
+                self.assertIsNone(static_target("/jobs/nope/a.png"))
             finally:
-                server.WORK = saved
+                server.JOBS = saved
 
-    def test_zip_stem_decodes_and_strips_folders(self):
-        self.assertEqual(zip_stem("260924_X_a%40b%C3%B6.de.zip"), "260924_X_a@bö.de")
-        self.assertEqual(zip_stem("..%2F..%2Fevil.zip"), "evil")
-        with self.assertRaises(OpenError):
-            zip_stem("..")
+    def test_upload_name_decodes_and_strips_folders(self):
+        self.assertEqual(upload_name("260924_X_a%40b%C3%B6.de.zip"), "260924_X_a@bö.de.zip")
+        self.assertEqual(upload_name("..%2F..%2Fevil.zip"), "evil.zip")
+        self.assertEqual(upload_name("p"), "p.zip")
+        with self.assertRaises(JobError):
+            upload_name("..%2F.hidden.zip")
 
 
 if __name__ == "__main__":

@@ -1,11 +1,12 @@
 """Plant view server: serves src/plant/ (and the src/ modules it imports,
-unbuilt), unpacks posted project zips into plant/work/<zip stem>/ and
-runs the audio and artwork checks (checks.py) into
-plant/work/<zip stem>.checks/.
+unbuilt) and works on the jobs tree (jobs.py): stage folders holding one
+folder per job. Project zips land in 00_INBOX/ and become a new job or
+merge into an existing one; the audio and artwork checks (checks.py) run
+into each job's .checks/ folder.
 
 Standard library only; binds 127.0.0.1. Refuses to start without the
 tools and libraries the checks need (plant/pyproject.toml).
-Run: uv run --project plant plant/server.py
+Run: uv run --project plant plant/server.py [--jobs <folder>]
 """
 import argparse
 import errno
@@ -15,20 +16,19 @@ import re
 import shutil
 import subprocess
 import sys
-import stat
-import tempfile
-import threading
 import tomllib
-import zipfile
-import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
+
+import jobs
+from jobs import JobError, Conflict
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "plant" / "pyproject.toml"
 SRC = ROOT / "src"
-WORK = ROOT / "plant" / "work"
+# The jobs tree; --jobs changes it.
+JOBS = ROOT / "plant" / "jobs"
 INDEX = SRC / "plant" / "index.html"
 TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -38,9 +38,6 @@ TYPES = {
     ".png": "image/png",
 }
 CHUNK = 1 << 20
-# ThreadingHTTPServer: two opens of the same zip would otherwise wipe
-# and fill the same work folder at once.
-UNPACK_LOCK = threading.Lock()
 
 
 def lib_version(name):
@@ -85,103 +82,37 @@ def missing(lib_version=lib_version, tool_version=tool_version):
     return problems
 
 
-def checks_dir(dest):
-    """Check output sits beside the unpacked zip, never inside it, so it
-    can't show up in the zip's file list."""
-    return dest.with_name(dest.name + ".checks")
-
-
-class OpenError(Exception):
-    """A zip the plant view refuses; the message goes to the page as-is."""
-
-
-def safe_names(zf):
-    names = []
-    for info in zf.infolist():
-        path = PurePosixPath(info.filename)
-        if path.is_absolute() or ".." in path.parts or "\\" in info.filename:
-            raise OpenError(f"unsafe path in zip: {info.filename}")
-        # Unix mode lives in the high 16 bits of external_attr.
-        if stat.S_ISLNK(info.external_attr >> 16):
-            raise OpenError(f"symlink in zip: {info.filename}")
-        if not info.is_dir():
-            names.append(info.filename)
-    if len(names) != len(set(names)):
-        raise OpenError("duplicate filename in zip")
-    return names
-
-
-def unpack(zip_file, dest):
-    """Unpack a project zip into dest (replaced). Returns (project, files):
-    the parsed project.json and every other file, named relative to the
-    folder that holds project.json."""
-    try:
-        zf = zipfile.ZipFile(zip_file)
-    except zipfile.BadZipFile:
-        raise OpenError("not a zip file") from None
-    with zf:
-        names = safe_names(zf)
-        jsons = [n for n in names if PurePosixPath(n).name == "project.json"]
-        if not jsons:
-            raise OpenError("no project.json in zip")
-        if len(jsons) > 1:
-            raise OpenError("more than one project.json in zip")
-        try:
-            project = json.loads(zf.read(jsons[0]))
-        except ValueError:
-            raise OpenError("project.json is not valid JSON") from None
-        with UNPACK_LOCK:
-            for stale in (dest, checks_dir(dest)):
-                if stale.exists():
-                    shutil.rmtree(stale)
-            dest.mkdir(parents=True)
-            try:
-                zf.extractall(dest)
-            except (zipfile.BadZipFile, zlib.error, EOFError) as error:
-                raise OpenError(f"corrupt file in zip: {error}") from None
-            base = dest / PurePosixPath(jsons[0]).parent
-            files = [{"name": p.relative_to(base).as_posix(), "size": p.stat().st_size}
-                     for p in sorted(base.rglob("*")) if p.is_file() and p != base / "project.json"]
-    return project, files
-
-
 def static_target(url_path):
-    """File under src/, or check output (/work/<stem>.checks/<file>), for a
-    GET path, or None."""
+    """File under src/, or check output (/jobs/<job>/<file> from the
+    job's .checks/), for a GET path, or None."""
     path = unquote(urlsplit(url_path).path)
     if path in ("/", "/index.html"):
         return INDEX
-    if path.startswith("/work/"):
-        target = (WORK / path.removeprefix("/work/")).resolve()
-        allowed = target.parent.parent == WORK.resolve() and target.parent.name.endswith(".checks")
+    if path.startswith("/jobs/"):
+        parts = path.removeprefix("/jobs/").split("/")
+        try:
+            if len(parts) != 2:
+                return None
+            target = jobs.find(JOBS, parts[0])[1] / ".checks" / jobs.plain(parts[1])
+        except JobError:
+            return None
     else:
         target = (ROOT / path.lstrip("/")).resolve()
-        allowed = target.is_relative_to(SRC)
-    return target if allowed and target.is_file() else None
+        if not target.is_relative_to(SRC):
+            return None
+    return target if target.is_file() else None
 
 
-def open_project(stem):
-    """The folder holding project.json and the (created) check output."""
-    dest = WORK / stem
-    found = list(dest.rglob("project.json")) if dest.is_dir() else []
-    if len(found) != 1:
-        raise OpenError("project not open")
-    out = checks_dir(dest)
-    out.mkdir(exist_ok=True)
-    return found[0].parent, out
-
-
-def zip_stem(header_value):
-    """Work-folder name from the X-Filename header (encodeURIComponent'd)."""
+def upload_name(header_value):
+    """Inbox file name from the X-Filename header (encodeURIComponent'd)."""
     name = PurePosixPath(unquote(header_value).replace("\\", "/")).name
-    stem = name[:-4] if name.lower().endswith(".zip") else name
-    if stem in ("", ".", ".."):
-        raise OpenError("invalid file name")
-    return stem
+    if not name.lower().endswith(".zip"):
+        name += ".zip"
+    return jobs.plain(name)
 
 
 class Handler(BaseHTTPRequestHandler):
-    def reply(self, code, body, content_type):
+    def reply(self, code, body, content_type="text/plain; charset=utf-8"):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", content_type)
@@ -189,20 +120,144 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def json(self, obj):
+        self.reply(200, json.dumps(obj), "application/json; charset=utf-8")
+
+    def query(self, key):
+        return parse_qs(urlsplit(self.path).query).get(key, [""])[0]
+
+    def body(self):
+        try:
+            request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        except ValueError:
+            raise JobError("request is not valid JSON") from None
+        if not isinstance(request, dict):
+            raise JobError("request is not a JSON object")
+        return request
+
     def do_GET(self):
+        route = urlsplit(self.path).path
+        api = {"/api/board": self.get_board, "/api/job": self.get_job,
+               "/api/inbox": self.get_inbox, "/api/zip": self.get_zip}.get(route)
+        if api:
+            return self.answer(api)
         target = static_target(self.path)
         if target is None:
-            return self.reply(404, "not found", "text/plain; charset=utf-8")
+            return self.reply(404, "not found")
         self.reply(200, target.read_bytes(), TYPES.get(target.suffix, "application/octet-stream"))
+
+    def do_POST(self):
+        api = {"/api/upload": self.upload, "/api/accept": self.accept, "/api/merge": self.merge,
+               "/api/move": self.move, "/api/assign": self.assign,
+               "/api/check/audio": self.check_audio, "/api/check/artwork": self.check_artwork}.get(self.path)
+        if api is None:
+            return self.reply(404, "not found")
+        # A JSON content type makes browsers ask first (CORS preflight,
+        # which this server doesn't answer), so other websites can't post
+        # here. The upload needs its X-Filename header for the same reason.
+        if api != self.upload and self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
+            return self.reply(415, "JSON requests only")
+        self.answer(api)
+
+    def answer(self, api):
+        """Runs an endpoint; refusals go to the page as plain text."""
+        try:
+            api()
+        except Conflict as error:
+            self.reply(409, str(error))
+        except (JobError, KeyError, TypeError) as error:
+            self.reply(400, str(error) if isinstance(error, JobError) else f"bad request: {error}")
+        except OSError as error:
+            # Disk full, name too long, ...: still an answer the page can show.
+            self.reply(500, str(error))
+
+    def get_board(self):
+        self.json(jobs.board(JOBS))
+
+    def get_job(self):
+        stage, folder = jobs.find(JOBS, self.query("job"))
+        project, digest = jobs.read_project(folder)
+        self.json({"job": folder.name, "stage": stage, "stages": jobs.stages(JOBS),
+                   "project": project, "projectHash": digest, "files": jobs.files(folder)})
+
+    def get_inbox(self):
+        """A zip in the inbox, and the jobs with its catalogue number."""
+        zip_name = jobs.plain(self.query("zip"))
+        info = jobs.inspect_zip(JOBS / jobs.INBOX / zip_name)
+        matches = []
+        for stage in jobs.stages(JOBS):
+            for job in jobs.jobs_in(JOBS, stage):
+                folder = JOBS / stage / job
+                try:
+                    project, digest = jobs.read_project(folder)
+                except JobError:
+                    continue
+                if project.get("catalogue") and project.get("catalogue") == info["project"].get("catalogue"):
+                    listing = [{**f, "sha256": jobs.sha256(folder / f["name"])} for f in jobs.files(folder)]
+                    matches.append({"job": job, "stage": stage, "project": project,
+                                    "projectHash": digest, "files": listing})
+        self.json({"zip": zip_name, **info, "matches": matches})
+
+    def get_zip(self):
+        folder = jobs.find(JOBS, self.query("job"))[1]
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(folder.name)}.zip")
+        self.end_headers()  # no length: HTTP/1.0 ends the body by closing
+        jobs.write_zip(folder, self.wfile)
+
+    def upload(self):
+        """The zip in the body lands in the inbox, like a synced one."""
+        name = upload_name(self.headers.get("X-Filename", ""))
+        try:
+            remaining = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            raise JobError("invalid Content-Length") from None
+        target = JOBS / jobs.INBOX / name
+        if target.exists():
+            raise Conflict(f"{name} is in the inbox already")
+        tmp = target.with_name(f".{name}.part")
+        # Project zips can be hundreds of MB: stream to disk, not memory.
+        try:
+            with open(tmp, "wb") as f:
+                while remaining > 0:
+                    chunk = self.rfile.read(min(remaining, CHUNK))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    remaining -= len(chunk)
+            if remaining:
+                raise JobError("upload ended early")
+            tmp.rename(target)
+        finally:
+            tmp.unlink(missing_ok=True)
+        self.json({"zip": name})
+
+    def accept(self):
+        self.json({"job": jobs.accept(JOBS, self.body()["zip"])})
+
+    def merge(self):
+        r = self.body()
+        jobs.merge(JOBS, r["zip"], r["job"], r["copies"], r["project"], r["basedOn"])
+        self.json({"job": r["job"]})
+
+    def move(self):
+        r = self.body()
+        jobs.move(JOBS, r["job"], r["to"])
+        self.json({"job": r["job"]})
+
+    def assign(self):
+        r = self.body()
+        folder = jobs.find(JOBS, r["job"])[1]
+        self.json({"projectHash": jobs.assign(folder, r["file"], r["newName"], r["project"], r["basedOn"])})
 
     def check_audio(self):
         """Streams one JSON object per line: {"progress": percent} while
         the files are read, then {"result": facts} (or {"error": …})."""
         import checks  # needs the libraries main() verified
-        try:
-            project_dir, out = open_project(zip_stem(self.headers.get("X-Filename", "")))
-        except OpenError as error:
-            return self.reply(400, str(error), "text/plain; charset=utf-8")
+        folder = jobs.find(JOBS, self.body()["job"])[1]
+        out = folder / ".checks"
+        out.mkdir(exist_ok=True)
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson")
         self.end_headers()  # no length: HTTP/1.0 ends the body by closing
@@ -218,60 +273,19 @@ class Handler(BaseHTTPRequestHandler):
                 shown = int(fraction * 100)
                 line({"progress": shown})
         try:
-            line({"result": checks.audio(project_dir, out, progress)})
+            line({"result": checks.audio(folder, out, progress)})
         except OSError as error:
             line({"error": f"couldn't check audio: {error}"})
 
     def check_artwork(self):
         import checks  # needs the libraries main() verified
-        try:
-            try:
-                length = int(self.headers.get("Content-Length", 0))
-                request = json.loads(self.rfile.read(length) or b"{}")
-                if not isinstance(request, dict) or not isinstance(request.get("artwork", {}), dict):
-                    raise ValueError
-            except ValueError:
-                raise OpenError("check request is not valid JSON") from None
-            project_dir, out = open_project(zip_stem(self.headers.get("X-Filename", "")))
-            result = checks.check_artwork(project_dir, out, request.get("artwork", {}))
-        except OpenError as error:
-            return self.reply(400, str(error), "text/plain; charset=utf-8")
-        except OSError as error:
-            return self.reply(500, f"couldn't check artwork: {error}", "text/plain; charset=utf-8")
-        self.reply(200, json.dumps(result), "application/json; charset=utf-8")
-
-    def do_POST(self):
-        if self.path == "/api/check/audio":
-            return self.check_audio()
-        if self.path == "/api/check/artwork":
-            return self.check_artwork()
-        if self.path != "/api/open":
-            return self.reply(404, "not found", "text/plain; charset=utf-8")
-        try:
-            raw_name = self.headers.get("X-Filename", "")
-            stem = zip_stem(raw_name)
-            try:
-                remaining = int(self.headers.get("Content-Length", 0))
-            except ValueError:
-                raise OpenError("invalid Content-Length") from None
-            # Project zips can be hundreds of MB: stream to disk, not memory.
-            with tempfile.TemporaryFile() as tmp:
-                while remaining > 0:
-                    chunk = self.rfile.read(min(remaining, CHUNK))
-                    if not chunk:
-                        break
-                    tmp.write(chunk)
-                    remaining -= len(chunk)
-                tmp.seek(0)
-                project, files = unpack(tmp, WORK / stem)
-        except OpenError as error:
-            return self.reply(400, str(error), "text/plain; charset=utf-8")
-        except OSError as error:
-            # Disk full, name too long, ...: still an answer the page can show.
-            return self.reply(500, f"couldn't unpack: {error}", "text/plain; charset=utf-8")
-        name = PurePosixPath(unquote(raw_name)).name
-        self.reply(200, json.dumps({"name": name, "project": project, "files": files}),
-                   "application/json; charset=utf-8")
+        r = self.body()
+        if not isinstance(r.get("artwork", {}), dict):
+            raise JobError("artwork must be an object")
+        folder = jobs.find(JOBS, r["job"])[1]
+        out = folder / ".checks"
+        out.mkdir(exist_ok=True)
+        self.json(checks.check_artwork(folder, out, r.get("artwork", {})))
 
 
 def make_server(port):
@@ -284,15 +298,19 @@ def make_server(port):
 
 
 def main():
+    global JOBS
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", type=int, default=8765)
-    port = parser.parse_args().port
+    parser.add_argument("--jobs", type=Path, default=JOBS, help="the jobs tree (default: plant/jobs/)")
+    args = parser.parse_args()
+    port, JOBS = args.port, args.jobs.resolve()
     problems = missing()
     if problems:
         sys.exit("plant view can't start:\n" + "".join(f"  {p}\n" for p in problems)
                  + "start with: uv run --project plant plant/server.py (ffmpeg: brew install ffmpeg)")
+    jobs.ensure_stages(JOBS)
     server = make_server(port)
-    print(f"plant view: http://127.0.0.1:{port}/")
+    print(f"plant view: http://127.0.0.1:{port}/ — jobs in {JOBS}")
     server.serve_forever()
 
 
