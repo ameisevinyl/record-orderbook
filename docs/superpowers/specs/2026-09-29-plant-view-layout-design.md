@@ -141,8 +141,10 @@ Five sections, each `<section><h2 id="…">`:
    side file and tracklist file as rows of the side table instead. Then
    per audio file an `<h3>` with its position (A1, Side A): the facts
    table (format, duration, software, tags), play button, waveform with
-   the file's and the form's markers. Audio files no slot knows join
-   "Not assigned" in section 2's form (one table per section).
+   the file's and the form's markers. Last, if any: "Not assigned" —
+   like Artwork's, for files no slot knows. A file goes to Audio's by
+   its audio extension (`checks.AUDIO_EXT`), every other one to
+   Artwork's.
 4. **Shipping & billing** — the gaps of groups Billing and Shipping n.
    A billing address table (field rows); per shipping address an
    `<h3>`, its address table and its quantities, residential flag and
