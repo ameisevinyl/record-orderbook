@@ -28,6 +28,9 @@ let latest = 0;
 let view = null;
 // Rescan: the next job load checks every file by its content.
 let rescan = false;
+// A job whose folder vanished (deleted or renamed by hand) while the page
+// pointed at it: the overview says so once.
+let gone = "";
 
 // body: JSON to post, or {raw, headers} for an upload.
 async function api(path, body){
@@ -110,7 +113,8 @@ async function route(reload = true){
   view = null;
   background = "";
   resetPlayer();
-  error.textContent = "";
+  error.textContent = gone ? `${gone} is no longer in the jobs folder (deleted or renamed on disk).` : "";
+  gone = "";
   try{
     busy("reading the jobs");
     const board = await getJson("/api/board");
@@ -120,10 +124,19 @@ async function route(reload = true){
     else if(kind === "inbox") await showInbox(name, id);
     else out.innerHTML = renderHome(board);
   }catch(err){
-    if(id === latest) error.textContent = err.message;
+    if(id !== latest) return;
+    if(kind === "job" && err.message === `no job ${name}`) leave(name);
+    else error.textContent = err.message;
   }finally{
     if(id === latest) busy("");
   }
+}
+
+// The open job's folder is gone: back to the overview, which says so.
+function leave(job){
+  gone = job;
+  if(location.hash === "#/") route();
+  else location.hash = "#/";
 }
 
 async function showInbox(item, id){
@@ -339,8 +352,8 @@ setInterval(async ()=>{
     background = spectrum ? stepText({step: "plotting spectrum", ...spectrum}) : "";
     show();
     if(view && view.stamp && stamp !== view.stamp) route();
-  }catch{
-    // gone or moved: the next click shows why
+  }catch(err){
+    if(view && err.message === `no job ${view.job}`) leave(view.job);
   }
 }, 3000);
 
