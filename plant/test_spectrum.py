@@ -43,6 +43,19 @@ class SpectrumTest(unittest.TestCase):
         spectrum.job(self.dir)
         self.assertEqual(png.stat().st_mtime_ns, made)  # up to date: not rendered again
 
+    def test_job_reports_the_file_it_plots(self):
+        for name in ("A1.wav", "A2.wav"):
+            tone(self.dir / name, 1)
+        seen = []
+        saved = spectrum.render
+        spectrum.render = lambda path, out: seen.append(dict(spectrum.PROGRESS[self.dir]))
+        try:
+            spectrum.job(self.dir)
+        finally:
+            spectrum.render = saved
+        self.assertEqual(seen, [{"file": "A1.wav", "index": 1, "count": 2}, {"file": "A2.wav", "index": 2, "count": 2}])
+        self.assertNotIn(self.dir, spectrum.PROGRESS)
+
     def test_start_runs_in_the_background(self):
         tone(self.dir / "A1.wav", 2)
         spectrum.start(self.dir)

@@ -176,10 +176,12 @@ def preview_base(name, digest):
     return f"{name.replace('/', '_')}.{digest[:12]}"
 
 
-def audio(project_dir, out_dir, progress=lambda fraction: None, rescan=False):
+def audio(project_dir, out_dir, progress=lambda fraction: None, rescan=False,
+          step=lambda file, index, count, what: None):
     """Facts for every audio file under project_dir, keyed by its name
     relative to it; previews go to out_dir. progress(fraction) follows
-    the bytes read, across all files."""
+    the bytes read, across all files; step(file, index, count, what)
+    names each file and what is done with it."""
     # Dot folders are the machine's: .checks/ holds MP3s of its own.
     paths = [p for p in sorted(project_dir.rglob("*")) if p.is_file() and p.suffix.lower() in AUDIO_EXT
              and not any(part.startswith(".") for part in p.relative_to(project_dir).parts)]
@@ -193,8 +195,9 @@ def audio(project_dir, out_dir, progress=lambda fraction: None, rescan=False):
 
     cache = Cache(out_dir, "audio", rescan)
     files = {}
-    for path in paths:
+    for index, path in enumerate(paths, 1):
         name = path.relative_to(project_dir).as_posix()
+        step(name, index, len(paths), "checking audio")
         facts = cache.get(path, name)
         if facts is not None:
             read(path.stat().st_size)
@@ -202,6 +205,7 @@ def audio(project_dir, out_dir, progress=lambda fraction: None, rescan=False):
             digest = sha256(path)
             facts = probe_facts(path)
             if "error" not in facts:
+                step(name, index, len(paths), "creating waveform")
                 try:
                     facts["preview"], facts["waveform"] = render_previews(path, out_dir, preview_base(name, digest), read)
                 except subprocess.CalledProcessError as error:
@@ -214,11 +218,14 @@ def audio(project_dir, out_dir, progress=lambda fraction: None, rescan=False):
     return {"files": files}
 
 
-def check_artwork(project_dir, out_dir, params_by_name, rescan=False):
-    """Facts per artwork file the page asked for, with its part's params."""
+def check_artwork(project_dir, out_dir, params_by_name, rescan=False,
+                  step=lambda file, index, count, what: None):
+    """Facts per artwork file the page asked for, with its part's params;
+    step(file, index, count, what) names each file as it starts."""
     cache = Cache(out_dir, "artwork", rescan)
     result = {}
-    for name, params in params_by_name.items():
+    for index, (name, params) in enumerate(params_by_name.items(), 1):
+        step(name, index, len(params_by_name), "checking artwork")
         # Names come from the page: only files inside the project count.
         path = (project_dir / name).resolve()
         if not path.is_relative_to(project_dir.resolve()) or not path.is_file():

@@ -31,6 +31,11 @@ def render(path, out):
     tmp.replace(out)
 
 
+# Job folder → {"file", "index", "count"} while its spectrograms are
+# plotted; the page's change poll shows it (/api/job/stamp).
+PROGRESS = {}
+
+
 def job(folder):
     """Spectrograms for every audio file of the job that has none, or one
     older than the file or this code; stale ones removed."""
@@ -41,12 +46,17 @@ def job(folder):
     if wanted:
         out.mkdir(exist_ok=True)
     code = Path(__file__).stat().st_mtime  # a change here redraws them all
-    for png, path in wanted.items():
-        if not png.exists() or png.stat().st_mtime < max(path.stat().st_mtime, code):
+    todo = [(png, path) for png, path in wanted.items()
+            if not png.exists() or png.stat().st_mtime < max(path.stat().st_mtime, code)]
+    try:
+        for index, (png, path) in enumerate(todo, 1):
+            PROGRESS[folder] = {"file": path.name, "index": index, "count": len(todo)}
             try:
                 render(path, png)
             except (ValueError, OSError) as error:
                 print(f"spectrum {path.name}: {error}", file=sys.stderr)
+    finally:
+        PROGRESS.pop(folder, None)
     for png in out.glob("*.png") if out.is_dir() else []:
         if png not in wanted:
             png.unlink()

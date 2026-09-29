@@ -74,7 +74,7 @@ class HttpTest(unittest.TestCase):
         status, job = self.get("/api/job?job=p")
         self.assertNotIn("10_ORDERS", job["stages"])
         self.assertEqual((job["stage"], [f["name"] for f in job["files"]]), ("00_INBOX", ["A1.wav"]))
-        self.assertEqual(self.get("/api/job/stamp?job=p")[1], {"stamp": job["stamp"]})
+        self.assertEqual(self.get("/api/job/stamp?job=p")[1], {"stamp": job["stamp"], "spectrum": None})
         self.assertEqual(self.post("/api/move", {"job": "p", "to": "20_DONE"}), (200, {"job": "p"}))
         board = self.get("/api/board")[1]
         done = next(c for c in board["stages"] if c["stage"] == "20_DONE")
@@ -136,7 +136,8 @@ class HttpTest(unittest.TestCase):
         self.post("/api/accept", {"item": "p.zip"})
         for body in (b"{nope", b"[]", b'{"job": "p", "artwork": []}'):
             self.assertEqual(self.request("POST", "/api/check/artwork", body, JSON)[0], 400)
-        self.assertEqual(self.post("/api/check/artwork", {"job": "p"}), (200, {}))
+        status, data = self.request("POST", "/api/check/artwork", b'{"job": "p"}', JSON)
+        self.assertEqual((status, [json.loads(line) for line in data.decode().splitlines()]), (200, [{"result": {}}]))
 
     def test_audio_check_streams_progress_then_the_result(self):
         wav = self.root / "A1.wav"
@@ -150,6 +151,8 @@ class HttpTest(unittest.TestCase):
         progress = [line["progress"] for line in lines[:-1]]
         self.assertEqual(progress, sorted(progress))
         self.assertEqual(progress[-1], 100)
+        self.assertEqual({line["step"] for line in lines[:-1]}, {"checking audio", "creating waveform"})
+        self.assertTrue(all(line["file"] == "A1.wav" and line["count"] == 1 for line in lines[:-1]))
         facts = lines[-1]["result"]["files"]["A1.wav"]
         checks = self.root / "00_INBOX" / "p" / ".checks"
         self.assertEqual(static_target(f"/jobs/p/{facts['preview']}"), checks / facts["preview"])

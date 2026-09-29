@@ -188,8 +188,11 @@ class Handler(BaseHTTPRequestHandler):
                    "stamp": jobs.stamp(folder)})
 
     def get_stamp(self):
-        """Changes when any file of the job does: the open page polls it."""
-        self.json({"stamp": jobs.stamp(jobs.find(JOBS, self.query("job"))[1])})
+        """Changes when any file of the job does; also what the background
+        spectrum is plotting. The open page polls it."""
+        import spectrum  # needs the libraries main() verified
+        folder = jobs.find(JOBS, self.query("job"))[1]
+        self.json({"stamp": jobs.stamp(folder), "spectrum": spectrum.PROGRESS.get(folder)})
 
     def get_inbox(self):
         """A zip or folder in the inbox, and the jobs with its catalogue number."""
@@ -280,14 +283,8 @@ class Handler(BaseHTTPRequestHandler):
         folder = jobs.find(JOBS, r["job"])[1]
         self.json({"projectHash": jobs.assign(folder, r["file"], r["newName"], r["project"], r["basedOn"])})
 
-    def check_audio(self):
-        """Streams one JSON object per line: {"progress": percent} while
-        the files are read, then {"result": facts} (or {"error": …})."""
-        import checks  # needs the libraries main() verified
-        r = self.body()
-        folder = jobs.find(JOBS, r["job"])[1]
-        out = folder / ".checks"
-        out.mkdir(exist_ok=True)
+    def stream(self):
+        """Starts an NDJSON reply; returns line(obj), which sends one line."""
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson")
         self.end_headers()  # no length: HTTP/1.0 ends the body by closing
@@ -295,15 +292,31 @@ class Handler(BaseHTTPRequestHandler):
         def line(obj):
             self.wfile.write((json.dumps(obj) + "\n").encode())
             self.wfile.flush()
-        shown = -1
+        return line
+
+    def check_audio(self):
+        """Streams one JSON object per line: {"file", "index", "count",
+        "step", "progress"} while the files are read, then {"result":
+        facts} (or {"error": …})."""
+        import checks  # needs the libraries main() verified
+        r = self.body()
+        folder = jobs.find(JOBS, r["job"])[1]
+        out = folder / ".checks"
+        out.mkdir(exist_ok=True)
+        line = self.stream()
+        shown, state = -1, {}
+
+        def step(file, index, count, what):
+            state.update(file=file, index=index, count=count, step=what)
+            line({**state, "progress": max(shown, 0)})
 
         def progress(fraction):
             nonlocal shown
             if int(fraction * 100) != shown:
                 shown = int(fraction * 100)
-                line({"progress": shown})
+                line({**state, "progress": shown})
         try:
-            line({"result": checks.audio(folder, out, progress, bool(r.get("rescan")))})
+            line({"result": checks.audio(folder, out, progress, bool(r.get("rescan")), step)})
         except OSError as error:
             line({"error": f"couldn't check audio: {error}"})
 
@@ -315,6 +328,8 @@ class Handler(BaseHTTPRequestHandler):
         self.json({})
 
     def check_artwork(self):
+        """Streams {"file", "index", "count", "step"} as each file starts,
+        then {"result": facts} (or {"error": …})."""
         import checks  # needs the libraries main() verified
         r = self.body()
         if not isinstance(r.get("artwork", {}), dict):
@@ -322,8 +337,14 @@ class Handler(BaseHTTPRequestHandler):
         folder = jobs.find(JOBS, r["job"])[1]
         out = folder / ".checks"
         out.mkdir(exist_ok=True)
-        self.json(checks.check_artwork(folder, out, r.get("artwork", {}), bool(r.get("rescan"))))
+        line = self.stream()
 
+        def step(file, index, count, what):
+            line({"file": file, "index": index, "count": count, "step": what})
+        try:
+            line({"result": checks.check_artwork(folder, out, r.get("artwork", {}), bool(r.get("rescan")), step)})
+        except OSError as error:
+            line({"error": f"couldn't check artwork: {error}"})
 
 def make_server(port):
     try:

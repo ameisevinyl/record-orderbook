@@ -147,6 +147,19 @@ class AudioProgressTest(unittest.TestCase):
         self.assertEqual(seen[-1], 1.0)
 
 
+    def test_steps_name_each_file(self):
+        from checks import audio
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "p"
+            project.mkdir()
+            for name in ("A.wav", "B.wav"):
+                ffmpeg("-f", "lavfi", "-i", "sine=d=1", "-c:a", "pcm_s16le", str(project / name))
+            steps = []
+            audio(project, Path(tmp), step=lambda *a: steps.append(a))
+        self.assertEqual(steps, [("A.wav", 1, 2, "checking audio"), ("A.wav", 1, 2, "creating waveform"),
+                                 ("B.wav", 2, 2, "checking audio"), ("B.wav", 2, 2, "creating waveform")])
+
+
 class ArtworkWiringTest(unittest.TestCase):
     def test_one_failing_file_stays_a_file_error(self):
         import checks
@@ -266,6 +279,11 @@ class CacheTest(unittest.TestCase):
         finally:
             self.checks.CHECKS_VERSION = saved
         self.assertEqual(len(self.calls), 2)
+
+    def test_artwork_steps_name_each_file(self):
+        steps = []
+        self.checks.check_artwork(self.job, self.out, {"L.pdf": {"page": 1}}, step=lambda *a: steps.append(a))
+        self.assertEqual(steps, [("L.pdf", 1, 1, "checking artwork")])
 
     def test_previews_of_files_no_longer_asked_for_are_removed(self):
         preview = self.preview()
