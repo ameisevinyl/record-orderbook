@@ -1,6 +1,6 @@
 # Plant view layout — plain HTML structure — design
 
-Status: approved in conversation 2026-09-29, pending written-spec review.
+Status: approved 2026-09-29, built.
 
 ## Context
 

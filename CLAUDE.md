@@ -140,10 +140,17 @@ configured on purpose — keep it that way unless asked.
   unbuilt and works on the jobs tree (`plant/jobs.py`: scan, move,
   accept/merge inbox zips, safe `project.json` writes — refused with 409
   when the file changed since the page read it). Python does the disk,
-  the page decides (`src/lib/versions.js`). The page renders the board
-  and `project.json` itself (`src/lib/plant-board.js`,
-  `src/lib/plant-overview.js`, `src/lib/completeness.js`), not the
-  customer form. Spec: `docs/superpowers/specs/2026-09-29-job-folders-design.md`.
+  the page decides (`src/lib/versions.js`). Spec:
+  `docs/superpowers/specs/2026-09-29-job-folders-design.md`.
+  The page is plain HTML5 (`src/plant/index.html`, structure-only
+  `src/plant/structure.css` — a plant's theme goes on top later): the
+  jobs tree and the open job's section links in `<nav>`
+  (`src/lib/plant-board.js`), the job in five table sections — Basic,
+  Artwork, Audio, Shipping & billing, History — each fact once
+  (`src/lib/plant-overview.js`), one CLI status line fed by the checks'
+  step streams and the spectrum progress in `/api/job/stamp`. Grouping
+  stages (10_ORDERS) hold no jobs. Spec:
+  `docs/superpowers/specs/2026-09-29-plant-view-layout-design.md`.
 - `plant/checks.py` — deep checks on disk, piece 1 (audio): ffprobe
   facts, AIFF `MARK` markers, MP3 + waveform PNG per file, written to
   the job's hidden `.checks/` with a per-file cache (size+mtime, else
