@@ -20,7 +20,6 @@
 
 # Plant view default jobs tree (real ones live elsewhere, --jobs), and Python caches.
 /plant/jobs/
-/plant/work/
 /plant/.venv/
 # Separation profiles kept locally for manual checking.
 /plant/profiles/
