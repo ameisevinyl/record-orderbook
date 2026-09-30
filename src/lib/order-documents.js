@@ -12,7 +12,8 @@ function documentHeader(project, label, date){
   const title = project.albumTitle || "(no title)";
   const artist = project.albumArtist || "(no artist)";
   const cut = project.soundsystem ? "soundsystem" : "normal";
-  return `${label}\n${cat} - ${title} - ${artist} - ${humanDate(date)}\nFormat: ${project.format || "?"}\"\nCut: ${cut}\n\n`;
+  const referenceCut = (project.proofs || {}).referenceCut ? "Reference cut: yes\n" : "";
+  return `${label}\n${cat} - ${title} - ${artist} - ${humanDate(date)}\nFormat: ${project.format || "?"}\"\nCut: ${cut}\n${referenceCut}\n`;
 }
 
 function tracksNeedArtistColumn(project){
@@ -172,7 +173,9 @@ function shippingBillingSection(project){
       : `${quantity} ${colorLabel(row.color || "")}`)
     .join(", ");
 
-  let out = "BILLING ADDRESS:\n";
+  const testpresses = (project.proofs || {}).testpresses;
+  let out = testpresses > 0 ? `Testpresses: ${testpresses}\n\n` : "";
+  out += "BILLING ADDRESS:\n";
   out += `  ${billing.recipientName || ""}${billing.attention ? " — " + billing.attention : ""}\n`;
   out += `  ${billing.addressLine1 || ""}\n`;
   if(billing.addressLine2) out += `  ${billing.addressLine2}\n`;

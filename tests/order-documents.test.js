@@ -197,3 +197,22 @@ test("notes to the mastering engineer follow the tracklist in both documents", (
   }
   assert.ok(summary.indexOf("NOTES TO MASTERING ENGINEER") < summary.indexOf("BILLING ADDRESS"));
 });
+
+test("reference cut upfront in both documents, testpresses in the summary only", () => {
+  const p = project({proofs:{referenceCut:true, testpresses:3}, sides:{A:side(), B:side({blank:true})}});
+  const summary = buildOrderSummaryText(p, config, date);
+  const tracklist = buildTracklistText(p, config, date);
+  for(const doc of [summary, tracklist]){
+    assert.match(doc, /\nCut: normal\nReference cut: yes\n/);
+  }
+  assert.match(summary, /Testpresses: 3/);
+  assert.doesNotMatch(tracklist, /Testpress/);
+});
+
+test("no proofs lines when none are ordered", () => {
+  for(const proofs of [undefined, {referenceCut:false, testpresses:0}]){
+    const p = project({proofs});
+    const text = buildOrderSummaryText(p, config, date) + buildTracklistText(p, config, date);
+    assert.doesNotMatch(text, /Reference cut|Testpress/);
+  }
+});
