@@ -888,7 +888,7 @@ function downloadBlob(blob, fileName){
 // to treat its template PDF links as same-origin downloads rather than
 // navigating the tab away.
 function openSpecs(){
-  const html = buildSpecsHtml(CONFIG);
+  const html = buildSpecsHtml(CONFIG, {format: document.getElementById("format").value, coverSleeve: collectPrintedParts()});
   const url = URL.createObjectURL(new Blob([html], {type:"text/html"}));
   const w = window.open(url, "_blank");
   if(!w){

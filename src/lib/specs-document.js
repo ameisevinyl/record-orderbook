@@ -10,8 +10,18 @@ import { labelTemplatePdf, partTemplatePdf, templateFileName } from "./part-temp
 import { bytesToBase64 } from "./pdf.js";
 import { timeLimitTable, rpmRecommendation, PLAYING_TIME_NOTE } from "./playing-time.js";
 
+// Up to 3 columns sit narrow at the left; wider tables span the page.
+function tableTag(columns){
+  return columns <= 3 ? `<table class="narrow">` : `<table>`;
+}
+
 function kvTable(rows){
-  return `<table><tbody>${rows.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>`;
+  return `${tableTag(2)}<tbody>${rows.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+// Marks what the order doesn't need; "show ordered" hides it.
+function extraClass(base, extra){
+  return extra ? `${base} extra` : base;
 }
 
 // Schematic layout previews sit as figures directly under a category's
@@ -22,8 +32,8 @@ function kvTable(rows){
 function layoutFigures(figures){
   const shown = figures.filter(([, svg]) => svg);
   if(!shown.length) return "";
-  return `<div class="layouts">${shown.map(([caption, svg, template]) =>
-    `<figure class="layout-figure">${svg}<figcaption>${esc(caption)}</figcaption>`
+  return `<div class="layouts">${shown.map(([caption, svg, template, extra]) =>
+    `<figure class="${extraClass("layout-figure", extra)}">${svg}<figcaption>${esc(caption)}</figcaption>`
     + (template
       ? `<a class="template-link no-print" download="${esc(template.fileName)}" target="_blank" rel="noopener" href="data:application/pdf;base64,${bytesToBase64(template.bytes)}">PDF template</a>`
       : "")
@@ -35,10 +45,14 @@ function layoutFigures(figures){
 // don't apply to any of a category's printed products (e.g. Spine on
 // inner sleeve, Final size on inlay) are dropped rather than shown as a
 // full column of "—", same "only what applies" rule the live
-// Specifications box follows for a selected product.
-function productTable(title, products, partKey, formatId){
+// Specifications box follows for a selected product. chosenId (with an
+// order): the product ordered for this part; every other product, and
+// the whole part when nothing printed is chosen, is marked extra.
+function productTable(title, products, partKey, formatId, chosenId){
   const printed = products.filter(p => p.kind === "printed");
   if(!printed.length) return "";
+  const ordered = chosenId !== undefined;
+  const extra = p => ordered && p.id !== chosenId;
 
   const dataSize = p => { const d = flatDataMm(p); return `${d.w}×${d.h}mm`; };
   const columns = [
@@ -54,18 +68,20 @@ function productTable(title, products, partKey, formatId){
   ].filter(([, valueOf]) => printed.some(p => valueOf(p) !== "—"));
 
   const head = columns.map(([h]) => `<th>${esc(h)}</th>`).join("");
-  const body = printed.map(p => `<tr>${columns.map(([, valueOf]) => `<td>${valueOf(p)}</td>`).join("")}</tr>`).join("");
-  return `<h3>${esc(title)}</h3>
+  const body = printed.map(p => `<tr${extra(p) ? ` class="extra"` : ""}>${columns.map(([, valueOf]) => `<td>${valueOf(p)}</td>`).join("")}</tr>`).join("");
+  return `<div class="${extraClass("part", printed.every(extra))}">
+    <h3>${esc(title)}</h3>
     ${layoutFigures(printed.map(p => p.trimMm
       ? [p.name, printedPartLayoutSvg(p), {
           fileName: templateFileName({formatId, part: partKey, productName: p.name}),
           bytes: partTemplatePdf({formatId, part: p})
-        }]
+        }, extra(p)]
       : [p.name, null]))}
-    <table>
+    ${tableTag(columns.length)}
       <thead><tr>${head}</tr></thead>
       <tbody>${body}</tbody>
-    </table>`;
+    </table>
+  </div>`;
 }
 
 function timeLimitsTable(format){
@@ -97,10 +113,14 @@ function centerHoleLabel(centerHole){
   return Object.entries(centerHole).map(([kind, mm]) => `${names[kind] || kind} ${mm}mm`).join(" · ");
 }
 
-function formatSection(format, artworkFileTypes, printSpec){
+// order: {format, coverSleeve} as in project.json, or undefined for
+// the full reference (nothing marked).
+function formatSection(format, artworkFileTypes, printSpec, order){
   const label = format.printableParts.label;
   const parts = format.printableParts;
-  return `<section class="format">
+  const sleeve = order && order.coverSleeve;
+  const chosen = key => sleeve ? (sleeve[key] && sleeve[key].productId) || null : undefined;
+  return `<section class="${extraClass("format", !!order && format.id !== order.format)}">
     <h2>${esc(format.label)}</h2>
     ${kvTable([
       ["RPM (default)", format.rpm],
@@ -114,13 +134,13 @@ function formatSection(format, artworkFileTypes, printSpec){
       fileName: templateFileName({formatId: format.id, part: "labels"}),
       bytes: labelTemplatePdf({format, label})
     }]])}
-    <table>
+    ${tableTag(3)}
       <thead><tr><th>End format</th><th>Bleed</th><th>Data format</th></tr></thead>
       <tbody><tr><td>⌀${label.diameterMm}mm</td><td>${label.bleedMm}mm</td><td>${labelDataSizeMm(label)}×${labelDataSizeMm(label)}mm</td></tr></tbody>
     </table>
-    ${productTable("Inner Sleeve", parts.innerSleeve.products, "innersleeve", format.id)}
-    ${productTable("Outer Cover", parts.outerCover.products, "cover", format.id)}
-    ${productTable("Inlay", parts.inlay.products, "inlay", format.id)}
+    ${productTable("Inner Sleeve", parts.innerSleeve.products, "innersleeve", format.id, chosen("innerSleeve"))}
+    ${productTable("Outer Cover", parts.outerCover.products, "cover", format.id, chosen("cover"))}
+    ${productTable("Inlay", parts.inlay.products, "inlay", format.id, chosen("inlay"))}
   </section>`;
 }
 
@@ -135,12 +155,15 @@ function audioSection(audioSpec){
 
 const SPECS_CSS = `
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-       color:#161616;max-width:820px;margin:40px auto;padding:0 20px;line-height:1.5;}
+       color:#161616;max-width:1040px;margin:40px auto;padding:0 20px;line-height:1.5;}
   h1{font-size:18px;margin-bottom:4px;}
-  h2{font-size:15px;margin-top:32px;border-bottom:1px solid #d6d6d3;padding-bottom:6px;}
+  h2{font-size:15px;margin-top:32px;}
   h3{font-size:13px;margin-top:18px;color:#5c5c59;}
   .meta{color:#5c5c59;font-size:12px;margin-top:0;}
   table{border-collapse:collapse;width:100%;font-size:12px;margin-top:6px;}
+  table.narrow{width:auto;}
+  .view{font-size:12px;}
+  body.ordered .extra{display:none;}
   th,td{border:1px solid #d6d6d3;padding:4px 8px;text-align:left;}
   th{background:#f6f6f5;font-weight:600;}
   .layouts{display:flex;flex-wrap:wrap;gap:18px;margin-top:10px;}
@@ -170,6 +193,9 @@ const SPECS_CSS = `
 // rather than replacing this page.
 const TEMPLATE_DOWNLOAD_SCRIPT = `
 <script>
+document.addEventListener("change", event => {
+  if(event.target.name === "view") document.body.classList.toggle("ordered", event.target.value === "ordered");
+});
 document.addEventListener("click", event => {
   const link = event.target.closest && event.target.closest("a.template-link");
   if(!link) return;
@@ -190,18 +216,24 @@ document.addEventListener("click", event => {
 });
 <\/script>`;
 
-export function buildSpecsHtml(CONFIG){
+const VIEW_TOGGLE = `<p class="view no-print">
+    <label><input type="radio" name="view" value="ordered" checked> show ordered</label>
+    <label><input type="radio" name="view" value="all"> show all</label>
+  </p>`;
+
+export function buildSpecsHtml(CONFIG, order){
   const formats = enabledFormats(CONFIG);
   const generated = new Date().toLocaleString("de-DE", { dateStyle:"medium", timeStyle:"short" });
   const plantName = CONFIG.plant.imprint.recipientName;
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Specifications — ${esc(plantName)}</title>
 <style>${SPECS_CSS}</style>
-</head><body>
+</head><body${order ? ` class="ordered"` : ""}>
   <h1>${esc(plantName)} — Specifications</h1>
   <p class="meta">Generated ${esc(generated)}</p>
+  ${order ? VIEW_TOGGLE : ""}
   ${audioSection(CONFIG.audioSpec)}
-  ${formats.map(f => formatSection(f, CONFIG.artworkFileTypes, CONFIG.printSpec)).join("")}
+  ${formats.map(f => formatSection(f, CONFIG.artworkFileTypes, CONFIG.printSpec, order)).join("")}
   ${TEMPLATE_DOWNLOAD_SCRIPT}
 </body></html>`;
 }

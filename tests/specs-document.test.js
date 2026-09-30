@@ -157,3 +157,34 @@ test("buildSpecsHtml shows a format's recommended speed", () => {
   assert.ok(html.includes('<p class="note">Varies by style: more bass = less space</p>'));
   assert.ok(!buildSpecsHtml(config).includes("strongly recommended"));
 });
+
+const order = {format: "12", coverSleeve: {innerSleeve: {productId: "sleeve-white-cutout"}, cover: {productId: "cover-printed"}, inlay: {productId: null}}};
+
+test("buildSpecsHtml with an order marks other formats and parts not chosen, and offers the toggle", () => {
+  const both = structuredClone(config);
+  both.formats[1].enabled = true;
+  const html = buildSpecsHtml(both, order);
+  assert.match(html, /<body class="ordered">/);
+  assert.match(html, /name="view" value="ordered" checked/);
+  assert.match(html, /name="view" value="all"/);
+  assert.match(html, /<section class="format extra">\s*<h2>10&quot; EP/);
+  assert.match(html, /<section class="format">\s*<h2>12&quot; LP/);
+  assert.match(html, /<div class="part extra">\s*<h3>Inner Sleeve/, "unprinted sleeve chosen: no print spec to show");
+  assert.match(html, /<div class="part">\s*<h3>Outer Cover/);
+  assert.match(html, /<div class="part extra">\s*<h3>Inlay/);
+});
+
+test("buildSpecsHtml without an order marks nothing and has no toggle", () => {
+  const html = buildSpecsHtml(config);
+  assert.doesNotMatch(html, /class="[^"]*extra/);
+  assert.doesNotMatch(html, /name="view"/);
+  assert.match(html, /<body>/);
+});
+
+test("buildSpecsHtml: no heading underline, tables of up to 3 columns sit narrow", () => {
+  const html = buildSpecsHtml(config);
+  assert.doesNotMatch(html, /border-bottom/);
+  assert.match(html, /max-width:1040px/);
+  assert.match(html, /<table class="narrow"><tbody><tr><th>RPM \(default\)/);
+  assert.match(html, /<table class="narrow">\s*<thead><tr><th>End format<\/th><th>Bleed<\/th><th>Data format/);
+});
