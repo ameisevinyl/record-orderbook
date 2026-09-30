@@ -1,40 +1,43 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { transferLink, transferInstructions } from "../src/lib/transfer.js";
+import { transferOptions, transferInstructions } from "../src/lib/transfer.js";
 
-const withUploadUrl = {
-  uploadUrl: "https://cloud.plant.example/s/AbCd1234",
-  uploadServiceUrl: "https://www.swisstransfer.com/",
-  uploadEmail: "cutting@example.com"
-};
+const services = [
+  { name: "SwissTransfer", url: "https://www.swisstransfer.com/" },
+  { name: "FilePizza", url: "https://file.pizza/", direct: true }
+];
+const withUploadUrl = { uploadUrl: "https://cloud.plant.example/s/AbCd1234", services, uploadEmail: "cutting@example.com" };
+const withoutUploadUrl = { uploadUrl: "", services, uploadEmail: "cutting@example.com" };
 
-const withoutUploadUrl = {
-  uploadUrl: "",
-  uploadServiceUrl: "https://www.swisstransfer.com/",
-  uploadEmail: "cutting@example.com"
-};
-
-test("transferLink prefers a direct upload link when set", () => {
-  assert.equal(transferLink(withUploadUrl), "https://cloud.plant.example/s/AbCd1234");
+test("transferOptions: a direct upload link is the only option", () => {
+  assert.deepEqual(transferOptions(withUploadUrl),
+    [{ name: "upload page", url: "https://cloud.plant.example/s/AbCd1234", dropLink: true }]);
 });
 
-test("transferLink falls back to the service homepage when no direct link is set", () => {
-  assert.equal(transferLink(withoutUploadUrl), "https://www.swisstransfer.com/");
+test("transferOptions: without one, the configured services", () => {
+  assert.deepEqual(transferOptions(withoutUploadUrl), services);
 });
 
-test("transferInstructions omits the recipient step when there's a direct upload link", () => {
-  const steps = transferInstructions(withUploadUrl, "PNKRCK007.zip");
-  assert.deepEqual(steps, [
+test("transferInstructions: a direct upload link needs no recipient", () => {
+  assert.deepEqual(transferInstructions(withUploadUrl, "PNKRCK007.zip"), [
     "File saved: PNKRCK007.zip",
     "Open https://cloud.plant.example/s/AbCd1234 and upload the file"
   ]);
 });
 
-test("transferInstructions adds a recipient step when there's no direct upload link", () => {
-  const steps = transferInstructions(withoutUploadUrl, "PNKRCK007.zip");
-  assert.deepEqual(steps, [
+test("transferInstructions: a transfer service defaults to the first and names the recipient", () => {
+  assert.deepEqual(transferInstructions(withoutUploadUrl, "PNKRCK007.zip"), [
     "File saved: PNKRCK007.zip",
     "Open https://www.swisstransfer.com/ and upload the file",
     "Send it to: cutting@example.com"
+  ]);
+});
+
+test("transferInstructions: browser-to-browser sends the link and keeps the tab open", () => {
+  assert.deepEqual(transferInstructions(withoutUploadUrl, "PNKRCK007.zip", services[1]), [
+    "File saved: PNKRCK007.zip",
+    "Open https://file.pizza/ and drop the file in",
+    "Send the link it shows to: cutting@example.com",
+    "Keep that tab open until the plant has downloaded the file"
   ]);
 });

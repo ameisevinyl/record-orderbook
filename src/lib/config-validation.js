@@ -158,11 +158,18 @@ function validatePlant(value){
   imprintFields.forEach(name => string(imprint[name], `CONFIG.plant.imprint.${name}`, name !== "recipientName"));
 
   const transfer = object(plant.transfer, "CONFIG.plant.transfer");
-  for(const name of ["uploadUrl", "uploadServiceUrl", "uploadEmail"]){
+  for(const name of ["uploadUrl", "uploadEmail"]){
     string(transfer[name], `CONFIG.plant.transfer.${name}`, true);
   }
-  if(!transfer.uploadUrl.trim() && (!transfer.uploadServiceUrl.trim() || !transfer.uploadEmail.trim())){
-    fail("CONFIG.plant.transfer", "must provide uploadUrl or both uploadServiceUrl and uploadEmail");
+  array(transfer.services, "CONFIG.plant.transfer.services").forEach((service, i) => {
+    const path = `CONFIG.plant.transfer.services[${i}]`;
+    object(service, path);
+    string(service.name, `${path}.name`);
+    string(service.url, `${path}.url`);
+    if(service.direct !== undefined && typeof service.direct !== "boolean") fail(`${path}.direct`, "must be a boolean");
+  });
+  if(!transfer.uploadUrl.trim() && (!transfer.services.length || !transfer.uploadEmail.trim())){
+    fail("CONFIG.plant.transfer", "must provide uploadUrl or at least one service and uploadEmail");
   }
 }
 

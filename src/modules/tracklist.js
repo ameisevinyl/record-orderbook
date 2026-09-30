@@ -15,7 +15,7 @@ import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-cat
 import { trackFileName, continuousSideFileName, tracklistFileName, projectFileName, fileExt, mimeType, humanDate, slug } from "../lib/package-naming.js";
 import { defaultMatrix } from "../lib/matrix.js";
 import { isDebugMode } from "../lib/debug-mode.js";
-import { transferLink, transferInstructions } from "../lib/transfer.js";
+import { transferOptions, transferInstructions } from "../lib/transfer.js";
 import { buildSpecsHtml } from "../lib/specs-document.js";
 import { PROJECT_VERSION, includeSideFile, prepareProject, assertProjectFiles } from "../lib/project.js";
 import { buildOrderSummaryText, buildTracklistText } from "../lib/order-documents.js";
@@ -788,7 +788,7 @@ export function initTracklist(){
   });
   document.getElementById("btnCopyInstructions").addEventListener("click", ()=>{
     if(!lastSentZip) return;
-    const steps = transferInstructions(CONFIG.plant.transfer, lastSentZip.fileName);
+    const steps = transferInstructions(CONFIG.plant.transfer, lastSentZip.fileName, sendOption);
     copyToClipboard(steps.join("\n"));
   });
   return updateChecklist;
@@ -1231,16 +1231,32 @@ async function sendToPlant(){
   showSendPanel(fileName);
 }
 
-function showSendPanel(fileName){
-  const steps = transferInstructions(CONFIG.plant.transfer, fileName);
+// The transfer option whose steps the send panel shows and copies;
+// opening another one switches to it.
+let sendOption = null;
+
+function renderSendSteps(fileName){
   const list = document.getElementById("sendPanelSteps");
   list.innerHTML = "";
-  steps.forEach(text=>{
+  transferInstructions(CONFIG.plant.transfer, fileName, sendOption).forEach(text=>{
     const li = document.createElement("li");
     li.textContent = text;
     list.appendChild(li);
   });
-  document.getElementById("sendPanelOpenLink").href = transferLink(CONFIG.plant.transfer);
+}
+
+function showSendPanel(fileName){
+  const options = transferOptions(CONFIG.plant.transfer);
+  sendOption = options[0];
+  renderSendSteps(fileName);
+  const links = document.getElementById("sendPanelLinks");
+  links.innerHTML = "";
+  for(const option of options){
+    const a = document.createElement("a");
+    Object.assign(a, {className: "btn", href: option.url, target: "_blank", rel: "noopener", textContent: `Open ${option.name}`});
+    a.addEventListener("click", ()=>{ sendOption = option; renderSendSteps(fileName); });
+    links.append(a, " ");
+  }
   const panel = document.getElementById("sendPanel");
   panel.classList.remove("hidden");
   panel.scrollIntoView({behavior:"smooth", block:"nearest"});

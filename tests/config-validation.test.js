@@ -100,8 +100,14 @@ test("validates plant imprint and transfer shape", () => {
 
   const transfer = copy();
   transfer.plant.transfer.uploadUrl = "";
-  transfer.plant.transfer.uploadServiceUrl = "";
-  assert.throws(() => validateConfig(transfer), /must provide uploadUrl or both uploadServiceUrl and uploadEmail/);
+  transfer.plant.transfer.services = [];
+  assert.throws(() => validateConfig(transfer), /must provide uploadUrl or at least one service and uploadEmail/);
+
+  const service = copy();
+  service.plant.transfer.services = [{ name: "FilePizza", url: "" }];
+  assert.throws(() => validateConfig(service), /CONFIG\.plant\.transfer\.services\[0\]\.url must be a non-empty string/);
+  service.plant.transfer.services = [{ name: "FilePizza", url: "https://file.pizza/", direct: "yes" }];
+  assert.throws(() => validateConfig(service), /CONFIG\.plant\.transfer\.services\[0\]\.direct must be a boolean/);
 });
 
 test("validates the audio master-file spec", () => {
