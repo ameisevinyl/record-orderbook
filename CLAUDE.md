@@ -206,7 +206,8 @@ configured on purpose — keep it that way unless asked.
 - **Whitelabel** — a test/promo pressing with a blank or minimal label,
   as opposed to the final printed label.
 - **Reference cut** — a one-off acetate cut from the master so the
-  customer hears the cut before lacquers are made; one per order.
+  customer hears the sound before the master for plating is cut; one
+  per order.
 - **Testpress** — the first records off the stamper, checking the
   pressing (not mix or master); a quantity, default 3, recommended
   from 1,000 records up (`CONFIG.proofs`).

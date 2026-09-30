@@ -450,10 +450,10 @@ export const CONFIG = {
       en: `Accepted files: PDF, JPG, TIFF. Colour mode: CMYK. Max. ink coverage: 200%. Colour profile: ISO ECI v2 300.`
     },
     referenceCut: {
-      en: `A one-off acetate cut from your master, to hear the cut before the lacquers are made. Unsure about your mix or master? Order a reference cut.`
+      en: `One-off acetate cut from your master, to hear the sound before the actual master for plating is cut.`
     },
     testpress: {
-      en: `The first records from the stamper, to check the pressing for real errors before the run — not for judging mix or master (that's the reference cut). Recommended for runs of 1,000 records or more.`
+      en: `Testpressings from your master and metalwork, to check for real errors before pressing. Not for checking your mix and premaster.`
     }
   }
 };
