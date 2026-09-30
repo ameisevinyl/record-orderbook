@@ -1227,7 +1227,7 @@ function showSendPanel(fileName){
   links.innerHTML = "";
   for(const option of transferOptions(CONFIG.plant.transfer)){
     const a = document.createElement("a");
-    Object.assign(a, {className: "btn", href: option.url, target: "_blank", rel: "noopener", textContent: `Open ${option.name}`});
+    Object.assign(a, {className: "btn", href: option.url, target: "_blank", rel: "noopener", textContent: `${option.name} ↗`});
     links.append(a);
   }
   const panel = document.getElementById("sendPanel");
