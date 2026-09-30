@@ -15,7 +15,7 @@ import { getFormat, enabledFormats, firstEnabledFormat } from "../lib/format-cat
 import { trackFileName, continuousSideFileName, tracklistFileName, projectFileName, fileExt, mimeType, humanDate, slug } from "../lib/package-naming.js";
 import { defaultMatrix } from "../lib/matrix.js";
 import { isDebugMode } from "../lib/debug-mode.js";
-import { transferOptions, transferInstructions } from "../lib/transfer.js";
+import { transferOptions, transferPrompt } from "../lib/transfer.js";
 import { buildSpecsHtml } from "../lib/specs-document.js";
 import { PROJECT_VERSION, includeSideFile, prepareProject, assertProjectFiles } from "../lib/project.js";
 import { buildOrderSummaryText, buildTracklistText } from "../lib/order-documents.js";
@@ -782,15 +782,8 @@ export function initTracklist(){
     if(file) runProjectAction(()=> loadProject(file), "Couldn't open project");
   });
   document.getElementById("btnSend").addEventListener("click", ()=> runProjectAction(sendToPlant, "Couldn't prepare project package"));
-  document.getElementById("btnResendZip").addEventListener("click", ()=>{
-    if(!lastSentZip) return;
-    downloadBlob(lastSentZip.blob, lastSentZip.fileName);
-  });
-  document.getElementById("btnCopyInstructions").addEventListener("click", ()=>{
-    if(!lastSentZip) return;
-    const steps = transferInstructions(CONFIG.plant.transfer, lastSentZip.fileName, sendOption);
-    copyToClipboard(steps.join("\n"));
-  });
+  document.getElementById("btnCopyEmail").addEventListener("click", ()=>
+    copyToClipboard(CONFIG.plant.transfer.uploadEmail));
   return updateChecklist;
 }
 
@@ -1209,53 +1202,33 @@ function confirmIncompleteSend(){
    Send to Plant — no public browser-callable upload API exists for
    the transfer services this targets, so this stays a handoff:
    download the package, then show an inline panel with the steps to
-   finish it manually (see src/lib/transfer.js for the instructions
-   logic). An earlier version opened a generated instruction page via
+   finish it manually (see src/lib/transfer.js for the panel's
+   text). An earlier version opened a generated instruction page via
    window.open() after the async zip build — popup blockers routinely
    killed that in Safari/Firefox, since by the time window.open() ran
    it was no longer considered a direct response to the click. An
    inline panel has no such risk.
    ============================================================ */
 
-// {blob, fileName} from the most recent successful Send — lets "Save
-// .zip again"/"Copy instructions" reuse the exact file/name that was
-// actually sent, rather than rebuilding (which could differ if the
-// customer edited the form afterward).
-let lastSentZip = null;
-
 async function sendToPlant(){
   if(!confirmIncompleteSend()) return;
   const {blob, fileName} = await buildProjectZip(true);
   downloadBlob(blob, fileName);
-  lastSentZip = {blob, fileName};
   showSendPanel(fileName);
 }
 
-// The transfer option whose steps the send panel shows and copies;
-// opening another one switches to it.
-let sendOption = null;
-
-function renderSendSteps(fileName){
-  const list = document.getElementById("sendPanelSteps");
-  list.innerHTML = "";
-  transferInstructions(CONFIG.plant.transfer, fileName, sendOption).forEach(text=>{
-    const li = document.createElement("li");
-    li.textContent = text;
-    list.appendChild(li);
-  });
-}
-
 function showSendPanel(fileName){
-  const options = transferOptions(CONFIG.plant.transfer);
-  sendOption = options[0];
-  renderSendSteps(fileName);
+  const {text, email} = transferPrompt(CONFIG.plant.transfer);
+  document.getElementById("sendPanelSaved").textContent = `File saved: ${fileName}`;
+  document.getElementById("sendPanelPrompt").textContent = text;
+  document.getElementById("sendPanelEmail").textContent = email || "";
+  document.getElementById("sendPanelEmailWrap").classList.toggle("hidden", !email);
   const links = document.getElementById("sendPanelLinks");
   links.innerHTML = "";
-  for(const option of options){
+  for(const option of transferOptions(CONFIG.plant.transfer)){
     const a = document.createElement("a");
     Object.assign(a, {className: "btn", href: option.url, target: "_blank", rel: "noopener", textContent: `Open ${option.name}`});
-    a.addEventListener("click", ()=>{ sendOption = option; renderSendSteps(fileName); });
-    links.append(a, " ");
+    links.append(a);
   }
   const panel = document.getElementById("sendPanel");
   panel.classList.remove("hidden");

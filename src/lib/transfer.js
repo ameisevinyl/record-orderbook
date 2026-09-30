@@ -10,18 +10,11 @@ export function transferOptions(transfer){
     : transfer.services;
 }
 
-// Steps shown in the send panel and copied as plain text, for one
-// option. A direct (browser-to-browser, e.g. FilePizza) service stores
-// nothing: the customer sends its link and keeps the tab open until the
-// plant has the file.
-export function transferInstructions(transfer, fileName, option = transferOptions(transfer)[0]){
-  const steps = [`File saved: ${fileName}`];
-  if(option.dropLink) steps.push(`Open ${option.url} and upload the file`);
-  else if(option.direct) steps.push(
-    `Open ${option.url} and drop the file in`,
-    `Send the link it shows to: ${transfer.uploadEmail}`,
-    "Keep that tab open until the plant has downloaded the file"
-  );
-  else steps.push(`Open ${option.url} and upload the file`, `Send it to: ${transfer.uploadEmail}`);
-  return steps;
+// The send panel's line under "File saved": where to go, and the
+// address to send to (shown with a copy button) unless the plant's own
+// drop-link routes the file by itself.
+export function transferPrompt(transfer){
+  if(transfer.uploadUrl) return {text: "Open the upload page below and upload the file", email: null};
+  const which = transfer.services.length > 1 ? "one of the transfer services" : "the transfer service";
+  return {text: `Open ${which} below and send to`, email: transfer.uploadEmail};
 }
