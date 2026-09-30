@@ -54,6 +54,7 @@ const FILES = [
   "src/lib/shipping.js",
   "src/lib/countries.js",
   "src/lib/vinyl-color.js",
+  "src/lib/proofs.js",
   "src/lib/info-text.js",
   "src/lib/package-naming.js",
   "src/lib/text-table.js",
