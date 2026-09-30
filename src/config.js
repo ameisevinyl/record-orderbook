@@ -133,7 +133,7 @@ export const CONFIG = {
       // product has no artwork file, so it carries no trimMm/bleedMm at
       // all (the Specifications panel hides End format/Data format/
       // Bleed/Shipping weight for a product that has none — see
-      // renderXSpecs in the module files). `default:true` marks the
+      // partSpecRows in lib/format-catalogue.js). `default:true` marks the
       // product that's pre-selected on load — only inner sleeve needs
       // one (it's always required, never "none"); outer cover and inlay
       // default to "none" (nothing pre-selected). Data sizes are never

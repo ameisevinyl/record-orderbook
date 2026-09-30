@@ -276,9 +276,8 @@
   }
 
   /* Specifications — a collapsed-by-default disclosure under each
-     printed part's heading, rendered from CONFIG (see renderXSpecs in
-     labels.js/cover.js/inner-sleeve.js/inlay.js) rather than typed out
-     per part, so it can't drift from the actual format config. */
+     printed part's heading, rendered from CONFIG (labels.js, partSpecRows)
+     rather than typed out per part, so it can't drift from the config. */
   details.specs{ margin:2px 0 10px; }
   details.specs > summary{
     display:inline-block; cursor:pointer; list-style:none;
@@ -402,7 +401,7 @@
        columns doesn't fit an A4 page (2 × up to 106mm > usable
        width). Cover/inner-sleeve/inlay previews already scale
        responsively (percentage width + aspect-ratio, capped at
-       640px/~169mm — see cover.js/inner-sleeve.js/inlay.js) and fit as-is; only the
+       640px/~169mm — see printed-parts.js) and fit as-is; only the
        literal-mm label preview needs a print-specific override. This
        is a reference sheet, not a calibrated proof, same caveat the
        on-screen preview already carries. */
@@ -476,19 +475,9 @@
   <!-- ============ INNER SLEEVE ============ -->
   <section>
     <h2>Inner Sleeve</h2>
-    <details class="specs no-print">
+    <details class="specs no-print" id="innersleevespecs">
       <summary>Specifications</summary>
-      <div class="specs-body">
-        <div id="innersleeveSpecFiletypesRow"><span>Allowed filetypes</span><span id="innersleeveSpecFiletypes"></span></div>
-        <div id="innersleeveSpecColorModeRow"><span>Colour mode</span><span id="innersleeveSpecColorMode"></span></div>
-        <div><span>Final size</span><span id="innersleeveSpecFinalSize"></span></div>
-        <div id="innersleeveSpecEndFormatRow"><span>End format</span><span id="innersleeveSpecEndFormat"></span></div>
-        <div id="innersleeveSpecDataFormatRow"><span>Data format</span><span id="innersleeveSpecDataFormat"></span></div>
-        <div id="innersleeveSpecBleedRow"><span>Bleed</span><span id="innersleeveSpecBleed"></span></div>
-        <div><span>Paper weight</span><span id="innersleeveSpecPaperGsm"></span></div>
-        <div><span>Center cut-out</span><span id="innersleeveSpecCutout"></span></div>
-        <div id="innersleeveSpecWeightRow" class="hidden"><span>Shipping weight</span><span id="innersleeveSpecWeight"></span></div>
-      </div>
+      <div class="specs-body"></div>
     </details>
     <div class="row">
       <div class="field" style="flex:0 0 auto;">
@@ -520,20 +509,9 @@
   <!-- ============ OUTER COVER ============ -->
   <section>
     <h2>Outer Cover</h2>
-    <details class="specs no-print">
+    <details class="specs no-print" id="coverspecs">
       <summary>Specifications</summary>
-      <div class="specs-body">
-        <div id="coverSpecFiletypesRow"><span>Allowed filetypes</span><span id="coverSpecFiletypes"></span></div>
-        <div id="coverSpecColorModeRow"><span>Colour mode</span><span id="coverSpecColorMode"></span></div>
-        <div><span>Final size</span><span id="coverSpecFinalSize"></span></div>
-        <div id="coverSpecEndFormatRow"><span>End format</span><span id="coverSpecEndFormat"></span></div>
-        <div id="coverSpecDataFormatRow"><span>Data format</span><span id="coverSpecDataFormat"></span></div>
-        <div id="coverSpecBleedRow"><span>Bleed</span><span id="coverSpecBleed"></span></div>
-        <div><span>Spine</span><span id="coverSpecSpine"></span></div>
-        <div><span>Paper weight</span><span id="coverSpecPaperGsm"></span></div>
-        <div><span>Center cut-out</span><span id="coverSpecCutout"></span></div>
-        <div id="coverSpecWeightRow" class="hidden"><span>Shipping weight</span><span id="coverSpecWeight"></span></div>
-      </div>
+      <div class="specs-body"></div>
     </details>
     <div class="row">
       <div class="field" style="flex:0 0 auto;">
@@ -565,24 +543,16 @@
   <!-- ============ INLAY ============ -->
   <section>
     <h2>Inlay</h2>
-    <details class="specs no-print">
+    <details class="specs no-print" id="inlayspecs">
       <summary>Specifications</summary>
-      <div class="specs-body">
-        <div id="inlaySpecFiletypesRow"><span>Allowed filetypes</span><span id="inlaySpecFiletypes"></span></div>
-        <div id="inlaySpecColorModeRow"><span>Colour mode</span><span id="inlaySpecColorMode"></span></div>
-        <div id="inlaySpecEndFormatRow"><span>End format</span><span id="inlaySpecEndFormat"></span></div>
-        <div id="inlaySpecDataFormatRow"><span>Data format</span><span id="inlaySpecDataFormat"></span></div>
-        <div id="inlaySpecBleedRow"><span>Bleed</span><span id="inlaySpecBleed"></span></div>
-        <div><span>Paper weight</span><span id="inlaySpecPaperGsm"></span></div>
-        <div id="inlaySpecWeightRow" class="hidden"><span>Shipping weight</span><span id="inlaySpecWeight"></span></div>
-      </div>
+      <div class="specs-body"></div>
     </details>
     <div class="row">
       <div class="field" style="flex:0 0 auto;">
         <select id="inlayProduct"></select>
       </div>
     </div>
-    <div id="inlayBody" class="hidden">
+    <div id="inlayPrintedBody" class="hidden">
       <div class="label-cols2">
         <div>
           <div class="side-head">

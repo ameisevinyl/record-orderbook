@@ -20,9 +20,7 @@ import { buildSpecsHtml } from "../lib/specs-document.js";
 import { PROJECT_VERSION, includeSideFile, prepareProject, assertProjectFiles } from "../lib/project.js";
 import { buildOrderSummaryText, buildTracklistText } from "../lib/order-documents.js";
 import { collectLabelFiles, collectLabels, applyLabels, labelIssues } from "./labels.js";
-import { collectCoverFiles, collectCover, applyCover, coverIssues } from "./cover.js";
-import { collectInnerSleeveFiles, collectInnerSleeve, applyInnerSleeve, innerSleeveIssues } from "./inner-sleeve.js";
-import { collectInlayFiles, collectInlay, applyInlay, inlayIssues } from "./inlay.js";
+import { collectPrintedPartFiles, collectPrintedParts, applyPrintedParts, printedPartIssues } from "./printed-parts.js";
 import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
 import { collectShippingBilling, applyShippingBilling } from "./shipping-billing.js";
 
@@ -511,7 +509,7 @@ function updateChecklist(){
   }
 
   const artworkIssues = [
-    ...labelIssues(), ...coverIssues(), ...innerSleeveIssues(), ...inlayIssues()
+    ...labelIssues(), ...printedPartIssues()
   ];
   artworkIssues.forEach(issue=> items.push([false, issue.text, issue.blocking, issue.pending]));
 
@@ -857,7 +855,7 @@ function buildProjectObject(forSend = false){
     vinylColor: collectVinylColor(),
     shippingBilling: collectShippingBilling(),
     labels: collectLabels(forSend),
-    coverSleeve: { cover: collectCover(), innerSleeve: collectInnerSleeve(), inlay: collectInlay() },
+    coverSleeve: collectPrintedParts(),
     history: projectHistory
   };
 }
@@ -1047,10 +1045,7 @@ async function loadProject(file){
   applyVinylColor(p.vinylColor);
   applyShippingBilling(p.shippingBilling);
   await applyLabels(p.labels, fileMap);
-  const cs = p.coverSleeve || {};
-  await applyCover(cs.cover, fileMap);
-  await applyInnerSleeve(cs.innerSleeve, fileMap);
-  await applyInlay(cs.inlay, fileMap);
+  await applyPrintedParts(p.coverSleeve, fileMap);
 
   ["A","B"].forEach(side=>{
     const s = (p.sides && p.sides[side]) || {tracks:[]};
@@ -1165,9 +1160,7 @@ function collectPackageFiles(forSend = false){
     }
   }
   files.push(...collectLabelFiles(forSend));
-  files.push(...collectCoverFiles());
-  files.push(...collectInnerSleeveFiles());
-  files.push(...collectInlayFiles());
+  files.push(...collectPrintedPartFiles());
   return files;
 }
 

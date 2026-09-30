@@ -12,7 +12,7 @@ const PAD = 4; // room for the stroke on the outermost outline
 // print size. Exported so tests can assert the box is respected.
 export const PREVIEW_MAX = { w: 240, h: 200 };
 
-function esc(str){
+export function esc(str){
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 

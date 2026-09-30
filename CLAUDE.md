@@ -134,6 +134,11 @@ configured on purpose — keep it that way unless asked.
   DOM template and must not reach into another module's DOM.
   `tracklist.js` owns project save/load and the zip package — other
   modules expose a `collect*`/`apply*` pair for it to call.
+  `printed-parts.js` is cover, inner sleeve and inlay from one table.
+  Every artwork upload (those and `labels.js`) is one
+  `artwork-slot.js` slot, handed its own element ids by the caller;
+  sizes and spec rows come from `artworkSize`/`partSpecRows` in
+  `src/lib/format-catalogue.js`, also used by the plant's checks.
 - `tests/*.test.js` mirrors `src/lib/`. New pure logic needs a test.
 - `plant/server.py` + `src/plant/` — the plant (staff) view: a stdlib
   Python server on 127.0.0.1 that serves `src/plant/` and `src/`

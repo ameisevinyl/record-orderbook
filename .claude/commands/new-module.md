@@ -4,9 +4,11 @@ Ask which module to create if not given as an argument. Then:
 
 1. Create `src/modules/<name>.js` following the pattern in
    `src/modules/tracklist.js`: import `CONFIG` from `../config.js` and
-   whatever pure helpers from `src/lib/` it needs; export a single
-   `init<Name>()` function that wires up DOM events; keep all pure/
-   testable logic in `src/lib/` instead, not inline in the module.
+   whatever pure helpers from `src/lib/` it needs; export
+   `init<Name>()` that wires up DOM events, plus a `collect<Name>()`/
+   `apply<Name>()` pair for `tracklist.js`'s save/load; keep all pure/
+   testable logic in `src/lib/` instead, not inline in the module. An
+   artwork upload uses `createArtworkSlot` from `artwork-slot.js`.
 2. Add its markup section to `src/index.html` (mirror the structure of
    the existing `<fieldset>`/`<div class="side-box">` sections — same
    CSS classes, same visual language, no new colors or fonts).
@@ -17,7 +19,7 @@ Ask which module to create if not given as an argument. Then:
    matching `tests/<name>.test.js`, before touching the DOM-facing code.
 5. Add the new lib/module file paths to the `FILES` array in
    `build/build.js`, in dependency order (deps before dependents).
-6. Run `node --test tests/*.test.js` and `node build/build.js` — both
+6. Run `node --test tests/` and `node build/build.js` — both
    must pass before considering this done.
 
 Follow CLAUDE.md's constraints throughout: no runtime dependencies, no

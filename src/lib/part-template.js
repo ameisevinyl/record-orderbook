@@ -7,7 +7,7 @@
 // (trim, cut-outs, center holes) are black dotted; fold lines are a
 // lighter grey dotted, so they read as secondary.
 
-import { mmToPt, buildPdf } from "./pdf.js";
+import { mmToPt, buildPdf, fmt } from "./pdf.js";
 import { labelGeometry, partGeometry } from "./layout-preview.js";
 import { slug, sanitizeFileName } from "./package-naming.js";
 
@@ -17,10 +17,6 @@ const CUT_PT = 0.5;
 const FOLD_PT = 0.25;
 const CUT_DASH = [2, 3];
 const FOLD_DASH = [1, 3];
-
-function fmt(n){
-  return String(Math.round(n * 10000) / 10000);
-}
 
 function escPdf(str){
   return String(str).replace(/([\\()])/g, "\\$1");

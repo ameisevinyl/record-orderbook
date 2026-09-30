@@ -3,9 +3,7 @@
 import { CONFIG } from "./config.js";
 import { initTracklist } from "./modules/tracklist.js";
 import { initLabels } from "./modules/labels.js";
-import { initCover } from "./modules/cover.js";
-import { initInnerSleeve } from "./modules/inner-sleeve.js";
-import { initInlay } from "./modules/inlay.js";
+import { initPrintedParts } from "./modules/printed-parts.js";
 import { initVinylColor } from "./modules/vinyl-color.js";
 import { initShippingBilling } from "./modules/shipping-billing.js";
 import { validateConfig } from "./lib/config-validation.js";
@@ -30,9 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
   validateConfig(CONFIG);
   const refreshOrderStatus = initTracklist();
   initLabels(refreshOrderStatus);
-  initCover(refreshOrderStatus);
-  initInnerSleeve(refreshOrderStatus);
-  initInlay(refreshOrderStatus);
+  initPrintedParts(refreshOrderStatus);
   initVinylColor();
   initShippingBilling();
   refreshOrderStatus();

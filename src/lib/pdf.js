@@ -9,7 +9,7 @@ export function mmToPt(mm){
   return mm * 72 / 25.4;
 }
 
-function fmt(n){
+export function fmt(n){
   return String(Math.round(n * 10000) / 10000);
 }
 

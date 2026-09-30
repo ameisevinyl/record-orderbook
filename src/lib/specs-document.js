@@ -5,14 +5,10 @@
 // — no DOM, testable like every other lib/ file.
 
 import { enabledFormats, labelDataSizeMm, flatDataMm, partWeightG } from "./format-catalogue.js";
-import { labelLayoutSvg, printedPartLayoutSvg } from "./layout-preview.js";
+import { labelLayoutSvg, printedPartLayoutSvg, esc } from "./layout-preview.js";
 import { labelTemplatePdf, partTemplatePdf, templateFileName } from "./part-template.js";
 import { bytesToBase64 } from "./pdf.js";
 import { timeLimitTable, rpmRecommendation, PLAYING_TIME_NOTE } from "./playing-time.js";
-
-function esc(str){
-  return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
 
 function kvTable(rows){
   return `<table><tbody>${rows.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>`;
