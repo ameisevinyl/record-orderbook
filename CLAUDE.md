@@ -205,6 +205,11 @@ configured on purpose — keep it that way unless asked.
   marker.
 - **Whitelabel** — a test/promo pressing with a blank or minimal label,
   as opposed to the final printed label.
+- **Reference cut** — a one-off acetate cut from the master so the
+  customer hears the cut before lacquers are made; one per order.
+- **Testpress** — the first records off the stamper, checking the
+  pressing (not mix or master); a quantity, default 3, recommended
+  from 1,000 records up (`CONFIG.proofs`).
 - **Matrix / runout inscription** — text etched into the runout groove
   (the dead wax between the last track and the label) of each side,
   e.g. the catalogue number plus side letter. Defaults to

@@ -22,6 +22,7 @@ import { buildOrderSummaryText, buildTracklistText } from "../lib/order-document
 import { collectLabelFiles, collectLabels, applyLabels, labelIssues } from "./labels.js";
 import { collectPrintedPartFiles, collectPrintedParts, applyPrintedParts, printedPartIssues } from "./printed-parts.js";
 import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
+import { collectProofs, applyProofs, proofIssues } from "./proofs.js";
 import { collectShippingBilling, applyShippingBilling } from "./shipping-billing.js";
 
 // Renders "file: <current name> — <status>", plus a tight second line
@@ -512,6 +513,7 @@ function updateChecklist(){
     ...labelIssues(), ...printedPartIssues()
   ];
   artworkIssues.forEach(issue=> items.push([false, issue.text, issue.blocking, issue.pending]));
+  proofIssues().forEach(text=> items.push([false, text]));
 
   // Satisfied (ok) items are hidden outside debug mode — this is a
   // status block a customer checks before sending, not a running log of
@@ -853,6 +855,7 @@ function buildProjectObject(forSend = false){
     notes: document.getElementById("notes").value,
     sides: { A: serializeSide("A", forSend), B: serializeSide("B", forSend) },
     vinylColor: collectVinylColor(),
+    proofs: collectProofs(),
     shippingBilling: collectShippingBilling(),
     labels: collectLabels(forSend),
     coverSleeve: collectPrintedParts(),
@@ -1043,6 +1046,7 @@ async function loadProject(file){
   document.getElementById("albumArtist").value = p.albumArtist || "";
   document.getElementById("notes").value = p.notes || "";
   applyVinylColor(p.vinylColor);
+  applyProofs(p.proofs);
   applyShippingBilling(p.shippingBilling);
   await applyLabels(p.labels, fileMap);
   await applyPrintedParts(p.coverSleeve, fileMap);

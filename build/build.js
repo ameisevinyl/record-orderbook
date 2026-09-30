@@ -73,6 +73,7 @@ const FILES = [
   "src/modules/labels.js",
   "src/modules/printed-parts.js",
   "src/modules/vinyl-color.js",
+  "src/modules/proofs.js",
   "src/modules/shipping-billing.js",
   "src/modules/tracklist.js",
   "src/app.js",
