@@ -62,8 +62,9 @@ directly below "Vinyl Colour & Quantity":
 
 `testpressNote(testpresses, totalQty, recommendedFromQty)` returns the
 note text when `testpresses > 0 && totalQty < recommendedFromQty`, else
-null: "Testpress ordered for a run under 1000 records — it checks the
-pressing, not mix or master."
+null: "Testpresses are not recommended for small runs (<1000). If you
+want to check your mix and master, order a reference cut." (The number
+comes from `testpressRecommendedFromQty`.)
 
 ## Data (`project.json`)
 
