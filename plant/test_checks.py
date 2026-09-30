@@ -114,20 +114,20 @@ class ProbeTest(unittest.TestCase):
         bad.write_bytes(b"not audio")
         self.assertIn("error", probe_facts(bad))
 
-    def test_run_writes_facts_and_previews_outside_project(self):
-        project = self.dir / "work" / "p" / "p"
-        project.mkdir(parents=True)
+    def test_run_writes_facts_and_previews_to_hidden_checks(self):
+        project = self.dir / "job"
+        project.mkdir()
         (project / "project.json").write_text("{}")
         (project / "cover.pdf").write_bytes(b"%PDF")
         ffmpeg("-f", "lavfi", "-i", "sine=d=1", "-c:a", "pcm_s16le", str(project / "A1.wav"))
-        out = self.dir / "work" / "p.checks"
+        out = project / ".checks"
         result = run(project, out)
         self.assertEqual(list(result["files"]), ["A1.wav"])
         facts = result["files"]["A1.wav"]
         self.assertTrue((out / facts["preview"]).is_file())
         self.assertTrue((out / facts["waveform"]).is_file())
         self.assertTrue((out / "facts.json").is_file())
-        self.assertEqual(sorted(p.name for p in project.iterdir()), ["A1.wav", "cover.pdf", "project.json"])
+        self.assertEqual(sorted(p.name for p in project.iterdir()), [".checks", "A1.wav", "cover.pdf", "project.json"])
 
 
 class AudioProgressTest(unittest.TestCase):
