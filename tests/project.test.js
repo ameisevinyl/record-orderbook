@@ -6,6 +6,7 @@ const config = {
   formats: [
     {
       id: "12", enabled: true, rpm: 33,
+      proofs: {referenceCut: true, testpress: true},
       printableParts: {
         outerCover: {products:[{id:"cover-print"}]},
         innerSleeve: {products:[{id:"sleeve-white"}]},
@@ -14,6 +15,7 @@ const config = {
     },
     {
       id: "10", enabled: false, rpm: 33,
+      proofs: {referenceCut: false, testpress: false},
       printableParts: {
         outerCover: {products:[]}, innerSleeve: {products:[]}, inlay: {products:[]}
       }
@@ -198,4 +200,24 @@ test("fileSlots gives a path per slot that setAt writes through", () => {
     [["Side A file", null], ["Side A tracklist", null], ["A1", "A1.wav"], ["Label A", null]]);
   setAt(project, slots[2].path, "A1_v2.wav");
   assert.equal(project.sides.A.tracks[0].fileName, "A1_v2.wav");
+});
+
+test("prepareProject: proofs default to none, keep valid values, reject bad ones", () => {
+  const none = prepareProject({projectVersion:1, format:"12"}, config);
+  assert.deepEqual(none.proofs, {referenceCut:false, testpresses:0});
+
+  const ordered = prepareProject({projectVersion:1, format:"12", proofs:{referenceCut:true, testpresses:3}}, config);
+  assert.deepEqual(ordered.proofs, {referenceCut:true, testpresses:3});
+
+  assert.throws(() => prepareProject({projectVersion:1, format:"12", proofs:{testpresses:-1}}, config),
+    /project\.proofs\.testpresses must be a nonnegative integer/);
+  assert.throws(() => prepareProject({projectVersion:1, format:"12", proofs:{testpresses:"3"}}, config),
+    /project\.proofs\.testpresses must be a nonnegative integer/);
+  assert.throws(() => prepareProject({projectVersion:1, format:"12", proofs:{referenceCut:"yes"}}, config),
+    /project\.proofs\.referenceCut/);
+});
+
+test("prepareProject: a format without proofs drops them", () => {
+  const project = prepareProject({projectVersion:1, format:"10", proofs:{referenceCut:true, testpresses:3}}, config);
+  assert.deepEqual(project.proofs, {referenceCut:false, testpresses:0});
 });

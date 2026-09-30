@@ -167,6 +167,18 @@ export function prepareProject(raw, config){
     return row;
   });
 
+  // A product the format doesn't offer is dropped, like a big center
+  // hole on a format without one.
+  const offered = format.proofs || {};
+  project.proofs = objectOrEmpty(project.proofs, "project.proofs");
+  project.proofs.referenceCut = !!offered.referenceCut
+    && bool(project.proofs.referenceCut, "project.proofs.referenceCut");
+  const testpresses = project.proofs.testpresses === undefined ? 0 : project.proofs.testpresses;
+  if(!Number.isInteger(testpresses) || testpresses < 0){
+    throw new Error("project.proofs.testpresses must be a nonnegative integer");
+  }
+  project.proofs.testpresses = offered.testpress ? testpresses : 0;
+
   project.shippingBilling = objectOrEmpty(project.shippingBilling, "project.shippingBilling");
   project.shippingBilling.billing = objectOrEmpty(project.shippingBilling.billing, "project.shippingBilling.billing");
   project.shippingBilling.shipping = arrayOrEmpty(project.shippingBilling.shipping, "project.shippingBilling.shipping");
