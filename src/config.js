@@ -57,6 +57,7 @@ export const CONFIG = {
       // Spindle hole, in mm. "big" (jukebox-style 45s) is omitted for
       // formats that don't offer it.
       centerHole: { normal: 7.4 },
+      proofs: { referenceCut: true, testpress: true },
       // Playing time per side in minutes, per cut type and RPM.
       // "recommended" — stay below this for a full cutting level; above
       //                 it the customer sees a warning
@@ -215,6 +216,7 @@ export const CONFIG = {
       enabled: false,
       rpm: 33,
       centerHole: { normal: 7.4 },
+      proofs: { referenceCut: true, testpress: true },
       timeLimits: {
         normal:      { recommended:{45:8,   33:12}, max:{45:8,   33:14} },
         soundsystem: { recommended:{45:4.5, 33:7},  max:{45:6,   33:9} }
@@ -294,6 +296,7 @@ export const CONFIG = {
       // specs, and warned about when a side is set to the other speed.
       recommendedRpm: 45,
       centerHole: { normal: 7.4, big: 38 },
+      proofs: { referenceCut: true, testpress: true },
       timeLimits: {
         normal:      { recommended:{45:4.5, 33:6.5}, max:{45:6.0, 33:8.0} },
         soundsystem: { recommended:{45:3.5, 33:5.0}, max:{45:4.5, 33:6.0} }
@@ -417,6 +420,16 @@ export const CONFIG = {
     }
   },
 
+  // Reference cut (one acetate) and testpress (the first records off the
+  // stamper), each offered per format in formats[i].proofs. A ticked
+  // testpress starts at testpressDefaultQty; below
+  // testpressRecommendedFromQty records in the run the form shows a
+  // soft note pointing to the reference cut.
+  proofs: {
+    testpressDefaultQty: 3,
+    testpressRecommendedFromQty: 1000
+  },
+
   // UI language for the info-panel text below. Only "en" has content
   // today — German and Spanish are planned; once real translations
   // exist, add a "de"/"es" key next to "en" in each infoText entry and
@@ -435,6 +448,12 @@ export const CONFIG = {
     },
     labelArtwork: {
       en: `Accepted files: PDF, JPG, TIFF. Colour mode: CMYK. Max. ink coverage: 200%. Colour profile: ISO ECI v2 300.`
+    },
+    referenceCut: {
+      en: `A one-off acetate cut from your master, to hear the cut before the lacquers are made. Unsure about your mix or master? Order a reference cut.`
+    },
+    testpress: {
+      en: `The first records from the stamper, to check the pressing for real errors before the run — not for judging mix or master (that's the reference cut). Recommended for runs of 1,000 records or more.`
     }
   }
 };

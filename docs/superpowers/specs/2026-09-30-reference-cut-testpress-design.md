@@ -18,8 +18,9 @@ about 1,000 records up. A plant offers each one per format.
   is hidden and reset. With both disabled, the section is hidden.
 - Shipping is not part of the form; the plant settles it with the
   customer.
-- A testpress for a run under the threshold gives a soft,
-  non-blocking note in the order checklist.
+- A testpress for a run under the threshold shows a soft note in the
+  Reference cut & Testpress section itself — not in the order
+  checklist, whose flagged items trigger the "send anyway" warning.
 - `tracklist.txt` carries the reference cut upfront but not the
   testpress. `order_summary.txt` carries both.
 
@@ -51,7 +52,8 @@ directly below "Vinyl Colour & Quantity":
 
 - The quantity field shows only while Testpress is ticked. Ticking it
   prefills `testpressDefaultQty`. An empty field or one below 1 is an
-  issue in the order checklist, like other quantities.
+  issue in the order checklist, like other quantities. The soft note
+  sits under the testpress row and follows the colour quantities.
 - A format change hides products the format doesn't offer and resets
   them (unticked, 0).
 - Exports `initProofs(onStateChange)`, `collectProofs()`,

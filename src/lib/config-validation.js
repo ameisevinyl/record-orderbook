@@ -136,6 +136,18 @@ function validateVinylColor(value){
   }
 }
 
+function integer(value, path, allowZero = false){
+  if(!Number.isInteger(value) || (allowZero ? value < 0 : value <= 0)){
+    fail(path, `must be a ${allowZero ? "nonnegative" : "positive"} integer`);
+  }
+}
+
+function validateProofs(value){
+  const proofs = object(value, "CONFIG.proofs");
+  integer(proofs.testpressDefaultQty, "CONFIG.proofs.testpressDefaultQty");
+  integer(proofs.testpressRecommendedFromQty, "CONFIG.proofs.testpressRecommendedFromQty", true);
+}
+
 function validatePlant(value){
   const plant = object(value, "CONFIG.plant");
   const imprint = object(plant.imprint, "CONFIG.plant.imprint");
@@ -207,6 +219,10 @@ export function validateConfig(config){
     validateTimeLimits(format.timeLimits, `${path}.timeLimits`);
     validatePrintCheck(format.printCheck, `${path}.printCheck`);
     validateProducts(object(format.printableParts, `${path}.printableParts`), `${path}.printableParts`);
+    const proofs = object(format.proofs, `${path}.proofs`);
+    for(const name of ["referenceCut", "testpress"]){
+      if(typeof proofs[name] !== "boolean") fail(`${path}.proofs.${name}`, "must be a boolean");
+    }
   });
   if(!enabled) fail("CONFIG.formats", "must contain at least one enabled format");
 
@@ -217,6 +233,7 @@ export function validateConfig(config){
   if(typeof config.blockIncompleteArtworkOnSend !== "boolean") fail("CONFIG.blockIncompleteArtworkOnSend", "must be a boolean");
 
   validateVinylColor(config.vinylColor);
+  validateProofs(config.proofs);
 
   string(config.locale, "CONFIG.locale");
   validateInfoText(config.infoText);

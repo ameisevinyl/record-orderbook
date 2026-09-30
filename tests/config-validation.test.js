@@ -169,3 +169,21 @@ test("printCheck ink limits, black thresholds and new check severities are valid
     assert.throws(() => validateConfig(config), message);
   }
 });
+
+test("validates per-format proofs switches and the plant-wide testpress numbers", () => {
+  const missing = copy();
+  delete missing.formats[0].proofs;
+  assert.throws(() => validateConfig(missing), /CONFIG\.formats\[0\]\.proofs must be an object/);
+
+  const notBool = copy();
+  notBool.formats[0].proofs = { referenceCut: true, testpress: "yes" };
+  assert.throws(() => validateConfig(notBool), /CONFIG\.formats\[0\]\.proofs\.testpress must be a boolean/);
+
+  const qty = copy();
+  qty.proofs = { testpressDefaultQty: 0, testpressRecommendedFromQty: 1000 };
+  assert.throws(() => validateConfig(qty), /CONFIG\.proofs\.testpressDefaultQty must be a positive integer/);
+
+  const threshold = copy();
+  threshold.proofs = { testpressDefaultQty: 3, testpressRecommendedFromQty: -1 };
+  assert.throws(() => validateConfig(threshold), /CONFIG\.proofs\.testpressRecommendedFromQty must be a nonnegative integer/);
+});
