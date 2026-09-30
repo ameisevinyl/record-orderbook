@@ -87,25 +87,29 @@ function productTable(title, products, partKey, formatId, chosenId){
 function timeLimitsTable(format){
   const {head, rows} = timeLimitTable(format.timeLimits);
   const advice = rpmRecommendation(format);
-  return `<h3>Playing time per side</h3>
+  return `<div class="part">
+    <h3>Playing time per side</h3>
     <table>
       <thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>
       <tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
     </table>
     <p class="note">${esc(PLAYING_TIME_NOTE)}</p>
-    ${advice ? `<p class="note"><strong>${esc(advice)}</strong></p>` : ""}`;
+    ${advice ? `<p class="note"><strong>${esc(advice)}</strong></p>` : ""}
+  </div>`;
 }
 
 function printFilesTable(format, artworkFileTypes, printSpec){
   const { checks, dpi } = format.printCheck;
-  return `<h3>Print files</h3>
+  return `<div class="part">
+    <h3>Print files</h3>
     ${kvTable([
       ["Allowed filetypes", artworkFileTypes.labels.join(", ")],
       ["Colour mode", checks.colorMode.accepted.join("/")],
       ["Colour profile", printSpec.colourProfile],
       ["Spot colours", checks.spotColors.accepted ? "allowed" : "not allowed"],
       ["Resolution", `${dpi.min}–${dpi.max} dpi`]
-    ])}`;
+    ])}
+  </div>`;
 }
 
 function centerHoleLabel(centerHole){
@@ -129,6 +133,7 @@ function formatSection(format, artworkFileTypes, printSpec, order){
     ])}
     ${timeLimitsTable(format)}
     ${printFilesTable(format, artworkFileTypes, printSpec)}
+    <div class="part">
     <h3>Label</h3>
     ${layoutFigures([[`⌀${label.diameterMm}mm`, labelLayoutSvg(label), {
       fileName: templateFileName({formatId: format.id, part: "labels"}),
@@ -138,6 +143,7 @@ function formatSection(format, artworkFileTypes, printSpec, order){
       <thead><tr><th>End format</th><th>Bleed</th><th>Data format</th></tr></thead>
       <tbody><tr><td>⌀${label.diameterMm}mm</td><td>${label.bleedMm}mm</td><td>${labelDataSizeMm(label)}×${labelDataSizeMm(label)}mm</td></tr></tbody>
     </table>
+    </div>
     ${productTable("Inner Sleeve", parts.innerSleeve.products, "innersleeve", format.id, chosen("innerSleeve"))}
     ${productTable("Outer Cover", parts.outerCover.products, "cover", format.id, chosen("cover"))}
     ${productTable("Inlay", parts.inlay.products, "inlay", format.id, chosen("inlay"))}
@@ -178,10 +184,12 @@ const SPECS_CSS = `
   ul{font-size:12px;padding-left:18px;}
   .note{font-size:12px;margin:6px 0 0;}
   @page{ margin:12mm; }
-  /* Each format starts on its own page — but not the audio section, so
-     page 1 isn't just the title (an h2-wide break-before did exactly
-     that). */
-  @media print{ body{margin:0;max-width:none;padding:0;} .format{break-before:page;} .no-print{display:none;} }
+  /* A heading never ends a page away from its content. Show all: each
+     further format starts a new page (the first follows the audio spec,
+     so page 1 isn't just that); show ordered has one format, no break.
+     Tables fit their content, so none can run past the page edge. */
+  .part{break-inside:avoid;}
+  @media print{ body{margin:0;max-width:none;padding:0;} body:not(.ordered) .format ~ .format{break-before:page;} table{width:auto;max-width:100%;} .no-print{display:none;} }
 `;
 
 // Safari ignores the download attribute on data: URLs and can navigate

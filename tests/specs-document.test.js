@@ -130,10 +130,15 @@ test("buildSpecsHtml shows the label's data format as a square, not a diameter",
   assert.doesNotMatch(html, /⌀106mm/);
 });
 
-test("buildSpecsHtml starts each format on its own page", () => {
+test("buildSpecsHtml print: a new page per further format only in show all; blocks stay whole; tables fit", () => {
   const html = buildSpecsHtml(config);
-  assert.match(html, /<section class="format">/);
-  assert.match(html, /\.format\{break-before:page;\}/);
+  assert.match(html, /body:not\(\.ordered\) \.format ~ \.format\{break-before:page;\}/);
+  assert.doesNotMatch(html, /[{}] ?\.format\{break-before/);
+  assert.match(html, /\.part\{break-inside:avoid;\}/);
+  for(const title of ["Playing time per side", "Print files", "Label", "Outer Cover"]){
+    assert.match(html, new RegExp(`<div class="part">\\s*<h3>${title}`), title);
+  }
+  assert.match(html, /@media print\{.*table\{width:auto;max-width:100%;\}/);
 });
 
 test("buildSpecsHtml escapes the plant name (HTML-unsafe characters)", () => {
