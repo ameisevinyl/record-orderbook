@@ -7,6 +7,7 @@ import { computeStatus } from "./playing-time.js";
 import { getFormat, productById } from "./format-catalogue.js";
 import { parseQuantity, allocateQuantities, missingAddressFields, emailFormatValid } from "./shipping.js";
 import { belowMinimum, colorLabel } from "./vinyl-color.js";
+import { testpressNote } from "./proofs.js";
 
 export const ADDRESS_FIELD_LABELS = {
   recipientName: "name", attention: "attention", addressLine1: "address line 1",
@@ -104,6 +105,10 @@ export function projectGaps(project, config, files){
       add("Quantity", `${colorLabel(row.color)}: ${row.qty} is below the minimum of ${minOrderQty[row.color]}`);
     }
   }
+  const total = project.vinylColor.reduce((sum, row) => sum + (parseQuantity(row.qty) || 0), 0);
+  const note = testpressNote(project.proofs.testpresses, total,
+    (config.proofs && config.proofs.testpressRecommendedFromQty) || 0);
+  if(note) add("Quantity", note);
 
   const {billing, shipping} = project.shippingBilling;
   for(const field of missingAddressFields(billing)) add("Billing", `${ADDRESS_FIELD_LABELS[field]} missing`);

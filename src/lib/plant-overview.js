@@ -107,6 +107,8 @@ export function renderBasic(project, config, place, gaps){
       + ` — total ${total}` : ""],
     ["Customer", escapeHtml([billing.recipientName, billing.email].filter(v => v && v.trim()).join(", "))],
     ["Products", products],
+    ...(project.proofs.referenceCut ? [["Reference cut", "yes"]] : []),
+    ...(project.proofs.testpresses > 0 ? [["Testpresses", String(project.proofs.testpresses)]] : []),
     ["Stage", `${escapeHtml(stageLabel(place.stage))} <select id="moveTo">${options}</select> `
       + `<button type="button" id="move">Move</button> <button type="button" id="rescan">Rescan</button> `
       + `<a href="/api/zip?job=${encodeURIComponent(place.job)}" download>Download zip</a>`],

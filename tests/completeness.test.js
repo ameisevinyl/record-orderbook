@@ -113,3 +113,11 @@ test("shipping: no address, missing fields, over-allocated or invalid extra quan
   assert.deepEqual(texts(gaps({shippingBilling:{billing:{...address}, shipping:invalid}})),
     ["Shipping: Black: invalid shipping quantity"]);
 });
+
+test("testpress on a run under the recommended size is a soft quantity note", () => {
+  assert.deepEqual(gaps({proofs:{testpresses:3}}).filter(g => /Testpress/.test(g.text)),
+    [{group:"Quantity", text:"Testpresses are not recommended for small runs (<1000). If you want to check your mix and master, order a reference cut."}]);
+  assert.equal(gaps({proofs:{testpresses:3}, vinylColor:[{color:"black", qty:"1000"}],
+    shippingBilling:{billing:{...address}, shipping:[{...address, qtyByColor:{black:"1000"}}]}})
+    .filter(g => /Testpress/.test(g.text)).length, 0);
+});

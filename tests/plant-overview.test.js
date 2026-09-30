@@ -172,3 +172,11 @@ test("helpers", () => {
   assert.equal(stageLabel("10_ORDERS/20_PRESS"), "ORDERS › PRESS");
   assert.equal(escapeHtml(`a&"'`), "a&amp;&quot;&#39;");
 });
+
+test("basic: reference cut and testpresses only when ordered", () => {
+  assert.doesNotMatch(renderBasic(project, CONFIG, place, []), /Reference cut|Testpresses/);
+  const ordered = {...project, proofs: {referenceCut: true, testpresses: 3}};
+  const html = renderBasic(ordered, CONFIG, place, []);
+  assert.ok(html.includes('<tr><th scope="row">Reference cut</th><td>yes</td></tr>'));
+  assert.ok(html.includes('<tr><th scope="row">Testpresses</th><td>3</td></tr>'));
+});
