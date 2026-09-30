@@ -296,6 +296,7 @@ export const CONFIG = {
       // specs, and warned about when a side is set to the other speed.
       recommendedRpm: 45,
       centerHole: { normal: 7.4, big: 38 },
+      bigCenterDefault: true,
       proofs: { referenceCut: true, testpress: true },
       timeLimits: {
         normal:      { recommended:{45:4.5, 33:6.5}, max:{45:6.0, 33:8.0} },
@@ -443,12 +444,6 @@ export const CONFIG = {
   // by locale. Edit freely per pressing plant; this is the one place
   // that text lives.
   infoText: {
-    bigCenter: {
-      en: `38mm center hole, jukebox style. First choice for 7" pressings running 45 RPM — needs a center adapter for playback.`
-    },
-    labelArtwork: {
-      en: `Accepted files: PDF, JPG, TIFF. Colour mode: CMYK. Max. ink coverage: 200%. Colour profile: ISO ECI v2 300.`
-    },
     referenceCut: {
       en: `One-off acetate cut from your premaster, to hear the sound before the actual master for plating is cut.`
     },

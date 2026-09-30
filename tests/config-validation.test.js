@@ -158,8 +158,8 @@ test("validates artwork file types, print spec, locale, and info text", () => {
   assert.throws(() => validateConfig(locale), /CONFIG\.locale must be a non-empty string/);
 
   const info = copy();
-  delete info.infoText.bigCenter.en;
-  assert.throws(() => validateConfig(info), /infoText\.bigCenter\.en must be a non-empty string/);
+  delete info.infoText.referenceCut.en;
+  assert.throws(() => validateConfig(info), /infoText\.referenceCut\.en must be a non-empty string/);
 });
 
 test("printCheck ink limits, black thresholds and new check severities are validated", () => {
@@ -192,4 +192,16 @@ test("validates per-format proofs switches and the plant-wide testpress numbers"
   const threshold = copy();
   threshold.proofs = { testpressDefaultQty: 3, testpressRecommendedFromQty: -1 };
   assert.throws(() => validateConfig(threshold), /CONFIG\.proofs\.testpressRecommendedFromQty must be a nonnegative integer/);
+});
+
+test("bigCenterDefault is a boolean, only on a format with a big center hole", () => {
+  const seven = CONFIG.formats.findIndex(f => f.centerHole.big);
+  const notBool = copy();
+  notBool.formats[seven].bigCenterDefault = "yes";
+  assert.throws(() => validateConfig(notBool), /bigCenterDefault must be a boolean/);
+  const noHole = copy();
+  const other = noHole.formats.findIndex(f => !f.centerHole.big);
+  noHole.formats[other].bigCenterDefault = true;
+  assert.throws(() => validateConfig(noHole), /bigCenterDefault needs centerHole\.big/);
+  assert.equal(CONFIG.formats[seven].bigCenterDefault, true);
 });

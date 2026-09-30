@@ -223,6 +223,10 @@ export function validateConfig(config){
     const centerHole = object(format.centerHole, `${path}.centerHole`);
     number(centerHole.normal, `${path}.centerHole.normal`);
     if(centerHole.big !== undefined) number(centerHole.big, `${path}.centerHole.big`);
+    if(format.bigCenterDefault !== undefined){
+      if(typeof format.bigCenterDefault !== "boolean") fail(`${path}.bigCenterDefault`, "must be a boolean");
+      if(format.bigCenterDefault && centerHole.big === undefined) fail(`${path}.bigCenterDefault`, "needs centerHole.big");
+    }
     validateTimeLimits(format.timeLimits, `${path}.timeLimits`);
     validatePrintCheck(format.printCheck, `${path}.printCheck`);
     validateProducts(object(format.printableParts, `${path}.printableParts`), `${path}.printableParts`);

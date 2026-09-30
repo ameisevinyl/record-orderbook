@@ -8,7 +8,6 @@
 
 import { CONFIG } from "../config.js";
 import { getFormat, artworkSize } from "../lib/format-catalogue.js";
-import { infoText, renderInfoIcon } from "../lib/info-text.js";
 import { printedPartFileName, previewFileName, fileExt } from "../lib/package-naming.js";
 import { requiredFileIssue } from "../lib/file-issues.js";
 import { createArtworkSlot, pairSlots } from "./artwork-slot.js";
@@ -52,7 +51,6 @@ function labelSideTemplate(side){
       <label class="pagepick hidden no-print" id="labelpagewrap-${side}">page
         <select id="labelpage-${side}"></select> <span id="labelpagecount-${side}"></span></label>
       ${side === "A" ? `<button type="button" class="pairbtn hidden no-print" id="labelpair-A">Use page 2 for side B</button>` : ""}
-      <span id="labelinfo-${side}" style="margin-left:auto;"></span>
     </div>
     <input type="file" id="labelinput-${side}" accept="${CONFIG.artworkFileTypes.accept}" class="hidden">
 
@@ -90,13 +88,6 @@ function updatePreviewSizing(){
   });
 }
 
-// Expert-reference text only (ink coverage, colour profile), from
-// CONFIG.infoText; sizes are in the Specifications disclosure.
-function updateLabelInfo(){
-  const html = renderInfoIcon(infoText(CONFIG.infoText, CONFIG.locale, "labelArtwork"));
-  SIDES.forEach(side=> document.getElementById("labelinfo-"+side).innerHTML = html);
-}
-
 function renderLabelSpecs(){
   const {targetMm, bleedMm, label} = labelSize();
   const colorMode = getFormat(CONFIG, currentFormat()).printCheck.checks.colorMode.accepted.join("/");
@@ -129,7 +120,6 @@ export function initLabels(onStateChange = ()=>{}){
   )]));
   updateLabelPair = pairSlots(labelSlots.A, labelSlots.B, document.getElementById("labelpair-A"), ()=> whitelabel("B"));
   updatePreviewSizing();
-  updateLabelInfo();
   renderLabelSpecs();
   SIDES.forEach(side=> document.getElementById("whitelabel-"+side).addEventListener("change", ()=>{
     showWhitelabel(side);
@@ -137,25 +127,23 @@ export function initLabels(onStateChange = ()=>{}){
     labelsOnStateChange();
   }));
 
-  const bigCenterWrap = document.getElementById("bigCenterWrap");
-  bigCenterWrap.insertAdjacentHTML("beforeend",
-    renderInfoIcon(infoText(CONFIG.infoText, CONFIG.locale, "bigCenter")));
-  const updateBigCenterVisibility = ()=>{
-    const supported = !!getFormat(CONFIG, currentFormat()).centerHole.big;
-    bigCenterWrap.classList.toggle("hidden", !supported);
-    if(!supported) document.getElementById("bigCenter").checked = false;
+  // Offered where the format has a big hole, preselected where the
+  // format says so (7"); a reopened project's own choice comes after.
+  const updateBigCenter = ()=>{
+    const format = getFormat(CONFIG, currentFormat());
+    document.getElementById("bigCenterWrap").classList.toggle("hidden", !format.centerHole.big);
+    document.getElementById("bigCenter").checked = !!format.bigCenterDefault;
   };
   // A file is sized for one format — a format change drops it.
   document.getElementById("format").addEventListener("change", ()=>{
     SIDES.forEach(side=> labelSlots[side].clear());
     updateLabelPair();
-    updateBigCenterVisibility();
+    updateBigCenter();
     updatePreviewSizing();
-    updateLabelInfo();
     renderLabelSpecs();
     labelsOnStateChange();
   });
-  updateBigCenterVisibility();
+  updateBigCenter();
 }
 
 function labelFileName(side, file){
