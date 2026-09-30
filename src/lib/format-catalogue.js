@@ -62,3 +62,36 @@ export function groupProductsByKind(products){
 export function productById(products, id){
   return id == null ? undefined : products.find(p => p.id === id);
 }
+
+// The artwork file's expected size for one printed part: labels from the
+// format's label, flat parts from their product. null for an unprinted
+// product or none — no artwork file then.
+export function artworkSize(format, part, product){
+  if(part === "labels"){
+    const label = format.printableParts.label;
+    const data = labelDataSizeMm(label);
+    return {targetMm: {w: data, h: data}, trimMm: {w: label.diameterMm, h: label.diameterMm},
+      bleedMm: label.bleedMm, round: true};
+  }
+  if(!product || product.kind !== "printed") return null;
+  return {targetMm: flatDataMm(product), trimMm: product.trimMm, bleedMm: product.bleedMm, round: false};
+}
+
+// Specifications panel of a flat part's product as [label, value] rows;
+// a row shows only when the product has that value. File rows only for
+// a printed product (they describe the artwork file).
+export function partSpecRows(product, {fileTypes, colorMode, debug}){
+  if(!product) return [];
+  const mm = s => `${s.w}×${s.h}mm`;
+  const printed = product.kind === "printed";
+  const rows = [];
+  if(printed) rows.push(["Allowed filetypes", fileTypes], ["Colour mode", colorMode]);
+  if(product.finalMm) rows.push(["Final size", mm(product.finalMm)]);
+  if(product.trimMm) rows.push(["End format", mm(product.trimMm)]);
+  if(printed) rows.push(["Data format", mm(flatDataMm(product))], ["Bleed", `${product.bleedMm}mm`]);
+  if(product.spineMm != null) rows.push(["Spine", `${product.spineMm}mm`]);
+  rows.push(["Paper weight", `${product.paperGsm}gsm`]);
+  if(product.cutoutDiameterMm) rows.push(["Center cut-out", `⌀${product.cutoutDiameterMm}mm`]);
+  if(debug && product.trimMm) rows.push(["Shipping weight", `${partWeightG(product)}g`]);
+  return rows;
+}

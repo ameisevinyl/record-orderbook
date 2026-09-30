@@ -3,7 +3,7 @@
 // facts it returns — the customer page's checklist on exact values plus
 // Ink, Black and Bleed. No DOM.
 
-import { getFormat, labelDataSizeMm, flatDataMm, productById } from "./format-catalogue.js";
+import { getFormat, artworkSize, productById } from "./format-catalogue.js";
 import { buildChecklistRows, resolveSeverity } from "./print-artwork.js";
 
 // Share of the page area (%) a problem may cover before it counts —
@@ -25,14 +25,11 @@ export function artworkSlots(project, config){
     }});
   };
 
-  const label = parts.label;
-  const data = labelDataSizeMm(label);
+  const holeMm = format.centerHole[project.labels.bigCenter ? "big" : "normal"];
   for(const side of ["A", "B"]){
     const slot = project.labels.sides[side];
     if(slot.whitelabel) continue;
-    add(`Label ${side}`, slot, "labels", {targetMm: {w: data, h: data},
-      trimMm: {w: label.diameterMm, h: label.diameterMm}, bleedMm: label.bleedMm, round: true,
-      holeMm: format.centerHole[project.labels.bigCenter ? "big" : "normal"]});
+    add(`Label ${side}`, slot, "labels", {...artworkSize(format, "labels"), holeMm});
   }
 
   const sleeve = project.coverSleeve;
@@ -42,10 +39,8 @@ export function artworkSlots(project, config){
     ["Inlay front", sleeve.inlay.front, "inlay", sleeve.inlay.productId],
     ["Inlay back", sleeve.inlay.back, "inlay", sleeve.inlay.productId]
   ]){
-    const product = productById((parts[part] && parts[part].products) || [], productId);
-    if(!product || product.kind !== "printed") continue;
-    add(title, slot, part, {targetMm: flatDataMm(product), trimMm: product.trimMm,
-      bleedMm: product.bleedMm, round: false});
+    const size = artworkSize(format, part, productById((parts[part] && parts[part].products) || [], productId));
+    if(size) add(title, slot, part, size);
   }
   return slots;
 }

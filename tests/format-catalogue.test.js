@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   getFormat, enabledFormats, firstEnabledFormat,
   labelDataSizeMm, flatDataMm, partWeightG,
-  groupProductsByKind, productById
+  groupProductsByKind, productById, artworkSize, partSpecRows
 } from "../src/lib/format-catalogue.js";
 
 const config = {
@@ -106,4 +106,42 @@ test("productById returns undefined for an unknown id", () => {
 
 test("productById returns undefined for a null id (the None selection)", () => {
   assert.equal(productById(innerSleeveProducts12, null), undefined);
+});
+
+const cover = { kind: "printed", trimMm: {w: 633, h: 318}, finalMm: {w: 315, h: 318}, spineMm: 3, bleedMm: 5, paperGsm: 300 };
+const opts = { fileTypes: "PDF, TIFF", colorMode: "CMYK", debug: false };
+
+test("artworkSize: labels are a bled square with a round trim", () => {
+  const format = { printableParts: { label: { diameterMm: 100, bleedMm: 3 } } };
+  assert.deepEqual(artworkSize(format, "labels"),
+    { targetMm: {w: 106, h: 106}, trimMm: {w: 100, h: 100}, bleedMm: 3, round: true });
+});
+
+test("artworkSize: a printed flat part is trim plus bleed; unprinted or none has no artwork", () => {
+  assert.deepEqual(artworkSize({}, "outerCover", cover),
+    { targetMm: {w: 643, h: 328}, trimMm: {w: 633, h: 318}, bleedMm: 5, round: false });
+  assert.equal(artworkSize({}, "innerSleeve", { kind: "unprinted", paperGsm: 135 }), null);
+  assert.equal(artworkSize({}, "inlay", undefined), null);
+});
+
+test("partSpecRows: printed cover lists file, size and spine rows", () => {
+  assert.deepEqual(partSpecRows(cover, opts), [
+    ["Allowed filetypes", "PDF, TIFF"], ["Colour mode", "CMYK"],
+    ["Final size", "315×318mm"], ["End format", "633×318mm"],
+    ["Data format", "643×328mm"], ["Bleed", "5mm"], ["Spine", "3mm"], ["Paper weight", "300gsm"]
+  ]);
+});
+
+test("partSpecRows: unprinted sleeve has no file rows, shows its cut-out", () => {
+  const sleeve = { kind: "unprinted", finalMm: {w: 304, h: 309}, paperGsm: 135, cutoutDiameterMm: 85 };
+  assert.deepEqual(partSpecRows(sleeve, opts),
+    [["Final size", "304×309mm"], ["Paper weight", "135gsm"], ["Center cut-out", "⌀85mm"]]);
+});
+
+test("partSpecRows: inlay, shipping weight only in debug, none selected is empty", () => {
+  const inlay = { kind: "printed", trimMm: {w: 297, h: 297}, bleedMm: 3, paperGsm: 170 };
+  const rows = partSpecRows(inlay, { ...opts, debug: true });
+  assert.deepEqual(rows.map(r => r[0]),
+    ["Allowed filetypes", "Colour mode", "End format", "Data format", "Bleed", "Paper weight", "Shipping weight"]);
+  assert.deepEqual(partSpecRows(undefined, opts), []);
 });
