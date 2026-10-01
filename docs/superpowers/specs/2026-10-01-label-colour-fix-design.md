@@ -91,7 +91,8 @@ JPEG with 35% rich black, and a clean pure-K label. Every result came out at max
 - **Sharper previews:** `PREVIEW_PX` goes from 800 to 1600, so previews are sharp on Retina
   at the displayed size of up to 800 CSS px.
 - **CMYK data:** each checked file also writes `<preview base>.cmyk`: raw CMYK bytes at
-  preview size, the file's own numbers (RGB through the part's profile when available).
+  preview size: the same CMYK numbers the Ink check measures (CMYK/grey as the file's own,
+  RGB as MuPDF separates it), so readout and checks never disagree.
 - **Cache:** bump `CHECKS_VERSION`.
 - **Readout:** in the plant view, moving over an artwork preview shows `C M Y K` and the
   total at the pointer (`src/plant/app.js`, data fetched once per preview).
