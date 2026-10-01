@@ -10,7 +10,7 @@ import { colorLabel } from "./vinyl-color.js";
 import { parseQuantity } from "./shipping.js";
 import { sideTiming, ADDRESS_FIELD_LABELS } from "./completeness.js";
 import { sideAudio } from "./audio-checks.js";
-import { artworkRows, artworkVerdict } from "./artwork-checks.js";
+import { artworkRows, artworkVerdict, fixable } from "./artwork-checks.js";
 import { CHECKLIST_ICON } from "./print-artwork.js";
 
 export const SECTIONS = [["basic", "Basic"], ["artwork", "Artwork"], ["audio", "Audio"],
@@ -141,12 +141,18 @@ function cutLinesSvg(page, trim, bleedMm, round, holeMm){
 
 // A checked file: preview with cut lines and switchable problem areas,
 // then the checklist.
-function artFileHtml({title, params}, facts, printCheck, base){
+// slotIndex: the slot's index for an in-use file (its "fix colours"
+// button), null for a compared newer version.
+function artFileHtml({title, params}, facts, printCheck, base, slotIndex){
   let body = `<h3>${escapeHtml(title)}</h3>`;
+  if(slotIndex !== null && fixable(facts, params, printCheck)){
+    body += `<button type="button" class="fix" data-slot="${slotIndex}">fix colours</button>`;
+  }
   if(facts.preview){
     const url = file => escapeHtml(base + encodeURIComponent(file));
     body += `<label><input type="checkbox" class="show-overlay"> problem areas</label>`
-      + `<div class="art" style="aspect-ratio:${facts.pageMm.w} / ${facts.pageMm.h}">`
+      + `<div class="art" style="aspect-ratio:${facts.pageMm.w} / ${facts.pageMm.h}"`
+      + (facts.cmyk ? ` data-cmyk="${url(facts.cmyk)}" data-w="${facts.previewPx.w}" data-h="${facts.previewPx.h}"` : "") + `>`
       + `<img src="${url(facts.preview)}" alt=""><img class="overlay" hidden src="${url(facts.overlay)}" alt="">`
       + cutLinesSvg(facts.pageMm, facts.trimRectMm, params.bleedMm, params.round, params.holeMm) + `</div>`;
   }
@@ -158,7 +164,7 @@ function artFileHtml({title, params}, facts, printCheck, base){
 // files: jobFiles(); checkable: artworkSlots() (printed parts with their
 // check params); facts: the artwork check's result, or null while it
 // runs. base: URL folder of the job's check output.
-export function renderArtwork(files, checkable, facts, printCheck, base, gaps){
+export function renderArtwork(files, checkable, facts, printCheck, base, gaps, compare = []){
   const slots = files.slots.filter(s => s.section === "artwork");
   const params = new Map(checkable.map(c => [c.name, c.params]));
   const verdict = slot => !params.has(slot.name) ? "" : !facts ? "checking"
@@ -167,7 +173,12 @@ export function renderArtwork(files, checkable, facts, printCheck, base, gaps){
   let body = gapsHtml(gaps, "artwork");
   if(slots.length) body += listTable(["Slot", "File", "Other versions", "Verdict"],
     slots.map(s => [escapeHtml(s.title) + page(s), fileCell(s), versionsCell(s), verdict(s)]));
-  if(facts) body += checkable.map(c => artFileHtml(c, facts[c.name] || {error: "not checked"}, printCheck, base)).join("");
+  if(facts) body += checkable.map(c => {
+    const slot = files.slots.find(s => s.name === c.name);
+    const own = artFileHtml(c, facts[c.name] || {error: "not checked"}, printCheck, base, slot ? slot.index : null);
+    const newer = compare.find(v => v.of === c.name);
+    return newer ? `<div class="compare">${own}${artFileHtml(newer, facts[newer.name] || {error: "not checked"}, printCheck, base, null)}</div>` : own;
+  }).join("");
   return section("artwork", body || "<p>No artwork.</p>");
 }
 

@@ -180,3 +180,21 @@ test("basic: reference cut and testpresses only when ordered", () => {
   assert.ok(html.includes('<tr><th scope="row">Reference cut</th><td>yes</td></tr>'));
   assert.ok(html.includes('<tr><th scope="row">Testpresses</th><td>3</td></tr>'));
 });
+
+test("artwork: fix button on a warning label, comparison side by side, readout data", () => {
+  const params = {part: "labels", targetMm: {w: 106, h: 106}, trimMm: {w: 100, h: 100}, bleedMm: 3, round: true,
+    page: 1, inkLimitPct: 220, holeMm: 7.4, black: {kMinPct: 85, cmyMaxPct: 30}, toleranceMm: 0.5};
+  const checkable = [{title: "Label A", name: "lab_a_v1.pdf", params}];
+  const one = (ink, name) => ({kind: "pdf", parsed: {pageSizeMm: {w: 106, h: 106}, imagePx: null, declaredDpi: null,
+    colorMode: "CMYK", spotColors: [], iccProfileName: null, trimBoxMm: null, encrypted: false, hasUnembeddedFonts: false,
+    pdfVersion: "1.4", pageCount: 1, effectiveDpi: null}, pageMm: {w: 106, h: 106}, trimRectMm: {x: 3, y: 3, w: 100, h: 100},
+    ink: {maxPct: ink, overPct: ink > 220 ? 10 : 0}, black: {richPct: 0}, bleed: {outerInkPct: 90, innerInkPct: 90},
+    preview: `${name}.png`, overlay: `${name}.overlay.png`, cmyk: `${name}.cmyk`, previewPx: {w: 1600, h: 1600}});
+  const facts = {"lab_a_v1.pdf": one(330, "a1"), "lab_a_v2.pdf": one(220, "a2")};
+  const compare = [{title: "Label A — lab_a_v2.pdf", name: "lab_a_v2.pdf", params, of: "lab_a_v1.pdf"}];
+  const html = renderArtwork(files, checkable, facts, printCheck, "/jobs/j1/", [], compare);
+  assert.ok(html.includes('<button type="button" class="fix" data-slot="2">fix colours</button>'));
+  assert.ok(html.includes('<div class="compare"><div class="art-file"><h3>Label A</h3>'));
+  assert.ok(html.includes("<h3>Label A — lab_a_v2.pdf</h3>"));
+  assert.ok(html.includes('data-cmyk="/jobs/j1/a1.cmyk" data-w="1600" data-h="1600"'));
+});

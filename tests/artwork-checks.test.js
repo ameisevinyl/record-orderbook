@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
 import { prepareProject } from "../src/lib/project.js";
 import { getFormat } from "../src/lib/format-catalogue.js";
-import { artworkSlots, artworkRows, artworkVerdict } from "../src/lib/artwork-checks.js";
+import { artworkSlots, artworkRows, artworkVerdict, fixable, newerToCompare } from "../src/lib/artwork-checks.js";
 
 const printCheck = getFormat(CONFIG, "12").printCheck;
 const printed = getFormat(CONFIG, "12").printableParts.outerCover.products.find(p => p.kind === "printed");
@@ -84,4 +84,23 @@ test("artworkSlots: a big center hole where the format has one", () => {
   const seven = getFormat(CONFIG, "7");
   const slots = artworkSlots(prepareProject({format:"7", labels:{bigCenter:true, sides:{A:{fileName:"L.pdf"}}}}, CONFIG), CONFIG);
   assert.equal(slots[0].params.holeMm, seven.centerHole.big || seven.centerHole.normal);
+});
+
+test("fixable: a label whose ink or black warns; never other parts", () => {
+  const facts = ink => ({kind: "pdf", parsed: null, ink: {maxPct: ink, overPct: ink > 220 ? 5 : 0},
+    black: {richPct: 0}, bleed: {outerInkPct: 90, innerInkPct: 90}});
+  const params = part => ({part, inkLimitPct: 220, bleedMm: 3});
+  assert.equal(fixable(facts(330), params("labels"), printCheck), true);
+  assert.equal(fixable(facts(200), params("labels"), printCheck), false);
+  assert.equal(fixable(facts(330), params("outerCover"), printCheck), false);
+  assert.equal(fixable({error: "x"}, params("labels"), printCheck), false);
+});
+
+test("newerToCompare: the newest newer version of each checked slot, same params", () => {
+  const slots = [{name: "X_labels_A_v1.pdf", others: [{name: "X_labels_A_v3.pdf", newer: true},
+    {name: "X_labels_A_v2.pdf", newer: true}]}, {name: "X_cover_v2.pdf", others: [{name: "X_cover_v1.pdf", newer: false}]}];
+  const checkable = [{title: "Label A", name: "X_labels_A_v1.pdf", params: {part: "labels"}},
+    {title: "Cover", name: "X_cover_v2.pdf", params: {part: "outerCover"}}];
+  assert.deepEqual(newerToCompare(slots, checkable),
+    [{title: "Label A — X_labels_A_v3.pdf", name: "X_labels_A_v3.pdf", params: {part: "labels"}, of: "X_labels_A_v1.pdf"}]);
 });

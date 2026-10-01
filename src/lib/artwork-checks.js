@@ -77,3 +77,19 @@ export function artworkVerdict(rows){
   if(rows.some(row => row.severity === "warn")) return "review";
   return "ok";
 }
+
+// A label the plant's colour fix can help: its ink or black row warns.
+export function fixable(facts, params, printCheck){
+  if(params.part !== "labels" || !facts || facts.error || !facts.ink) return false;
+  return artworkRows(facts, params, printCheck).some(r => (r.feature === "Ink" || r.feature === "Black") && r.severity === "warn");
+}
+
+// Per checked slot, its newest version newer than the one in use — a
+// colour fix or a hand-saved fix — to show and check next to it.
+export function newerToCompare(slots, checkable){
+  return checkable.flatMap(c => {
+    const slot = slots.find(s => s.name === c.name);
+    const newer = slot ? slot.others.filter(o => o.newer) : [];
+    return newer.length ? [{title: `${c.title} — ${newer[0].name}`, name: newer[0].name, params: c.params, of: c.name}] : [];
+  });
+}
