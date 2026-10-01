@@ -158,42 +158,15 @@ configured on purpose — keep it that way unless asked.
   when the file changed since the page read it). Python does the disk,
   the page decides (`src/lib/versions.js`). Spec:
   `docs/superpowers/specs/2026-09-29-job-folders-design.md`.
-  The page is plain HTML5 (`src/plant/index.html`, structure-only
-  `src/plant/structure.css` — a plant's theme goes on top later): the
-  jobs tree and the open job's section links in `<nav>`
-  (`src/lib/plant-board.js`), the job in six table sections — Basic,
-  Artwork, Audio, Shipping & billing, Unmanaged files, History — each
-  fact once (`src/lib/plant-overview.js`), one CLI status line fed by the checks'
-  step streams and the spectrum progress in `/api/job/stamp`. Grouping
-  stages (10_ORDERS) hold no jobs. `project.json` is the reference and
+  Each fact is shown once. Grouping stages (10_ORDERS) hold no jobs. `project.json` is the reference and
   the naming convention strict: a slot's file and its `_v<N>` versions
   are managed (versions listed with "use", checked once in use); every
   other file in the job folder is unmanaged — only listed, never renamed
   into a slot, checked or plotted. Spec:
   `docs/superpowers/specs/2026-09-29-plant-view-layout-design.md`.
-- `plant/checks.py` — deep checks on disk, piece 1 (audio): ffprobe
-  facts, AIFF `MARK` markers, MP3 + waveform PNG per file, written to
-  the job's hidden `.checks/` with a per-file cache (size+mtime, else
-  sha256; Rescan: sha256 always; bump `CHECKS_VERSION` when fact-reading
-  changes). Preview names carry the content hash, so a fix saved over a
-  file never shows a stale image. The open job page polls
-  `/api/job/stamp` and reloads on any save in the job folder.
-  `plant/spectrum.py`: a spectrogram per audio file for the mastering
-  engineer in `<job>/spectrum/` (ffmpeg `showspectrumpic`: L above R,
-  linear frequency, magma, 50 dB from -20 dBFS, with scales), started in the
-  background by the page after all its checks (`/api/spectrum`), not
-  shown in the plant view. Job files are top level only, so
-  `spectrum/` stays out of listings and zips.
-  Python only reads facts; the rules live in `src/lib/audio-checks.js`.
-  Spec: `docs/superpowers/specs/2026-09-24-audio-checks-design.md`.
-  Piece 2 (artwork, `plant/artwork.py`): PyMuPDF/Pillow/numpy facts,
-  ink/black/bleed measurements (CMYK/grey files read as their own
-  numbers, colour management off — see `render`; the cut is the part's
-  trim size centred in the data area, the file's TrimBox only
-  information — exports often set it to the page), preview + overlay
-  PNG; rules in
-  `src/lib/artwork-checks.js`. Spec:
-  `docs/superpowers/specs/2026-09-25-artwork-checks-design.md`.
+- Deep checks on disk (`plant/checks.py`, `spectrum.py`, `artwork.py`):
+  see `plant/CLAUDE.md`. Python only reads facts; the rules live in
+  `src/lib/audio-checks.js` and `src/lib/artwork-checks.js`.
 - `src/plant.config.local.js` (gitignored, copied from the committed
   sample `src/plant.config.local.example.js`) holds a real plant's
   identity; `build/build.js` bundles it instead of the sample when
