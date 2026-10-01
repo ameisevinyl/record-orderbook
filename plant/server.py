@@ -281,18 +281,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def merge(self):
         r = self.body()
-        jobs.merge(JOBS, r["item"], r["job"], r["copies"], r["project"], r["basedOn"])
-        self.json({"job": r["job"]})
+        self.json({"job": jobs.merge(JOBS, r["item"], r["job"], r["copies"], r["project"], r["basedOn"])})
 
     def move(self):
         r = self.body()
-        jobs.move(JOBS, r["job"], r["to"])
-        self.json({"job": r["job"]})
+        self.json({"job": jobs.move(JOBS, r["job"], r["to"])})
 
     def assign(self):
         r = self.body()
         folder = jobs.find(JOBS, r["job"])[1]
-        self.json({"projectHash": jobs.assign(folder, r["file"], r["newName"], r["project"], r["basedOn"])})
+        digest = jobs.assign(folder, r["file"], r["newName"], r["project"], r["basedOn"])
+        self.json({"projectHash": digest, "job": jobs.restamp(JOBS, folder.name)})
 
     def stream(self):
         """Starts an NDJSON reply; returns line(obj), which sends one line."""

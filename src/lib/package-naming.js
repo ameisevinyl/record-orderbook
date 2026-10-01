@@ -4,8 +4,8 @@
 // which is what lets a reopened project zip re-attach files by an exact
 // name match instead of guessing.
 //
-// Versioning isn't tracked yet (see CLAUDE.md) — every name gets a fixed
-// "v1" suffix for now.
+// The customer page always writes v1; higher file versions are made at
+// the plant (see CLAUDE.md).
 
 // German umlauts/ß transliterated before the general a-z/0-9 filter below
 // would otherwise just drop them as unrecognized characters — "schöner"

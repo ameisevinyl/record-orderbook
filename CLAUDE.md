@@ -72,7 +72,8 @@ yourself. Be short and precise.
    at the version that counts. A received zip or unpacked folder in
    `00_INBOX` (copied in, synced, or loaded in the plant view) becomes a
    new job or merges into the job with its catalogue number
-   (`mergeResend` in `src/lib/versions.js`); `plant.received` keeps the
+   (`mergeResend` in `src/lib/versions.js`; a zip with the key of an
+   existing job — see the naming convention — can only merge); `plant.received` keeps the
    sha256 of every file as it came in, so resending the same content
    doesn't undo a fix saved over it under the same name. In the inbox, a folder is a
    job only once `plant.stage` is set — the customer page never writes
@@ -89,7 +90,15 @@ yourself. Be short and precise.
   `<catalogue#>_<side>_side_v<rev>.<ext>` — e.g. `PNKRCK007_A_side_v1.wav`
 - Printed parts: `<catalogue#>_<part>_<side-or-variant>_v<rev>.<ext>` —
   e.g. `PNKRCK007_labels_A_v1.pdf`
-- Project folder / zip name: `<YYMMDD>_<catalogue#>_<customer-email>`
+- Project folder / zip name: `<catalogue#>_<artist>_<title>_<YYMMDD-HHMM>` —
+  e.g. `PNKRCK007_the_band_loud_record_261001-1432`. Local time (the
+  customer's on save, the plant server's on a change); artist and title
+  slugged, max 32 chars each, left out when empty. No email: the name
+  travels through transfer services. Without the stamp it is the job's
+  key (`job_key` in `plant/jobs.py`). The plant job folder keeps the
+  stamp; merging a resend or using a file version renews it (rename),
+  moving does not, and jobs are found by key, so an older name still
+  resolves. Same key = same job — a repress isn't told apart yet.
 
 The customer page always writes `v1`. Higher versions are made at the
 plant only (`src/lib/versions.js`): staff fixes, files assigned by hand,

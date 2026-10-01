@@ -220,12 +220,17 @@ out.addEventListener("click", async e => {
       setAt(project, slot.path, newName);
       project.history = [...(project.history || []),
         historyEntry(`${slot.title}: ${newName}${newName === file ? "" : ` (was ${file})`}`, new Date())];
-      await postJson("/api/assign", {job: view.job, file, newName, project, basedOn: view.hash});
+      const {job} = await postJson("/api/assign", {job: view.job, file, newName, project, basedOn: view.hash});
+      // A change renews the stamp in the job's name: follow the rename.
+      if(job !== view.job){
+        location.hash = `#/job/${encodeURIComponent(job)}`;
+        return;
+      }
     } else if(button.matches(".merge")){
       const plan = view.plans.find(p => p.job === button.dataset.job);
-      await postJson("/api/merge", {item: view.item, job: plan.job, copies: plan.copies,
+      const {job} = await postJson("/api/merge", {item: view.item, job: plan.job, copies: plan.copies,
         project: plan.project, basedOn: plan.basedOn});
-      location.hash = `#/job/${encodeURIComponent(plan.job)}`;
+      location.hash = `#/job/${encodeURIComponent(job)}`;
       return;
     } else {
       const {job} = await postJson("/api/accept", {item: view.item});

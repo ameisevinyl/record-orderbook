@@ -22,6 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 STAGE = re.compile(r"\d\d_[A-Z0-9_]+")
+# A job name ends in a local-time stamp, <key>_YYMMDD-HHMM (the customer
+# page names its zips so); the key is the job's identity across renames.
+STAMP = re.compile(r"_\d{6}-\d{4}$")
 DEFAULT_STAGES = ["00_INBOX", "10_ORDERS/10_PREPRESS", "10_ORDERS/20_PRESS", "20_DONE", "99_ARCHIVE"]
 INBOX = "00_INBOX"
 # Written by the customer page into every package; replaced on a resend.
@@ -76,22 +79,56 @@ def places(root):
     return [s for s in stages(root) if s not in group]
 
 
+def job_key(name):
+    return STAMP.sub("", name)
+
+
+def stamped(key, now=None):
+    return f"{key}_{(now or datetime.now()).strftime('%y%m%d-%H%M')}"
+
+
+def natural_key(name):
+    """PNKRCK7 before PNKRCK10: digit runs compare as numbers."""
+    return [(0, int(part), "") if part.isdigit() else (1, 0, part) for part in re.split(r"(\d+)", name)]
+
+
 def jobs_in(root, stage):
     """Job folders in a stage; in the inbox only accepted ones (see inbox())."""
     folder = root / stage
-    return sorted(p.name for p in folder.iterdir() if p.is_dir() and not p.name.startswith(".")
-                  and (p / "project.json").is_file() and (stage != INBOX or accepted(p)))
+    return sorted((p.name for p in folder.iterdir() if p.is_dir() and not p.name.startswith(".")
+                   and (p / "project.json").is_file() and (stage != INBOX or accepted(p))), key=natural_key)
+
+
+def same_key(root, job):
+    """(stage, name) of every job with job's key."""
+    key = job_key(job)
+    return [(stage, name) for stage in stages(root) for name in jobs_in(root, stage) if job_key(name) == key]
 
 
 def find(root, job):
-    """(stage, folder) of the job named `job`."""
+    """(stage, folder) of the job `job`, by key: an older stamp still finds
+    the job after a restamp renamed it."""
     plain(job)
-    hits = [stage for stage in stages(root) if job in jobs_in(root, stage)]
+    hits = same_key(root, job)
     if not hits:
         raise JobError(f"no job {job}")
     if len(hits) > 1:
-        raise JobError(f"job {job} is in more than one stage: {', '.join(hits)}")
-    return hits[0], root / hits[0] / job
+        raise JobError(f"more than one job {job_key(job)}: {', '.join(f'{s}/{n}' for s, n in hits)}")
+    stage, name = hits[0]
+    return stage, root / stage / name
+
+
+def restamp(root, job, now=None):
+    """A job's content changed through the plant view: a fresh stamp in
+    its name. A name without a stamp (older jobs) stays as it is."""
+    with LOCK:
+        stage, folder = find(root, job)
+        if not STAMP.search(folder.name):
+            return folder.name
+        new = stamped(job_key(folder.name), now)
+        if new != folder.name:
+            folder.rename(folder.with_name(new))
+        return new
 
 
 def sha256(path):
@@ -155,7 +192,7 @@ def board(root):
         cards = []
         for job in jobs_in(root, stage):
             folder = root / stage / job
-            seen.setdefault(job, []).append(stage)
+            seen.setdefault(job_key(job), []).append(f"{stage}/{job}")
             try:
                 note_stage(folder, stage, "disk")
                 project = read_project(folder)[0]
@@ -164,7 +201,7 @@ def board(root):
             except (JobError, OSError) as error:
                 cards.append({"job": job, "error": str(error)})
         columns.append({"stage": stage, "jobs": cards})
-    problems += [f"{job} is in more than one stage: {', '.join(where)}" for job, where in seen.items() if len(where) > 1]
+    problems += [f"more than one job {key}: {', '.join(where)}" for key, where in seen.items() if len(where) > 1]
     return {"stages": columns, "inbox": inbox(root), "problems": problems}
 
 
@@ -212,11 +249,12 @@ def move(root, job, to):
         stage, folder = find(root, job)
         if to not in places(root):
             raise JobError(f"{to} only groups its sub-stages" if to in stages(root) else f"no stage {to}")
-        target = root / to / job
+        target = root / to / folder.name
         if target.exists():
-            raise Conflict(f"{to} already holds {job}")
+            raise Conflict(f"{to} already holds {folder.name}")
         folder.rename(target)
         note_stage(target, to, "plant")
+        return folder.name
 
 
 def assign(folder, name, new_name, project, based_on):
@@ -383,8 +421,9 @@ def accept(root, name):
             job = plain(job)
             folder = root / INBOX / job
             in_place = path.is_dir() and project_dir(path) == folder
-            if any((root / stage / job).exists() for stage in stages(root) if not (path == folder and stage == INBOX)):
-                raise Conflict(f"job {job} exists already")
+            if same_key(root, job) or any((root / stage / job).exists() for stage in stages(root)
+                                          if not (path == folder and stage == INBOX)):
+                raise Conflict(f"job {job_key(job)} exists already")
             if path.is_dir() and not in_place:
                 # Out of its wrapper (which may carry the job's own name).
                 moved = root / INBOX / f".{job}.tmp"
@@ -418,7 +457,8 @@ def accept(root, name):
 def merge(root, name, job, copies, project, based_on):
     """A resend into an existing job: copies [{from, to}] (from: name in
     the item, to: a new file in the job — never an existing one), the
-    item's text files replace the job's, project saved, item removed."""
+    item's text files replace the job's, project saved, item removed.
+    Returns the job's new (restamped) name."""
     path = root / INBOX / plain(name)
     with LOCK:
         folder = find(root, job)[1]
@@ -444,6 +484,7 @@ def merge(root, name, job, copies, project, based_on):
                 target.unlink(missing_ok=True)
             raise
         remove_item(path)
+        return restamp(root, job)
 
 
 def upload_file(root, folder, rel, stream, length):

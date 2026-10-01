@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import warnings
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 import jobs
@@ -78,10 +79,10 @@ class JobsTest(Tree):
         self.job("20_DONE", "j")
         (self.job("10_ORDERS/20_PRESS", "bad") / "project.json").write_text("{")
         board = jobs.board(self.root)
-        self.assertEqual(board["problems"], ["j is in more than one stage: 10_ORDERS/10_PREPRESS, 20_DONE"])
+        self.assertEqual(board["problems"], ["more than one job j: 10_ORDERS/10_PREPRESS/j, 20_DONE/j"])
         press = next(c for c in board["stages"] if c["stage"] == "10_ORDERS/20_PRESS")
         self.assertIn("not valid JSON", press["jobs"][0]["error"])
-        with self.assertRaisesRegex(JobError, "more than one stage"):
+        with self.assertRaisesRegex(JobError, "more than one job j"):
             jobs.find(self.root, "j")
 
     def test_move_renames_and_logs(self):
@@ -323,3 +324,48 @@ class FolderTest(Tree):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StampTest(Tree):
+    """Job names end in a local-time stamp; the rest is the job's key."""
+
+    def test_key_and_stamp(self):
+        self.assertEqual(jobs.job_key("PNKRCK007_band_loud_261001-1432"), "PNKRCK007_band_loud")
+        self.assertEqual(jobs.job_key("260925_X_a"), "260925_X_a")
+        self.assertEqual(jobs.stamped("K", datetime(2026, 10, 2, 9, 5)), "K_261002-0905")
+
+    def test_find_resolves_an_older_stamp(self):
+        folder = self.job("20_DONE", "X_band_261002-0910")
+        self.assertEqual(jobs.find(self.root, "X_band_261001-1432"), ("20_DONE", folder))
+        self.job("10_ORDERS/20_PRESS", "X_band_261003-1200")
+        with self.assertRaises(JobError):
+            jobs.find(self.root, "X_band_261001-1432")
+
+    def test_restamp_renews_a_stamp_and_leaves_old_names(self):
+        self.job("20_DONE", "X_band_261001-1432")
+        new = jobs.restamp(self.root, "X_band_261001-1432", datetime(2026, 10, 2, 9, 5))
+        self.assertEqual(new, "X_band_261002-0905")
+        self.assertTrue((self.root / "20_DONE" / new / "project.json").is_file())
+        self.job("20_DONE", "260925_Y_a")
+        self.assertEqual(jobs.restamp(self.root, "260925_Y_a"), "260925_Y_a")
+
+    def test_accept_keeps_the_stamp_and_refuses_a_same_key_job(self):
+        make_zip(self.root / "00_INBOX" / "a.zip", [("X_band_261001-1432/project.json", b"{}")])
+        self.assertEqual(jobs.accept(self.root, "a.zip"), "X_band_261001-1432")
+        make_zip(self.root / "00_INBOX" / "b.zip", [("X_band_261002-0910/project.json", b"{}")])
+        with self.assertRaises(Conflict):
+            jobs.accept(self.root, "b.zip")
+
+    def test_merge_renews_the_stamp(self):
+        folder = self.job("10_ORDERS/10_PREPRESS", "X_band_261001-1432")
+        make_zip(self.root / "00_INBOX" / "r.zip", [("X_band_261002-0910/project.json", b"{}")])
+        new = jobs.merge(self.root, "r.zip", "X_band_261001-1432", [], {"m": 1}, jobs.read_project(folder)[1])
+        self.assertNotEqual(new, "X_band_261001-1432")
+        self.assertEqual(jobs.job_key(new), "X_band")
+        self.assertEqual(self.project(self.root / "10_ORDERS/10_PREPRESS" / new), {"m": 1})
+
+    def test_jobs_sort_by_catalogue_number_naturally(self):
+        for name in ["PNKRCK10_a_261001-1432", "PNKRCK7_a_261001-1432", "PNKRCK007_b_261001-1432"]:
+            self.job("20_DONE", name)
+        self.assertEqual(jobs.jobs_in(self.root, "20_DONE"),
+                         ["PNKRCK7_a_261001-1432", "PNKRCK007_b_261001-1432", "PNKRCK10_a_261001-1432"])
