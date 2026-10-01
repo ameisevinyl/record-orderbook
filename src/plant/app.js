@@ -13,8 +13,9 @@ import { artworkSlots, newerToCompare } from "../lib/artwork-checks.js";
 import { getFormat } from "../lib/format-catalogue.js";
 import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf, useVersion } from "../lib/versions.js";
 import { projectFileName } from "../lib/package-naming.js";
-import { renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
-import { renderNav, renderHome, renderInbox } from "../lib/plant-board.js";
+import { renderBasic, renderProduction, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
+import { renderNav, renderHome, renderInbox, renderBoard } from "../lib/plant-board.js";
+import { lineState, logEntry, fixerTargets } from "../lib/lines.js";
 
 const zipInput = document.getElementById("zipInput");
 const folderInput = document.getElementById("folderInput");
@@ -89,7 +90,7 @@ async function readStream(res, onStep){
   }
 }
 
-// --- Routes: #/ · #/inbox/<item> · #/job/<job>[/<section>]
+// --- Routes: #/ · #/board · #/inbox/<item> · #/job/<job>[/<section>]
 
 function parseHash(){
   const [, kind, name, section] = /^#\/(job|inbox)\/([^/]+)(?:\/(\w+))?$/.exec(location.hash) || [];
@@ -123,6 +124,7 @@ async function route(reload = true){
     nav.innerHTML = renderNav(board, kind === "job" ? name : null);
     if(kind === "job") await showJob(name, section, id);
     else if(kind === "inbox") await showInbox(name, id);
+    else if(location.hash === "#/board") out.innerHTML = boardHtml(board);
     else out.innerHTML = renderHome(board);
   }catch(err){
     if(id !== latest) return;
@@ -131,6 +133,22 @@ async function route(reload = true){
   }finally{
     if(id === latest) busy("");
   }
+}
+
+// Every job's production lines, from what /api/board carries (the last
+// check results; a job never opened has none and reads "not checked").
+function boardHtml(board){
+  const names = Object.keys(CONFIG.lines);
+  const rows = board.stages.flatMap(s => s.jobs).filter(card => !card.error).map(card => {
+    let states = {};
+    try{
+      const project = prepareProject(card.project, CONFIG);
+      const results = Object.keys(card.artwork || {}).length ? card.artwork : null;
+      states = Object.fromEntries(names.map(n => [n, lineState(project, CONFIG, n, results)]));
+    }catch{ /* an unreadable project: an empty row */ }
+    return {job: card.job, catalogue: card.catalogue, title: card.title, states};
+  });
+  return renderBoard(rows, names);
 }
 
 // The open job's folder is gone: back to the overview, which says so.
@@ -171,7 +189,9 @@ async function showJob(job, section, id){
     names: data.files.map(f => f.name), slots: files.slots, checkable, format: project.format};
   const full = rescan;
   rescan = false;
+  const lines = Object.keys(CONFIG.lines);
   out.innerHTML = renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps)
+    + renderProduction(lines.map(n => lineState(project, CONFIG, n, null)), CONFIG.partners)
     + renderArtwork(files, checkable, null, printCheck, base, gaps, compare)
     + renderAudio(project, files, null, [], base, gaps)
     + renderShipping(project, gaps)
@@ -193,6 +213,38 @@ async function showJob(job, section, id){
       {job, rescan: full, artwork: Object.fromEntries([...checkable, ...compare].map(s => [s.name, s.params]))}), onStep);
     if(id !== latest) return;
     replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps, compare));
+    const states = lines.map(n => lineState(project, CONFIG, n, artworkFacts));
+    Object.assign(view, {project, artworkFacts});
+    replace("production", renderProduction(states, CONFIG.partners));
+    replace("basic", renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps,
+      states.length > 0 && states.every(s => s.ready)));
+
+    // A line standing at a step with a fixer runs it by itself: one file
+    // per load, the fix becomes the slot's file ("use"), the log records
+    // it, and the reload checks the fix and runs the next.
+    what = "fix the colours of";
+    for(const name of lines){
+      const [target] = fixerTargets(project, CONFIG, name, artworkFacts);
+      if(!target) continue;
+      const slot = files.slots.find(s => s.name === target);
+      const check = checkable.find(c => c.name === target);
+      const newName = nextVersionName(versionOf(target).base, ".pdf", view.names);
+      busy(`fixing colours of ${target}`);
+      await postJson("/api/fix/label", {job, file: target, newName,
+        params: {...check.params, fixDpi: printCheck.fixDpi, profile: CONFIG.printProfiles.labels || null}});
+      const raw = structuredClone(view.raw);
+      useVersion(raw, slot.path, newName);
+      raw.plant = raw.plant || {};
+      raw.plant.lines = raw.plant.lines || {};
+      raw.plant.lines[name] = [...(raw.plant.lines[name] || []),
+        {step: "colour", by: "fixer", at: new Date().toISOString(), from: {[target]: artworkFacts[target].sha256}, to: newName}];
+      raw.history = [...(raw.history || []), historyEntry(`${name}: colour fixed, ${target} → ${newName}`, new Date())];
+      const {job: renamed} = await postJson("/api/assign", {job, file: newName, newName, project: raw,
+        basedOn: view.hash, name: jobName(raw)});
+      if(renamed !== job) location.hash = `#/job/${encodeURIComponent(renamed)}`;
+      else route();
+      return;
+    }
     // Last: the mastering engineer's spectrograms, in the background; the
     // change poll below shows their progress.
     await postJson("/api/spectrum", {job, files: audioNames});
@@ -211,7 +263,7 @@ function jobName(project){
 // A 409 (someone changed the job meanwhile) shows its message; the next
 // reload shows their change.
 out.addEventListener("click", async e => {
-  const button = e.target.closest(".use, #move, #rescan, .merge, #accept, .fix");
+  const button = e.target.closest(".use, #move, #rescan, .merge, #accept, .fix, .line-act");
   if(!button || !view || task) return;
   error.textContent = "";
   if(button.id === "rescan"){
@@ -237,6 +289,18 @@ out.addEventListener("click", async e => {
         location.hash = `#/job/${encodeURIComponent(job)}`;
         return;
       }
+    } else if(button.matches(".line-act")){
+      // A step done by a person: appended to the line's log, tied to the
+      // line's current files and their hashes.
+      const {line, step, by} = button.dataset;
+      const raw = structuredClone(view.raw);
+      raw.plant = raw.plant || {};
+      raw.plant.lines = raw.plant.lines || {};
+      const partner = button.parentElement.querySelector(".partner");
+      const fields = {step, by, ...(step.startsWith("send:") ? {to: partner ? partner.value : ""} : {})};
+      raw.plant.lines[line] = [...(raw.plant.lines[line] || []), logEntry(view.project, CONFIG, line, view.artworkFacts, fields)];
+      raw.history = [...(raw.history || []), historyEntry(`${line}: ${step} — ${button.textContent}${fields.to ? ` (${fields.to})` : ""}`, new Date())];
+      await postJson("/api/project", {job: view.job, project: raw, basedOn: view.hash});
     } else if(button.matches(".fix")){
       // The fix becomes the slot's next version; "use" decides.
       const slot = view.slots[Number(button.dataset.slot)];

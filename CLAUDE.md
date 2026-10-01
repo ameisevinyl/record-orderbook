@@ -160,11 +160,20 @@ configured on purpose — keep it that way unless asked.
   `docs/superpowers/specs/2026-09-29-job-folders-design.md`.
   Each fact is shown once. Artwork previews carry their raw CMYK, shown
   under the pointer; a warning label offers a colour fix, shown next to
-  the version in use. Grouping stages (10_ORDERS) hold no jobs. `project.json` is the reference and
+  the version in use. Production lines (`src/lib/lines.js`,
+  `CONFIG.lines`): per product its steps — checks (live from the check
+  results; the colour fixer runs by itself), approve, send to a partner,
+  back — where a line stands is derived on every scan; `plant.lines` in
+  `project.json` keeps an append-only log whose entries count while their
+  files keep their sha256. Spec:
+  `docs/superpowers/specs/2026-10-02-production-lines-design.md`.
+  Grouping stages (10_ORDERS) hold no jobs. `project.json` is the reference and
   the naming convention strict: a slot's file and its `_v<N>` versions
   are managed (versions listed with "use", checked once in use); every
   other file in the job folder is unmanaged — only listed, never renamed
-  into a slot, checked or plotted. Spec:
+  into a slot, checked or plotted. The page's look is layered:
+  `structure.css` is structure only, `theme.css` on top carries the design
+  system (DESIGN.md tokens; a plant overrides the `:root` values). Spec:
   `docs/superpowers/specs/2026-09-29-plant-view-layout-design.md`.
 - Deep checks on disk (`plant/checks.py`, `spectrum.py`, `artwork.py`):
   see `plant/CLAUDE.md`. Python only reads facts; the rules live in
