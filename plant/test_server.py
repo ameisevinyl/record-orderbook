@@ -192,6 +192,10 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(self.post("/api/move", {"job": "X_band_261001-1432", "to": "10_ORDERS/20_PRESS"})[0], 200)
         self.assertTrue((self.root / "10_ORDERS/20_PRESS" / merged["job"]).is_dir())
 
+    def test_profiles_start_downloads_and_answer_at_once(self):
+        self.assertEqual(self.post("/api/profiles", {"profiles": {}}), (200, {}))
+        self.assertEqual(self.post("/api/profiles", {"profiles": []})[0], 400)
+
 
 class StartupTest(unittest.TestCase):
     def test_port_in_use_is_a_clear_exit(self):

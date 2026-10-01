@@ -166,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
                "/api/accept": self.accept, "/api/merge": self.merge,
                "/api/move": self.move, "/api/assign": self.assign,
                "/api/check/audio": self.check_audio, "/api/check/artwork": self.check_artwork,
-               "/api/spectrum": self.spectrum}.get(self.path)
+               "/api/spectrum": self.spectrum, "/api/profiles": self.profiles}.get(self.path)
         if api is None:
             return self.reply(404, "not found")
         # A JSON content type makes browsers ask first (CORS preflight,
@@ -338,6 +338,16 @@ class Handler(BaseHTTPRequestHandler):
         import spectrum
         r = self.body()
         spectrum.start(jobs.find(JOBS, r["job"])[1], files(r))
+        self.json({})
+
+    def profiles(self):
+        """The page sends CONFIG.printProfiles on load; missing ones are
+        downloaded in the background (icc.py)."""
+        import icc
+        specs = self.body().get("profiles", {})
+        if not isinstance(specs, dict):
+            raise JobError("profiles must be an object")
+        icc.ensure_all(specs)
         self.json({})
 
     def check_artwork(self):

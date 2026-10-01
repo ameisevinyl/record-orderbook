@@ -436,13 +436,13 @@ export const CONFIG = {
     testpressDefaultQty: 3,
     testpressRecommendedFromQty: 1000
   },
+
   // Output profile per printed part, for turning RGB artwork into CMYK
   // in a plant-side fix. The plant server downloads it into plant/icc/
   // when missing (a .zip: the member with this file name); never committed.
   printProfiles: {
     labels: { name: "ISO Coated v2 (ECI)", url: "https://eci.org/lib/exe/eci_offset_2009.zip", file: "ISOcoated_v2_eci.icc" }
   },
-
 
   // UI language for the info-panel text below. Only "en" has content
   // today — German and Spanish are planned; once real translations
