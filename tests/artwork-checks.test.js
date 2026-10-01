@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
 import { prepareProject } from "../src/lib/project.js";
 import { getFormat } from "../src/lib/format-catalogue.js";
-import { artworkSlots, artworkRows, artworkVerdict, fixable, newerToCompare } from "../src/lib/artwork-checks.js";
+import { artworkSlots, artworkRows, artworkVerdict, fixable, newerToCompare, geometryFixes } from "../src/lib/artwork-checks.js";
 
 const printCheck = getFormat(CONFIG, "12").printCheck;
 const printed = getFormat(CONFIG, "12").printableParts.outerCover.products.find(p => p.kind === "printed");
@@ -103,4 +103,46 @@ test("newerToCompare: the newest newer version of each checked slot, same params
     {title: "Cover", name: "X_cover_v2.pdf", params: {part: "outerCover"}}];
   assert.deepEqual(newerToCompare(slots, checkable),
     [{title: "Label A — X_labels_A_v3.pdf", name: "X_labels_A_v3.pdf", params: {part: "labels", page: 1}, of: "X_labels_A_v1.pdf"}]);
+});
+
+const geo = (pageMm, over = {}) => ({kind: "pdf", parsed: {...clean.parsed, effectiveDpi: null, ...over.parsed},
+  pageMm, ink: clean.ink, black: clean.black, bleed: {outerInkPct: 95, innerInkPct: 97, ...over.bleed}});
+const rect = {...params, toleranceMm: 0.5};
+const label7 = {targetMm: {w: 98, h: 98}, trimMm: {w: 92, h: 92}, bleedMm: 3, toleranceMm: 0.5, round: true};
+
+test("geometryFixes: a 96 mm label for 92 + 3 — scale to fit or keep 1:1 and mirror", () => {
+  const fixes = geometryFixes(geo({w: 96.012, h: 96.012}, {parsed: {effectiveDpi: {x: 300, y: 300}}}), label7);
+  assert.deepEqual(fixes.map(f => [f.id, f.title, f.keep, f.fill, f.dpiAfter]), [
+    ["fit", "Scale to fit · ×1.021", "file", null, 294],
+    ["keep", "Keep 1:1 · mirror 1.0 mm", "file", "mirror", 300]]);
+  assert.ok(Math.abs(fixes[0].scale - 98 / 96.012) < 1e-9);
+  assert.equal(fixes[1].scale, 1);
+});
+
+test("geometryFixes: right size, empty bleed — rebuild or zoom", () => {
+  const fixes = geometryFixes(geo({w: 106, h: 106}, {bleed: {outerInkPct: 1, innerInkPct: 90}}), rect);
+  assert.deepEqual(fixes.map(f => [f.id, f.title, f.scale, f.keep, f.fill, f.dpiAfter]), [
+    ["rebuild", "Trim + rebuild bleed · mirror 3.0 mm", 1, "trim", "mirror", null],
+    ["zoom", "Zoom into bleed · ×1.060", 1.06, "file", null, null]]);
+});
+
+test("geometryFixes: smaller than the trim — only scale to fit", () => {
+  assert.deepEqual(geometryFixes(geo({w: 90, h: 90}), rect).map(f => f.id), ["fit"]);
+});
+
+test("geometryFixes: other aspect — cover and crop centred", () => {
+  const fixes = geometryFixes(geo({w: 212, h: 106}), rect);
+  assert.deepEqual(fixes.map(f => f.title), ["Scale to fit · ×1.000 · crops 53.0 mm", "Keep 1:1 · crops 53.0 mm"]);
+});
+
+test("geometryFixes: a 72 dpi tag on print pixels — fit shows the real detail", () => {
+  const fixes = geometryFixes(geo({w: 1158 / 72 * 25.4, h: 1158 / 72 * 25.4}, {parsed: {declaredDpi: {x: 72, y: 72}}}), label7);
+  assert.deepEqual(fixes.map(f => [f.id, f.dpiAfter]), [["fit", 300], ["keep", 72]]);
+});
+
+test("geometryFixes: nothing for a passing, broken or unmeasured file", () => {
+  assert.deepEqual(geometryFixes(geo({w: 106, h: 106}), rect), []);
+  assert.deepEqual(geometryFixes({error: "can't read"}, rect), []);
+  assert.deepEqual(geometryFixes({kind: "pdf", parsed: clean.parsed}, rect), []);
+  assert.deepEqual(geometryFixes(undefined, rect), []);
 });

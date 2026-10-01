@@ -45,6 +45,13 @@ export function artworkSlots(project, config){
   return slots;
 }
 
+// Ink right inside the cut but hardly any in the bleed: the artwork was
+// trimmed to the finished size.
+function bleedTrimmed(facts){
+  const {outerInkPct: outer, innerInkPct: inner} = facts.bleed;
+  return outer !== null && inner >= EDGE_INKED_PCT && outer < BLEED_EMPTY_PCT;
+}
+
 function measuredRows(facts, params, checks){
   const rows = [];
   const inkOk = facts.ink.overPct <= AREA_PCT;
@@ -57,9 +64,8 @@ function measuredRows(facts, params, checks){
     detected: blackOk ? "no rich black" : `rich black on ${facts.black.richPct.toFixed(1)} % of the area`,
     expected: blackOk ? null : "100 % K"});
 
-  const {outerInkPct: outer, innerInkPct: inner} = facts.bleed;
-  const noBleed = outer === null;
-  const trimmed = !noBleed && inner >= EDGE_INKED_PCT && outer < BLEED_EMPTY_PCT;
+  const noBleed = facts.bleed.outerInkPct === null;
+  const trimmed = bleedTrimmed(facts);
   rows.push({feature: "Bleed", severity: resolveSeverity(checks.bleed.severity, !noBleed && !trimmed),
     detected: noBleed ? "no bleed in the file" : trimmed ? "empty — artwork looks trimmed" : "ok",
     expected: noBleed ? `${params.bleedMm} mm bleed` : trimmed ? `artwork into the ${params.bleedMm} mm bleed` : null});
@@ -82,6 +88,37 @@ export function artworkVerdict(rows){
 export function fixable(facts, params, printCheck){
   if(params.part !== "labels" || !facts || facts.error || !facts.ink) return false;
   return artworkRows(facts, params, printCheck).some(r => (r.feature === "Ink" || r.feature === "Black") && r.severity === "warn");
+}
+
+// Size and bleed fixes for a checked file, rendered by plant/geomfix.py:
+// the source scaled by `scale` and centred on the data size, `keep` (the
+// whole "file" or the "trim") kept, the rest mirrored from its edge when
+// `fill` is set. dpiAfter: the detail the file really has afterwards —
+// the fix is written at fixDpi regardless.
+export function geometryFixes(facts, params){
+  if(!facts || facts.error || !facts.pageMm || !facts.bleed) return [];
+  const S = facts.pageMm, T = params.targetMm, trim = params.trimMm, tol = params.toleranceMm;
+  const dpi = facts.parsed.effectiveDpi || facts.parsed.declaredDpi;
+  const make = (id, title, scale, keep, fill) => ({id, title, scale, keep, fill,
+    dpiAfter: dpi ? Math.round(Math.min(dpi.x, dpi.y) / scale) : null});
+  const mm = v => `${v.toFixed(1)} mm`;
+  // Per side and axis: cropped (> 0) or missing (< 0) after scaling.
+  const over = scale => ({w: (S.w * scale - T.w) / 2, h: (S.h * scale - T.h) / 2});
+  const crop = o => Math.max(o.w, o.h) > tol ? ` · crops ${mm(Math.max(o.w, o.h))}` : "";
+  if(Math.abs(S.w - T.w) > tol || Math.abs(S.h - T.h) > tol){
+    const fit = Math.max(T.w / S.w, T.h / S.h);
+    const fixes = [make("fit", `Scale to fit · ×${fit.toFixed(3)}${crop(over(fit))}`, fit, "file", null)];
+    // Mirroring a file smaller than the trim would reach inside the cut.
+    if(S.w >= trim.w && S.h >= trim.h){
+      const o = over(1), mirror = Math.max(0, -o.w, -o.h);
+      fixes.push(make("keep", `Keep 1:1${mirror > 0 ? ` · mirror ${mm(mirror)}` : ""}${crop(o)}`, 1, "file", "mirror"));
+    }
+    return fixes;
+  }
+  if(!bleedTrimmed(facts)) return [];
+  const zoom = Math.max(T.w / trim.w, T.h / trim.h);
+  return [make("rebuild", `Trim + rebuild bleed · mirror ${mm(params.bleedMm)}`, 1, "trim", "mirror"),
+    make("zoom", `Zoom into bleed · ×${zoom.toFixed(3)}`, zoom, "file", null)];
 }
 
 // Per checked slot, its newest version newer than the one in use — a
