@@ -451,6 +451,9 @@ export const CONFIG = {
   lines: {
     labels: { parts: ["labels"], steps: ["size", "resolution", "pdf", "bleed", "colour", "approve", "send:printer", "back:printed"] }
   },
+  // Stages in which fixers run by themselves when a job is opened; in the
+  // others (press, done, archive) opening a job only looks.
+  fixerStages: ["00_INBOX", "10_ORDERS/10_PREPRESS"],
   // Who a send step can go to; a plant lists its named suppliers here.
   partners: {
     printer: ["in-house", "external"]

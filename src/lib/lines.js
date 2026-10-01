@@ -7,6 +7,7 @@
 import { getFormat } from "./format-catalogue.js";
 import { artworkSlots, artworkRows } from "./artwork-checks.js";
 import { fileSlots } from "./project.js";
+import { versionOf } from "./versions.js";
 
 // Which checklist rows decide a check step. Spot colours are part of the
 // Colour mode row; an unreadable file (File) has no other home than pdf.
@@ -31,8 +32,9 @@ function failing(step, facts, slot, printCheck){
   return row ? `${slot.title}: ${row.detected}${row.expected ? `, expected ${row.expected}` : ""}` : null;
 }
 
+// A file without a hash (missing, unreadable) is null on both sides.
 function counts(entry, current){
-  return !entry.files || Object.entries(entry.files).every(([name, sha]) => current[name] === sha);
+  return !entry.files || Object.entries(entry.files).every(([name, sha]) => (current[name] ?? null) === sha);
 }
 
 export function lineState(project, config, lineName, checkResults){
@@ -70,17 +72,24 @@ export function logEntry(project, config, lineName, checkResults, fields){
   return {...fields, at: new Date().toISOString(), files};
 }
 
-// Files the colour fixer should run on now: the line stands at colour,
-// the file fails it, no fixer tried this file at this hash, and the
-// file isn't itself a fixer's output.
-export function fixerTargets(project, config, lineName, checkResults){
+// Files the colour fixer should run on now: the job is in a stage where
+// fixers run (CONFIG.fixerStages — opening a finished job only looks),
+// the line stands at colour, the file fails it, no fixer tried this file
+// at this hash, it isn't a fixer's output, and no newer version of it
+// waits in the folder (a fix not yet used: the comparison shows it).
+export function fixerTargets(project, config, lineName, checkResults, stage, names = []){
+  if(stage !== undefined && !(config.fixerStages || []).includes(stage)) return [];
   const state = lineState(project, config, lineName, checkResults);
   if(state.step !== "colour" || !checkResults) return [];
+  const newerWaits = name => {
+    const own = versionOf(name);
+    return own && names.some(n => { const v = versionOf(n); return v && v.base === own.base && v.version > own.version; });
+  };
   const printCheck = getFormat(config, project.format).printCheck;
   const fixer = (project.plant.lines[lineName] || []).filter(e => e.by === "fixer");
   return lineFiles(project, config, lineName).filter(f => {
     const facts = checkResults[f.name];
-    if(!facts || !failing("colour", facts, f.slot, printCheck)) return false;
+    if(!facts || !failing("colour", facts, f.slot, printCheck) || newerWaits(f.name)) return false;
     return !fixer.some(e => (e.from && e.from[f.name] === facts.sha256) || e.to === f.name);
   }).map(f => f.name);
 }

@@ -68,3 +68,20 @@ test("whitelabel side left out; checking while there are no results; logEntry ca
   assert.deepEqual([e.step, e.by, e.files], ["approve", "staff", files]);
   assert.match(e.at, /^\d{4}-\d\d-\d\dT/);
 });
+
+test("review: an accept on a file without hash counts", () => {
+  const missing = {"K_labels_A_v1.pdf": {error: "not in the job"}, "K_labels_B_v1.pdf": good("b1")};
+  const e = logEntry(job(), CONFIG, "labels", missing, {step: "pdf", by: "staff"});
+  assert.equal(e.files["K_labels_A_v1.pdf"], null);
+  assert.notEqual(lineState(job([e]), CONFIG, "labels", missing).step, "pdf");
+});
+
+test("review: the fixer runs only in the configured stages, and not while a newer version waits", () => {
+  const atColour = {"K_labels_A_v1.pdf": facts({parsed: {...facts().parsed, pageSizeMm: {w: 98, h: 98}}, pageMm: {w: 98, h: 98},
+    bleed: {outerInkPct: 90, innerInkPct: 90}}), "K_labels_B_v1.pdf": good("b1")};
+  const names = ["K_labels_A_v1.pdf", "K_labels_B_v1.pdf"];
+  assert.deepEqual(fixerTargets(job(), CONFIG, "labels", atColour, "00_INBOX", names), ["K_labels_A_v1.pdf"]);
+  assert.deepEqual(fixerTargets(job(), CONFIG, "labels", atColour, "20_DONE", names), [], "a finished job is only looked at");
+  assert.deepEqual(fixerTargets(job(), CONFIG, "labels", atColour, "00_INBOX", [...names, "K_labels_A_v2.pdf"]), [],
+    "a fix already written but not used: the comparison shows it");
+});

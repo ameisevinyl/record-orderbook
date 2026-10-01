@@ -222,16 +222,29 @@ async function showJob(job, section, id){
     // A line standing at a step with a fixer runs it by itself: one file
     // per load, the fix becomes the slot's file ("use"), the log records
     // it, and the reload checks the fix and runs the next.
-    what = "fix the colours of";
     for(const name of lines){
-      const [target] = fixerTargets(project, CONFIG, name, artworkFacts);
+      const [target] = fixerTargets(project, CONFIG, name, artworkFacts, data.stage, view.names);
       if(!target) continue;
       const slot = files.slots.find(s => s.name === target);
       const check = checkable.find(c => c.name === target);
       const newName = nextVersionName(versionOf(target).base, ".pdf", view.names);
       busy(`fixing colours of ${target}`);
-      await postJson("/api/fix/label", {job, file: target, newName,
-        params: {...check.params, fixDpi: printCheck.fixDpi, profile: CONFIG.printProfiles.labels || null}});
+      try{
+        await postJson("/api/fix/label", {job, file: target, newName,
+          params: {...check.params, fixDpi: printCheck.fixDpi, profile: CONFIG.printProfiles.labels || null}});
+      }catch(err){
+        // A refused fix is logged as tried, so it isn't repeated on every
+        // load; the line waits at colour for staff.
+        const raw = structuredClone(view.raw);
+        raw.plant = raw.plant || {};
+        raw.plant.lines = raw.plant.lines || {};
+        raw.plant.lines[name] = [...(raw.plant.lines[name] || []),
+          {step: "colour", by: "fixer", at: new Date().toISOString(), from: {[target]: artworkFacts[target].sha256}, error: err.message}];
+        raw.history = [...(raw.history || []), historyEntry(`${name}: colour fix of ${target} refused — ${err.message}`, new Date())];
+        await postJson("/api/project", {job, project: raw, basedOn: view.hash});
+        error.textContent = `Couldn't fix the colours of ${target}: ${err.message}`;
+        break;
+      }
       const raw = structuredClone(view.raw);
       useVersion(raw, slot.path, newName);
       raw.plant = raw.plant || {};

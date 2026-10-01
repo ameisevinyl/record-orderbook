@@ -281,6 +281,7 @@ export function validateConfig(config){
   validateProofs(config.proofs);
   validatePrintProfiles(config.printProfiles);
   validateLines(config.lines, config.partners);
+  array(config.fixerStages, "CONFIG.fixerStages").forEach((s, i) => string(s, `CONFIG.fixerStages[${i}]`));
 
   string(config.locale, "CONFIG.locale");
   validateInfoText(config.infoText);
