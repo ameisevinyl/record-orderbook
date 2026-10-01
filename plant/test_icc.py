@@ -22,21 +22,21 @@ class IccTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_direct_icc_is_downloaded_once(self):
-        src = self.dir / "p.icc"
-        src.write_bytes(profile_bytes())
+        src, data = self.dir / "p.icc", profile_bytes()  # the header carries a time: build once
+        src.write_bytes(data)
         spec = {"name": "P", "url": src.as_uri(), "file": "p.icc"}
         self.assertIsNone(icc.path(spec, self.out))
-        self.assertEqual(icc.ensure(spec, self.out).read_bytes(), profile_bytes())
+        self.assertEqual(icc.ensure(spec, self.out).read_bytes(), data)
         src.unlink()  # a second call must not download again
         self.assertEqual(icc.ensure(spec, self.out), self.out / "p.icc")
 
     def test_member_of_a_zip_by_basename_skipping_macosx(self):
-        z = self.dir / "e.zip"
+        z, data = self.dir / "e.zip", profile_bytes()
         with zipfile.ZipFile(z, "w") as zf:
             zf.writestr("__MACOSX/ECI/._ISOcoated_v2_eci.icc", b"junk")
-            zf.writestr("ECI/ISOcoated_v2_eci.icc", profile_bytes())
+            zf.writestr("ECI/ISOcoated_v2_eci.icc", data)
         spec = {"name": "ISO", "url": z.as_uri(), "file": "ISOcoated_v2_eci.icc"}
-        self.assertEqual(icc.ensure(spec, self.out).read_bytes(), profile_bytes())
+        self.assertEqual(icc.ensure(spec, self.out).read_bytes(), data)
 
     def test_failures_name_the_profile_and_leave_nothing(self):
         with zipfile.ZipFile(self.dir / "x.zip", "w") as zf:
