@@ -221,3 +221,19 @@ test("validates fixDpi and the print profiles", () => {
 
   assert.equal(CONFIG.printProfiles.labels.file, "ISOcoated_v2_eci.icc");
 });
+
+test("validates production lines and partners", () => {
+  const kind = copy();
+  kind.lines.labels.steps = ["size", "polish"];
+  assert.throws(() => validateConfig(kind), /CONFIG\.lines\.labels\.steps\[1\] must be a known step/);
+
+  const partner = copy();
+  partner.lines.labels.steps = ["send:courier"];
+  assert.throws(() => validateConfig(partner), /send:courier needs CONFIG\.partners\.courier/);
+
+  const after = copy();
+  after.lines.labels.after = ["press"];
+  assert.throws(() => validateConfig(after), /CONFIG\.lines\.labels\.after\[0\] must name a line/);
+
+  assert.deepEqual(CONFIG.lines.labels.steps.at(-1), "back:printed");
+});

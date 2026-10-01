@@ -444,6 +444,18 @@ export const CONFIG = {
     labels: { name: "ISO Coated v2 (ECI)", url: "https://eci.org/lib/exe/eci_offset_2009.zip", file: "ISOcoated_v2_eci.icc" }
   },
 
+  // Production lines (src/lib/lines.js): per product, its steps in order.
+  // Check steps (size, resolution, pdf, bleed, colour) pass by the
+  // artwork checks; approve, send:<partners list> and back:<what> are
+  // confirmed by staff. after: lines that must be through first.
+  lines: {
+    labels: { parts: ["labels"], steps: ["size", "resolution", "pdf", "bleed", "colour", "approve", "send:printer", "back:printed"] }
+  },
+  // Who a send step can go to; a plant lists its named suppliers here.
+  partners: {
+    printer: ["in-house", "external"]
+  },
+
   // UI language for the info-panel text below. Only "en" has content
   // today — German and Spanish are planned; once real translations
   // exist, add a "de"/"es" key next to "en" in each infoText entry and

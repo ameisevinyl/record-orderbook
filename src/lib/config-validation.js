@@ -160,6 +160,28 @@ function validatePrintProfiles(value){
   }
 }
 
+const CHECK_STEPS = ["size", "resolution", "pdf", "bleed", "colour"];
+
+function validateLines(lines, partners){
+  object(partners, "CONFIG.partners");
+  for(const [list, names] of Object.entries(partners)){
+    array(names, `CONFIG.partners.${list}`).forEach((n, i) => string(n, `CONFIG.partners.${list}[${i}]`));
+  }
+  for(const [name, line] of Object.entries(object(lines, "CONFIG.lines"))){
+    const path = `CONFIG.lines.${name}`;
+    object(line, path);
+    array(line.parts, `${path}.parts`).forEach((p, i) => string(p, `${path}.parts[${i}]`));
+    array(line.steps, `${path}.steps`).forEach((step, i) => {
+      const [kind, arg] = String(step).split(":");
+      if(!(CHECK_STEPS.includes(step) || step === "approve" || ((kind === "back" || kind === "send") && arg))){
+        fail(`${path}.steps[${i}]`, "must be a known step");
+      }
+      if(kind === "send" && !Array.isArray(partners[arg])) fail(`${path}.steps[${i}]`, `${step} needs CONFIG.partners.${arg}`);
+    });
+    (line.after || []).forEach((other, i) => { if(!lines[other] || other === name) fail(`${path}.after[${i}]`, "must name a line"); });
+  }
+}
+
 function validatePlant(value){
   const plant = object(value, "CONFIG.plant");
   const imprint = object(plant.imprint, "CONFIG.plant.imprint");
@@ -258,6 +280,7 @@ export function validateConfig(config){
   validateVinylColor(config.vinylColor);
   validateProofs(config.proofs);
   validatePrintProfiles(config.printProfiles);
+  validateLines(config.lines, config.partners);
 
   string(config.locale, "CONFIG.locale");
   validateInfoText(config.infoText);
