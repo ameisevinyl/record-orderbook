@@ -83,10 +83,6 @@ def job_key(name):
     return STAMP.sub("", name)
 
 
-def stamped(key, now=None):
-    return f"{key}_{(now or datetime.now()).strftime('%y%m%d-%H%M')}"
-
-
 def natural_key(name):
     """PNKRCK7 before PNKRCK10: digit runs compare as numbers."""
     return [(0, int(part), "") if part.isdigit() else (1, 0, part) for part in re.split(r"(\d+)", name)]
@@ -107,7 +103,7 @@ def same_key(root, job):
 
 def find(root, job):
     """(stage, folder) of the job `job`, by key: an older stamp still finds
-    the job after a restamp renamed it."""
+    the job after a rename."""
     plain(job)
     hits = same_key(root, job)
     if not hits:
@@ -118,17 +114,19 @@ def find(root, job):
     return stage, root / stage / name
 
 
-def restamp(root, job, now=None):
-    """A job's content changed through the plant view: a fresh stamp in
-    its name. A name without a stamp (older jobs) stays as it is."""
+def rename(root, job, name):
+    """A job's content changed through the plant view: it takes the name
+    the page built from its project.json (the customer page's rule, with
+    the plant's local time). Refused when another job has that key."""
+    plain(name)
     with LOCK:
         stage, folder = find(root, job)
-        if not STAMP.search(folder.name):
-            return folder.name
-        new = stamped(job_key(folder.name), now)
-        if new != folder.name:
-            folder.rename(folder.with_name(new))
-        return new
+        if name == folder.name:
+            return name
+        if any(root / s / n != folder for s, n in same_key(root, name)) or folder.with_name(name).exists():
+            raise Conflict(f"job {job_key(name)} exists already")
+        folder.rename(folder.with_name(name))
+        return name
 
 
 def sha256(path):
@@ -454,11 +452,11 @@ def accept(root, name):
     return job
 
 
-def merge(root, name, job, copies, project, based_on):
+def merge(root, name, job, copies, project, based_on, new_name):
     """A resend into an existing job: copies [{from, to}] (from: name in
     the item, to: a new file in the job — never an existing one), the
     item's text files replace the job's, project saved, item removed.
-    Returns the job's new (restamped) name."""
+    The job then takes new_name (see rename), which is returned."""
     path = root / INBOX / plain(name)
     with LOCK:
         folder = find(root, job)[1]
@@ -484,7 +482,7 @@ def merge(root, name, job, copies, project, based_on):
                 target.unlink(missing_ok=True)
             raise
         remove_item(path)
-        return restamp(root, job)
+        return rename(root, job, new_name)
 
 
 def upload_file(root, folder, rel, stream, length):

@@ -12,6 +12,7 @@ import { audioFindings, sideAudio } from "../lib/audio-checks.js";
 import { artworkSlots } from "../lib/artwork-checks.js";
 import { getFormat } from "../lib/format-catalogue.js";
 import { jobFiles, assignedName, mergeResend } from "../lib/versions.js";
+import { projectFileName } from "../lib/package-naming.js";
 import { renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
 import { renderNav, renderHome, renderInbox } from "../lib/plant-board.js";
 
@@ -197,6 +198,12 @@ async function showJob(job, section, id){
   }
 }
 
+// A job changed through this page is named like a customer's save of it
+// now: catalogue#_artist_title_<plant's local time>, old names included.
+function jobName(project){
+  return projectFileName({catalogue: project.catalogue, artist: project.albumArtist, title: project.albumTitle, date: new Date()});
+}
+
 // Buttons of the job and inbox views; each ends by reloading from disk.
 // A 409 (someone changed the job meanwhile) shows its message; the next
 // reload shows their change.
@@ -220,8 +227,9 @@ out.addEventListener("click", async e => {
       setAt(project, slot.path, newName);
       project.history = [...(project.history || []),
         historyEntry(`${slot.title}: ${newName}${newName === file ? "" : ` (was ${file})`}`, new Date())];
-      const {job} = await postJson("/api/assign", {job: view.job, file, newName, project, basedOn: view.hash});
-      // A change renews the stamp in the job's name: follow the rename.
+      const {job} = await postJson("/api/assign", {job: view.job, file, newName, project, basedOn: view.hash,
+        name: jobName(project)});
+      // A change renames the job (see jobName): follow it.
       if(job !== view.job){
         location.hash = `#/job/${encodeURIComponent(job)}`;
         return;
@@ -229,7 +237,7 @@ out.addEventListener("click", async e => {
     } else if(button.matches(".merge")){
       const plan = view.plans.find(p => p.job === button.dataset.job);
       const {job} = await postJson("/api/merge", {item: view.item, job: plan.job, copies: plan.copies,
-        project: plan.project, basedOn: plan.basedOn});
+        project: plan.project, basedOn: plan.basedOn, name: jobName(plan.project)});
       location.hash = `#/job/${encodeURIComponent(job)}`;
       return;
     } else {

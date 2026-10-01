@@ -180,15 +180,15 @@ class HttpTest(unittest.TestCase):
         (folder / "fix.pdf").write_bytes(b"%PDF")
         digest = self.get("/api/job?job=X_band_261001-1432")[1]["projectHash"]
         status, reply = self.post("/api/assign", {"job": "X_band_261001-1432", "file": "fix.pdf",
-                                                  "newName": "X_labels_A_v2.pdf", "project": {"catalogue": "X"}, "basedOn": digest})
-        self.assertEqual(status, 200)
-        self.assertTrue(reply["job"].startswith("X_band_") and reply["job"] != "X_band_261001-1432")
+                                                  "newName": "X_labels_A_v2.pdf", "project": {"catalogue": "X"}, "basedOn": digest,
+                                                  "name": "X_band_261002-0905"})
+        self.assertEqual((status, reply["job"]), (200, "X_band_261002-0905"))
         self.assertTrue((self.root / "20_DONE" / reply["job"] / "X_labels_A_v2.pdf").is_file())
         self.upload("r.zip", [("X_band_261003-1000/project.json", b'{"catalogue": "X"}')])
         digest = self.get(f"/api/job?job={reply['job']}")[1]["projectHash"]
         status, merged = self.post("/api/merge", {"item": "r.zip", "job": "X_band_261001-1432", "copies": [],
-                                                  "project": {"catalogue": "X"}, "basedOn": digest})
-        self.assertEqual((status, merged["job"].startswith("X_band_")), (200, True))
+                                                  "project": {"catalogue": "X"}, "basedOn": digest, "name": "X_band_261003-1200"})
+        self.assertEqual((status, merged["job"]), (200, "X_band_261003-1200"))
         self.assertEqual(self.post("/api/move", {"job": "X_band_261001-1432", "to": "10_ORDERS/20_PRESS"})[0], 200)
         self.assertTrue((self.root / "10_ORDERS/20_PRESS" / merged["job"]).is_dir())
 

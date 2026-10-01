@@ -216,9 +216,9 @@ class ZipTest(Tree):
                                  ("j/order_summary.txt", b"new")])
         digest = jobs.read_project(folder)[1]
         with self.assertRaises(Conflict):
-            jobs.merge(self.root, "r.zip", "j", [{"from": "X_labels_A_v1.pdf", "to": "X_labels_A_v1.pdf"}], {}, digest)
+            jobs.merge(self.root, "r.zip", "j", [{"from": "X_labels_A_v1.pdf", "to": "X_labels_A_v1.pdf"}], {}, digest, "j")
         jobs.merge(self.root, "r.zip", "j", [{"from": "X_labels_A_v1.pdf", "to": "X_labels_A_v2.pdf"}],
-                   {"merged": True}, digest)
+                   {"merged": True}, digest, "j")
         self.assertEqual((folder / "X_labels_A_v1.pdf").read_bytes(), b"old")
         self.assertEqual((folder / "X_labels_A_v2.pdf").read_bytes(), b"new")
         self.assertEqual((folder / "order_summary.txt").read_text(), "new")
@@ -229,7 +229,7 @@ class ZipTest(Tree):
         folder = self.job("20_DONE", "j")
         self.inbox_zip("r.zip", [("project.json", b"{}"), ("a.pdf", b"new")])
         with self.assertRaises(Conflict):
-            jobs.merge(self.root, "r.zip", "j", [{"from": "a.pdf", "to": "a_v2.pdf"}], {}, "stale")
+            jobs.merge(self.root, "r.zip", "j", [{"from": "a.pdf", "to": "a_v2.pdf"}], {}, "stale", "j")
         self.assertFalse((folder / "a_v2.pdf").exists())
 
     def test_write_zip_is_a_customer_package(self):
@@ -303,7 +303,7 @@ class FolderTest(Tree):
         folder = self.job("20_DONE", "j")
         self.received("resend", "j")
         jobs.merge(self.root, "resend", "j", [{"from": "X_labels_A_v1.pdf", "to": "X_labels_A_v1.pdf"}],
-                   {"merged": True}, jobs.read_project(folder)[1])
+                   {"merged": True}, jobs.read_project(folder)[1], "j")
         self.assertEqual((folder / "X_labels_A_v1.pdf").read_bytes(), b"abc")
         self.assertFalse((self.root / "00_INBOX" / "resend").exists())
 
@@ -332,7 +332,6 @@ class StampTest(Tree):
     def test_key_and_stamp(self):
         self.assertEqual(jobs.job_key("PNKRCK007_band_loud_261001-1432"), "PNKRCK007_band_loud")
         self.assertEqual(jobs.job_key("260925_X_a"), "260925_X_a")
-        self.assertEqual(jobs.stamped("K", datetime(2026, 10, 2, 9, 5)), "K_261002-0905")
 
     def test_find_resolves_an_older_stamp(self):
         folder = self.job("20_DONE", "X_band_261002-0910")
@@ -341,13 +340,16 @@ class StampTest(Tree):
         with self.assertRaises(JobError):
             jobs.find(self.root, "X_band_261001-1432")
 
-    def test_restamp_renews_a_stamp_and_leaves_old_names(self):
-        self.job("20_DONE", "X_band_261001-1432")
-        new = jobs.restamp(self.root, "X_band_261001-1432", datetime(2026, 10, 2, 9, 5))
-        self.assertEqual(new, "X_band_261002-0905")
-        self.assertTrue((self.root / "20_DONE" / new / "project.json").is_file())
-        self.job("20_DONE", "260925_Y_a")
-        self.assertEqual(jobs.restamp(self.root, "260925_Y_a"), "260925_Y_a")
+    def test_rename_takes_the_page_s_name_old_format_included(self):
+        self.job("20_DONE", "260925_X_a")
+        self.assertEqual(jobs.rename(self.root, "260925_X_a", "X_band_loud_261002-0905"), "X_band_loud_261002-0905")
+        self.assertTrue((self.root / "20_DONE" / "X_band_loud_261002-0905" / "project.json").is_file())
+        self.assertEqual(jobs.rename(self.root, "X_band_loud_261002-0905", "X_band_loud_261002-0905"), "X_band_loud_261002-0905")
+        self.job("20_DONE", "Y_other_261001-1000")
+        with self.assertRaises(Conflict):
+            jobs.rename(self.root, "X_band_loud_261002-0905", "Y_other_261003-1100")
+        with self.assertRaises(JobError):
+            jobs.rename(self.root, "X_band_loud_261002-0905", "../x")
 
     def test_accept_keeps_the_stamp_and_refuses_a_same_key_job(self):
         make_zip(self.root / "00_INBOX" / "a.zip", [("X_band_261001-1432/project.json", b"{}")])
@@ -356,12 +358,12 @@ class StampTest(Tree):
         with self.assertRaises(Conflict):
             jobs.accept(self.root, "b.zip")
 
-    def test_merge_renews_the_stamp(self):
+    def test_merge_renames_to_the_given_name(self):
         folder = self.job("10_ORDERS/10_PREPRESS", "X_band_261001-1432")
         make_zip(self.root / "00_INBOX" / "r.zip", [("X_band_261002-0910/project.json", b"{}")])
-        new = jobs.merge(self.root, "r.zip", "X_band_261001-1432", [], {"m": 1}, jobs.read_project(folder)[1])
-        self.assertNotEqual(new, "X_band_261001-1432")
-        self.assertEqual(jobs.job_key(new), "X_band")
+        new = jobs.merge(self.root, "r.zip", "X_band_261001-1432", [], {"m": 1}, jobs.read_project(folder)[1],
+                         "X_band_261002-0910")
+        self.assertEqual(new, "X_band_261002-0910")
         self.assertEqual(self.project(self.root / "10_ORDERS/10_PREPRESS" / new), {"m": 1})
 
     def test_jobs_sort_by_catalogue_number_naturally(self):

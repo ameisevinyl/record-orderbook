@@ -95,10 +95,12 @@ yourself. Be short and precise.
   customer's on save, the plant server's on a change); artist and title
   slugged, max 32 chars each, left out when empty. No email: the name
   travels through transfer services. Without the stamp it is the job's
-  key (`job_key` in `plant/jobs.py`). The plant job folder keeps the
-  stamp; merging a resend or using a file version renews it (rename),
-  moving does not, and jobs are found by key, so an older name still
-  resolves. Same key = same job — a repress isn't told apart yet.
+  key (`job_key` in `plant/jobs.py`). A plant job folder is renamed when
+  its content changes through the plant view (merging a resend, using a
+  file version): the page builds the name from its project.json with
+  `projectFileName` and the plant's local time, so older names convert
+  too. Moving doesn't rename. Jobs are found by key, so an older stamp
+  still resolves. Same key = same job — a repress isn't told apart yet.
 
 The customer page always writes `v1`. Higher versions are made at the
 plant only (`src/lib/versions.js`): staff fixes, files assigned by hand,
