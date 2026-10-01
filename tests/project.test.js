@@ -188,8 +188,8 @@ test("prepareProject rejects a page that isn't a positive integer", () => {
 });
 
 test("prepareProject carries the plant stage and rejects a malformed one", () => {
-  assert.deepEqual(prepareProject({projectVersion:1, format:"12"}, config).plant, {stage: ""});
-  assert.deepEqual(prepareProject({projectVersion:1, format:"12", plant:{stage:"20_DONE"}}, config).plant, {stage: "20_DONE"});
+  assert.deepEqual(prepareProject({projectVersion:1, format:"12"}, config).plant, {stage: "", lines: {}});
+  assert.deepEqual(prepareProject({projectVersion:1, format:"12", plant:{stage:"20_DONE"}}, config).plant, {stage: "20_DONE", lines: {}});
   assert.throws(() => prepareProject({projectVersion:1, format:"12", plant:[]}, config), /project\.plant must be an object/);
 });
 
