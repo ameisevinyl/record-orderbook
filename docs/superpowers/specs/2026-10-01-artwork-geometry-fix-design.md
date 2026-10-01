@@ -24,9 +24,13 @@ preview with the cut lines, and writes the one staff pick as the slot's next ver
   grey read unmanaged, RGB stays RGB (the colour checks judge it as before).
 - **Bleed fill: mirror** — outward from the kept region's edge; radial for labels
   (d′ = 2r − d), per axis for rects (corners mirror twice).
-- **Resolution: retag + warn.** A wrong dpi tag is fixed by `fit` without resampling.
-  Too low an effective dpi is not fixable: each candidate shows its resulting dpi, the
-  existing Resolution row sends the file back. No up- or downsampling as a fix.
+- **Resolution: always delivered at `fixDpi`.** The file goes on to a printing house that
+  expects a minimum (e.g. 300 dpi); a 300 dpi label scaled 96 → 98 mm would be 294 dpi.
+  So every fixed file is written at the part's `fixDpi`: PDFs rendered at it, rasters
+  resampled to it with Pillow (`LANCZOS`, CMYK native — no own resampler, no new library;
+  pyvips only if Pillow's memory ever becomes a problem). Upsampling adds no detail, so
+  each candidate shows the real detail (`dpiAfter`) next to the output dpi and warns below
+  `dpi.min`; the history entry records it.
 - **Rules in JS, pixels in Python:** which candidates apply and their geometry come from
   `src/lib/artwork-checks.js`; `plant/geomfix.py` renders what it is handed.
 - **Previews automatic, write on pick:** previews only (`.checks/`); the full file is
@@ -68,12 +72,11 @@ render(path, params, candidate, out, dpi)   # writes out (.pdf, or .png for a pr
 
 1. **Source to pixels** in its own numbers (`colourfix._raster`'s reading, moved to a shared
    helper): a PDF is rendered on its data box at `dpi` × `scale`, so it lands at `dpi`
-   after scaling. A JPG/TIFF is never resampled: scaling a raster is a retag (its dpi
-   becomes dpi / `scale`), the canvas is built in its own pixels — a mis-tagged raster is
-   fixed by `fit` without touching a pixel.
+   after scaling; a JPG/TIFF is resampled with Pillow `LANCZOS` to the same pixel size
+   (a mis-tagged raster's real size comes from its pixels and `fit`'s scale).
 2. **Geometry in numpy:** the source centred on a T canvas; pixels outside the keep
-   region (inside T) take the mirrored pixel. Mirroring repeats when the band is wider
-   than the kept area (reflect padding).
+   region (inside T) take the mirrored pixel — rect: `numpy.pad(mode="symmetric")`;
+   round: d′ = 2r − d by index arithmetic (no library does radial mirroring).
 3. **PDF:** one image, page = T = BleedBox, TrimBox = trim centred (as `colourfix.fix_label`).
 4. **Preview:** the same at 72 dpi, converted for display (RGB, like the check previews),
    written as PNG at `PREVIEW_PX` long side.
@@ -101,11 +104,11 @@ render(path, params, candidate, out, dpi)   # writes out (.pdf, or .png for a pr
   request the previews (one slot after another, progress in the busy line).
 - Under the slot's preview: one tile per candidate — preview, `cutLinesSvg` with
   page = T, trim centred, bleed, round, hole — and a caption, e.g.
-  "Scale to fit · ×1.021 · 294 dpi", "Keep 1:1 · mirror 1 mm". A `dpiAfter` below
-  `printCheck.dpi.min` is shown as a warning.
+  "Scale to fit · ×1.021 · detail 294 → 1200 dpi", "Keep 1:1 · mirror 1 mm". A `dpiAfter`
+  below `printCheck.dpi.min` is shown as a warning.
 - Button "use this": `/api/fix/geometry` with `nextVersionName(base, ".pdf")`, then
   `/api/assign` makes it the slot's file; history: "Label A: size fix (keep 1:1),
-  KMPN012_labels_A_v1.pdf → KMPN012_labels_A_v2.pdf". Picking is the decision.
+  KMPN012_labels_A_v1.pdf → KMPN012_labels_A_v2.pdf, detail 294 dpi". Picking is the decision.
 - Outside `fixerStages` no previews are made (opening a finished job only looks).
 
 ## Lines
@@ -121,12 +124,12 @@ render(path, params, candidate, out, dpi)   # writes out (.pdf, or .png for a pr
   with empty bleed → `rebuild` + `zoom`; smaller than trim → `fit` only; aspect mismatch
   crop; `dpiAfter` (declared, effective, null); a passing file → none.
 - `plant/test_geomfix.py` on synthetic CMYK PDF and TIFF: output size = T; kept pixels keep
-  their exact numbers; a mirrored pixel equals its source pixel (rect and radial); a
-  mis-tagged TIFF is retagged, not resampled; TrimBox centred.
+  their exact numbers (scale 1); a mirrored pixel equals its source pixel (rect and radial);
+  a 300 dpi raster scaled up comes out at `fixDpi`; TrimBox centred.
 - `plant/test_server.py`: preview cached by name; fix never writes over an existing file.
 - `tests/config-validation.test.js`: `fixDpi` per part.
 
 ## Out of scope
 
-- Customer-side suggestions; resampling as a fix; content-aware fill; moving artwork
+- Customer-side suggestions; sharpening or AI upscaling; content-aware fill; moving artwork
   off-centre; lines for non-label parts.
