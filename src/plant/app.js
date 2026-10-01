@@ -9,7 +9,7 @@ import { CONFIG } from "../config.js";
 import { prepareProject, historyEntry } from "../lib/project.js";
 import { projectGaps } from "../lib/completeness.js";
 import { audioFindings, sideAudio } from "../lib/audio-checks.js";
-import { artworkSlots, newerToCompare } from "../lib/artwork-checks.js";
+import { artworkSlots, newerToCompare, geometryFixes } from "../lib/artwork-checks.js";
 import { getFormat } from "../lib/format-catalogue.js";
 import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf, useVersion } from "../lib/versions.js";
 import { projectFileName } from "../lib/package-naming.js";
@@ -219,6 +219,26 @@ async function showJob(job, section, id){
     replace("basic", renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps,
       states.length > 0 && states.every(s => s.ready)));
 
+    // Size and bleed fixes: a preview per candidate (made once per file
+    // content), under the file for staff to pick; only where fixers run.
+    const fixes = {};
+    if((CONFIG.fixerStages || []).includes(data.stage)){
+      for(const c of checkable){
+        const candidates = geometryFixes(artworkFacts[c.name], c.params);
+        if(!candidates.length) continue;
+        busy(`previewing size fixes of ${c.name}`);
+        try{
+          const {previews} = await postJson("/api/fix/geometry/preview", {job, file: c.name, params: c.params, candidates});
+          if(id !== latest) return;
+          fixes[c.name] = candidates.map(candidate => ({candidate, preview: previews[candidate.id]}));
+        }catch(err){
+          error.textContent = `Couldn't preview size fixes of ${c.name}: ${err.message}`;
+        }
+      }
+      if(Object.keys(fixes).length) replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps, compare, fixes));
+    }
+    view.fixes = fixes;
+
     // A line standing at a step with a fixer runs it by itself: one file
     // per load, the fix becomes the slot's file ("use"), the log records
     // it, and the reload checks the fix and runs the next.
@@ -276,7 +296,7 @@ function jobName(project){
 // A 409 (someone changed the job meanwhile) shows its message; the next
 // reload shows their change.
 out.addEventListener("click", async e => {
-  const button = e.target.closest(".use, #move, #rescan, .merge, #accept, .fix, .line-act");
+  const button = e.target.closest(".use, #move, #rescan, .merge, #accept, .fix, .geo, .line-act");
   if(!button || !view || task) return;
   error.textContent = "";
   if(button.id === "rescan"){
@@ -314,6 +334,27 @@ out.addEventListener("click", async e => {
       raw.plant.lines[line] = [...(raw.plant.lines[line] || []), logEntry(view.project, CONFIG, line, view.artworkFacts, fields)];
       raw.history = [...(raw.history || []), historyEntry(`${line}: ${step} — ${button.textContent}${fields.to ? ` (${fields.to})` : ""}`, new Date())];
       await postJson("/api/project", {job: view.job, project: raw, basedOn: view.hash});
+    } else if(button.matches(".geo")){
+      // A size/bleed fix: written as the slot's next version and used —
+      // picking is the decision. No line log: the new file passes by its checks.
+      const slot = view.slots[Number(button.dataset.slot)];
+      const check = view.checkable.find(c => c.name === slot.name);
+      const {candidate} = view.fixes[slot.name].find(f => f.candidate.id === button.dataset.id);
+      const newName = nextVersionName(versionOf(slot.name).base, ".pdf", view.names);
+      busy(`fixing the size of ${slot.name}`);
+      await postJson("/api/fix/geometry", {job: view.job, file: slot.name, newName, candidate,
+        params: {...check.params, fixDpi: getFormat(CONFIG, view.format).printCheck.fixDpi[check.params.part]}});
+      const project = structuredClone(view.raw);
+      useVersion(project, slot.path, newName);
+      const detail = candidate.dpiAfter === null ? "" : `, detail ${candidate.dpiAfter} dpi`;
+      project.history = [...(project.history || []),
+        historyEntry(`${slot.title}: size fix (${candidate.title}), ${slot.name} → ${newName}${detail}`, new Date())];
+      const {job} = await postJson("/api/assign", {job: view.job, file: newName, newName, project, basedOn: view.hash,
+        name: jobName(project)});
+      if(job !== view.job){
+        location.hash = `#/job/${encodeURIComponent(job)}`;
+        return;
+      }
     } else if(button.matches(".fix")){
       // The fix becomes the slot's next version; "use" decides.
       const slot = view.slots[Number(button.dataset.slot)];
