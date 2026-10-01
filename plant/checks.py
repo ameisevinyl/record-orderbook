@@ -25,7 +25,7 @@ AUDIO_EXT = {".wav", ".wave", ".bwf", ".aif", ".aiff", ".aifc",
 SOFTWARE_TAGS = ("encoder", "encoded_by", "coding_history")
 WAVE_COLOUR = "#5c5c59"  # --ink-dim in src/plant/index.html
 # Bump when the facts read from a file change: cached facts then expire.
-CHECKS_VERSION = 2  # 2: CMYK ink read unmanaged (artwork.render)
+CHECKS_VERSION = 3  # 2: CMYK ink read unmanaged (artwork.render); 3: cut from the spec, not the TrimBox
 
 
 def outputs(facts):

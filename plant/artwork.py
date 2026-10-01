@@ -195,15 +195,12 @@ def page_geometry(doc_page, kind, parsed, params):
     """The rendered area (clip, in displayed page coordinates), its size
     and the trim rectangle in mm, top-left origin. A PDF is measured on
     data_box, the box its Size row judges; /Rotate is applied, so the
-    page is measured as displayed."""
+    page is measured as displayed. The cut is always the part's trim
+    size centred in the data area, never the file's TrimBox: exports
+    often set it to the whole page, which would put the cut on the edge."""
     if kind == "pdf":
-        rot = doc_page.rotation_matrix
-        clip = (data_box(doc_page.parent, doc_page) * rot).normalize()
+        clip = (data_box(doc_page.parent, doc_page) * doc_page.rotation_matrix).normalize()
         page_mm = size_mm(clip)
-        if parsed["trimBoxMm"]:
-            t = (doc_page.trimbox * rot).normalize()
-            return clip, page_mm, {"x": (t.x0 - clip.x0) * MM_PER_PT, "y": (t.y0 - clip.y0) * MM_PER_PT,
-                                   "w": t.width * MM_PER_PT, "h": t.height * MM_PER_PT}
     elif parsed["declaredDpi"]:
         clip = doc_page.rect
         px, dpi = parsed["imagePx"], parsed["declaredDpi"]

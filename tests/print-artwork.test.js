@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { CONFIG } from "../src/config.js";
 import assert from "node:assert/strict";
 import { deflateSync } from "node:zlib";
 import {
@@ -1064,4 +1065,18 @@ test("buildChecklistRows prefers effectiveDpi over pixels-per-page", () => {
   const row = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, true).find(r => r.feature === "Resolution");
   assert.equal(row.detected, "~150dpi");
   assert.equal(row.expected, "≥300dpi");
+});
+
+test("buildChecklistRows: a TrimBox equal to the page is not set, and passes", () => {
+  const parsed = { ...CLEAN_PDF_PARSED, pageSizeMm: { w: 98, h: 98 }, trimBoxMm: { w: 98, h: 98 } };
+  const row = buildChecklistRows(parsed, "pdf", TARGET, TRIM, PRINT_CHECK, true).find((r) => r.feature === "TrimBox");
+  assert.deepEqual(row, { feature: "TrimBox", severity: "info", detected: "= page (not set)", expected: null });
+});
+
+test("the committed CONFIG shows the TrimBox row only in debug mode", () => {
+  for(const format of CONFIG.formats){
+    const parsed = { ...CLEAN_PDF_PARSED, trimBoxMm: { w: 50, h: 50 } };
+    const rows = buildChecklistRows(parsed, "pdf", TARGET, TRIM, format.printCheck, false);
+    assert.ok(!rows.some((r) => r.feature === "TrimBox"), format.id);
+  }
 });

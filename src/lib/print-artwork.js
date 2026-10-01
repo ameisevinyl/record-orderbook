@@ -870,15 +870,20 @@ export function buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, d
     });
   }
 
-  // TrimBox is a size check against the part's finished trim size, not
-  // a mere presence check — a missing TrimBox isn't itself a problem
-  // (an "extra", not a requirement, unless a plant opts in via
-  // checks.trimBox.required), so it stays "debug" (hidden in
-  // production) when absent rather than warning like a real failure.
+  // TrimBox: information only — the cut is the part's trim size, not
+  // the file's box (the plant measures it so too). Exports often set
+  // the TrimBox to the whole page, which means "not set". A missing one
+  // isn't a problem either, unless a plant opts in via
+  // checks.trimBox.required.
   if(isPdf){
-    if(parsed.trimBoxMm){
-      const passed = Math.abs(parsed.trimBoxMm.w - trimMm.w) <= printCheck.sizeToleranceMm
-        && Math.abs(parsed.trimBoxMm.h - trimMm.h) <= printCheck.sizeToleranceMm;
+    const near = (a, b) => Math.abs(a.w - b.w) <= printCheck.sizeToleranceMm && Math.abs(a.h - b.h) <= printCheck.sizeToleranceMm;
+    if(parsed.trimBoxMm && parsed.pageSizeMm && near(parsed.trimBoxMm, parsed.pageSizeMm)){
+      pushRow(rows, debugMode, {
+        feature: "TrimBox", severity: resolveSeverity(checks.trimBox.severity, true),
+        detected: "= page (not set)", expected: null
+      });
+    } else if(parsed.trimBoxMm){
+      const passed = near(parsed.trimBoxMm, trimMm);
       pushRow(rows, debugMode, {
         feature: "TrimBox", severity: resolveSeverity(checks.trimBox.severity, passed),
         detected: `${parsed.trimBoxMm.w.toFixed(1)}×${parsed.trimBoxMm.h.toFixed(1)}mm`,

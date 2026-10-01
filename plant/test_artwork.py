@@ -151,7 +151,17 @@ class MeasureTest(unittest.TestCase):
         pdf(flush, size_mm=100, fills=[((0, 0, 100, 100), (0, 1, 0, 0))])
         self.assertIsNone(self.facts(flush)["bleed"]["outerInkPct"])
 
-    def test_rect_part_uses_trimbox_position(self):
+    def test_trimbox_equal_to_the_page_is_not_the_cut(self):
+        # Exports often set every box to the page: the cut is the part's
+        # trim size centred in the data area, so the bleed still measures.
+        path = self.dir / "allboxes.pdf"
+        pdf(path, size_mm=106, trim_mm=106, fills=[((0, 0, 106, 106), (0, 1, 0, 0))])
+        f = self.facts(path)
+        self.assertAlmostEqual(f["trimRectMm"]["x"], 3, places=1)
+        self.assertAlmostEqual(f["trimRectMm"]["w"], 100, places=1)
+        self.assertGreater(f["bleed"]["outerInkPct"], 90)
+
+    def test_rect_part_cut_is_the_spec_trim_centred(self):
         path = self.dir / "sleeve.pdf"
         pdf(path, size_mm=106, trim_mm=100, fills=[((3, 3, 103, 103), (0, 1, 0, 0))])
         f = self.facts(path, round=False)

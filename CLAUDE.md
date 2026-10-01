@@ -188,7 +188,9 @@ configured on purpose — keep it that way unless asked.
   Spec: `docs/superpowers/specs/2026-09-24-audio-checks-design.md`.
   Piece 2 (artwork, `plant/artwork.py`): PyMuPDF/Pillow/numpy facts,
   ink/black/bleed measurements (CMYK/grey files read as their own
-  numbers, colour management off — see `render`), preview + overlay
+  numbers, colour management off — see `render`; the cut is the part's
+  trim size centred in the data area, the file's TrimBox only
+  information — exports often set it to the page), preview + overlay
   PNG; rules in
   `src/lib/artwork-checks.js`. Spec:
   `docs/superpowers/specs/2026-09-25-artwork-checks-design.md`.
