@@ -78,8 +78,8 @@ render(path, params, candidate, out, dpi)   # writes out (.pdf, or .png for a pr
    region (inside T) take the mirrored pixel — rect: `numpy.pad(mode="symmetric")`;
    round: d′ = 2r − d by index arithmetic (no library does radial mirroring).
 3. **PDF:** one image, page = T = BleedBox, TrimBox = trim centred (as `colourfix.fix_label`).
-4. **Preview:** the same at 72 dpi, converted for display (RGB, like the check previews),
-   written as PNG at `PREVIEW_PX` long side.
+4. **Preview:** the same at the dpi that gives `PREVIEW_PX` on the long side, converted
+   for display (RGB, like the check previews), written as PNG.
 
 `FixError` (message to the page) for unreadable files and encrypted PDFs.
 
