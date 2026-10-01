@@ -26,3 +26,10 @@
   (`icc.py` downloads them into the gitignored `plant/icc/`). Written as
   the slot's next `_v<N>.pdf`; "use" decides. Spec:
   `docs/superpowers/specs/2026-10-01-label-colour-fix-design.md`.
+- `geomfix.py` — size and bleed fix, all printed parts: the candidate
+  the page picked (`geometryFixes` in `src/lib/artwork-checks.js`:
+  fit, keep 1:1, rebuild bleed, zoom), the source in its own colours
+  at `fixDpi[part]` (rasters resampled with Lanczos), kept region as
+  is, the rest mirrored (`numpy.pad` symmetric; radial for labels),
+  one raster PDF; previews the same as PNG. Spec:
+  `docs/superpowers/specs/2026-10-01-artwork-geometry-fix-design.md`.
