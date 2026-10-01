@@ -9,9 +9,9 @@ import { CONFIG } from "../config.js";
 import { prepareProject, setAt, historyEntry } from "../lib/project.js";
 import { projectGaps } from "../lib/completeness.js";
 import { audioFindings, sideAudio } from "../lib/audio-checks.js";
-import { artworkSlots } from "../lib/artwork-checks.js";
+import { artworkSlots, newerToCompare } from "../lib/artwork-checks.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { jobFiles, assignedName, mergeResend } from "../lib/versions.js";
+import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf } from "../lib/versions.js";
 import { projectFileName } from "../lib/package-naming.js";
 import { renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
 import { renderNav, renderHome, renderInbox } from "../lib/plant-board.js";
@@ -158,6 +158,9 @@ async function showJob(job, section, id){
   const files = jobFiles(project, data.files);
   const gaps = projectGaps(project, CONFIG, data.files);
   const checkable = artworkSlots(project, CONFIG);
+  // A newer version of a checked slot (e.g. a colour fix) is checked and
+  // shown next to the one in use.
+  const compare = newerToCompare(files.slots, checkable);
   const printCheck = getFormat(CONFIG, project.format).printCheck;
   // The audio the slots point at: checks and spectrograms run on these
   // only, never on unmanaged files or versions not in use.
@@ -165,11 +168,11 @@ async function showJob(job, section, id){
   // The job's check output and spectrum/ folder, served by the server.
   const base = `/jobs/${encodeURIComponent(job)}/`;
   view = {job, raw: data.project, hash: data.projectHash, stamp: data.stamp,
-    names: data.files.map(f => f.name), slots: files.slots};
+    names: data.files.map(f => f.name), slots: files.slots, checkable, format: project.format};
   const full = rescan;
   rescan = false;
   out.innerHTML = renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps)
-    + renderArtwork(files, checkable, null, printCheck, base, gaps)
+    + renderArtwork(files, checkable, null, printCheck, base, gaps, compare)
     + renderAudio(project, files, null, [], base, gaps)
     + renderShipping(project, gaps)
     + renderUnmanaged(files)
@@ -187,9 +190,9 @@ async function showJob(job, section, id){
     what = "check the artwork of";
     busy("checking artwork");
     const artworkFacts = await readStream(await api("/api/check/artwork",
-      {job, rescan: full, artwork: Object.fromEntries(checkable.map(s => [s.name, s.params]))}), onStep);
+      {job, rescan: full, artwork: Object.fromEntries([...checkable, ...compare].map(s => [s.name, s.params]))}), onStep);
     if(id !== latest) return;
-    replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps));
+    replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps, compare));
     // Last: the mastering engineer's spectrograms, in the background; the
     // change poll below shows their progress.
     await postJson("/api/spectrum", {job, files: audioNames});
@@ -208,7 +211,7 @@ function jobName(project){
 // A 409 (someone changed the job meanwhile) shows its message; the next
 // reload shows their change.
 out.addEventListener("click", async e => {
-  const button = e.target.closest(".use, #move, #rescan, .merge, #accept");
+  const button = e.target.closest(".use, #move, #rescan, .merge, #accept, .fix");
   if(!button || !view || task) return;
   error.textContent = "";
   if(button.id === "rescan"){
@@ -234,6 +237,15 @@ out.addEventListener("click", async e => {
         location.hash = `#/job/${encodeURIComponent(job)}`;
         return;
       }
+    } else if(button.matches(".fix")){
+      // The fix becomes the slot's next version; "use" decides.
+      const slot = view.slots[Number(button.dataset.slot)];
+      const check = view.checkable.find(c => c.name === slot.name);
+      const newName = nextVersionName(versionOf(slot.name).base, ".pdf", view.names);
+      busy(`fixing colours of ${slot.name}`);
+      await postJson("/api/fix/label", {job: view.job, file: slot.name, newName,
+        params: {...check.params, fixDpi: getFormat(CONFIG, view.format).printCheck.fixDpi,
+          profile: CONFIG.printProfiles.labels || null}});
     } else if(button.matches(".merge")){
       const plan = view.plans.find(p => p.job === button.dataset.job);
       const {job} = await postJson("/api/merge", {item: view.item, job: plan.job, copies: plan.copies,
@@ -381,5 +393,33 @@ nav.addEventListener("click", e => {
   if(link && link.hash === location.hash) scrollToSection(parseHash().section);
 });
 
+// CMYK readout: the preview's own numbers under the pointer (artwork.py
+// writes them next to the preview; fetched once per preview).
+const tip = document.getElementById("tip");
+const cmykData = new Map();
+out.addEventListener("mousemove", e => {
+  const art = e.target.closest(".art[data-cmyk]");
+  if(!art){ tip.hidden = true; return; }
+  const url = art.dataset.cmyk;
+  if(!cmykData.has(url)){
+    cmykData.set(url, null);
+    fetch(url).then(r => r.arrayBuffer()).then(b => cmykData.set(url, new Uint8Array(b)));
+  }
+  const data = cmykData.get(url);
+  if(!data) return;
+  const box = art.getBoundingClientRect();
+  const w = Number(art.dataset.w), h = Number(art.dataset.h);
+  const x = Math.min(w - 1, Math.floor((e.clientX - box.left) / box.width * w));
+  const y = Math.min(h - 1, Math.floor((e.clientY - box.top) / box.height * h));
+  const v = [0, 1, 2, 3].map(i => Math.round(data[(y * w + x) * 4 + i] / 2.55));
+  tip.textContent = `C ${v[0]}  M ${v[1]}  Y ${v[2]}  K ${v[3]}   total ${v[0] + v[1] + v[2] + v[3]} %`;
+  tip.style.left = `${e.clientX + 14}px`;
+  tip.style.top = `${e.clientY + 14}px`;
+  tip.hidden = false;
+});
+out.addEventListener("mouseleave", () => { tip.hidden = true; });
+
 window.addEventListener("hashchange", ()=> route(false));
+// The output profiles a colour fix may need; the server fetches missing ones.
+postJson("/api/profiles", {profiles: CONFIG.printProfiles}).catch(() => {});
 route();

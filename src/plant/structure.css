@@ -24,3 +24,9 @@ header{ grid-column:1 / -1; }
 .art .under{ stroke:white; }
 .art .trim, .art .hole{ stroke:black; stroke-dasharray:5 4; }
 .art .bleed{ stroke:black; stroke-dasharray:1.5 3; }
+
+/* CMYK readout over artwork previews; a fix shown next to the label in use. */
+#tip{ position:fixed; pointer-events:none; background:Canvas; color:CanvasText; border:1px solid;
+      white-space:pre; z-index:10; }
+.compare{ display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; }
+.compare > .art-file{ flex:1 1 360px; }

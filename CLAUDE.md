@@ -158,7 +158,9 @@ configured on purpose — keep it that way unless asked.
   when the file changed since the page read it). Python does the disk,
   the page decides (`src/lib/versions.js`). Spec:
   `docs/superpowers/specs/2026-09-29-job-folders-design.md`.
-  Each fact is shown once. Grouping stages (10_ORDERS) hold no jobs. `project.json` is the reference and
+  Each fact is shown once. Artwork previews carry their raw CMYK, shown
+  under the pointer; a warning label offers a colour fix, shown next to
+  the version in use. Grouping stages (10_ORDERS) hold no jobs. `project.json` is the reference and
   the naming convention strict: a slot's file and its `_v<N>` versions
   are managed (versions listed with "use", checked once in use); every
   other file in the job folder is unmanaged — only listed, never renamed

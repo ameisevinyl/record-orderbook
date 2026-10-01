@@ -19,3 +19,10 @@
   information — exports often set it to the page), preview + overlay
   PNG. Rules: `src/lib/artwork-checks.js`. Spec:
   `docs/superpowers/specs/2026-09-25-artwork-checks-design.md`.
+- `colourfix.py` — labels only (oven before pressing): the data area as
+  one CMYK image at `printCheck.fixDpi`, K ≥ `black.kMinPct` → pure K,
+  ink over `inkLimitPct.labels` → C, M, Y scaled with K kept; CMYK read
+  as its own numbers, grey into K, RGB through `CONFIG.printProfiles`
+  (`icc.py` downloads them into the gitignored `plant/icc/`). Written as
+  the slot's next `_v<N>.pdf`; "use" decides. Spec:
+  `docs/superpowers/specs/2026-10-01-label-colour-fix-design.md`.
