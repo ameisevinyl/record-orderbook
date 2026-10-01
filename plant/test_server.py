@@ -196,6 +196,27 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(self.post("/api/profiles", {"profiles": {}}), (200, {}))
         self.assertEqual(self.post("/api/profiles", {"profiles": []})[0], 400)
 
+    def test_fix_label_writes_the_next_version_once(self):
+        import pymupdf
+        folder = self.root / "20_DONE" / "X_band_261001-1432"
+        folder.mkdir()
+        (folder / "project.json").write_text('{"catalogue": "X"}')
+        doc = pymupdf.open()
+        page = doc.new_page(width=106 * 72 / 25.4, height=106 * 72 / 25.4)
+        page.draw_rect(page.rect, color=None, fill=(0.6, 0.4, 0.4, 1))
+        doc.save(folder / "X_labels_A_v1.pdf")
+        body = {"job": "X_band_261001-1432", "file": "X_labels_A_v1.pdf", "newName": "X_labels_A_v2.pdf",
+                "params": {"page": 1, "targetMm": {"w": 106, "h": 106}, "trimMm": {"w": 100, "h": 100},
+                           "toleranceMm": 0.5, "inkLimitPct": 220, "black": {"kMinPct": 85}, "fixDpi": 100, "profile": None}}
+        self.assertEqual(self.post("/api/fix/label", body), (200, {"name": "X_labels_A_v2.pdf"}))
+        self.assertTrue((folder / "X_labels_A_v2.pdf").is_file())
+        self.assertEqual(self.post("/api/fix/label", body)[0], 409)
+        self.assertEqual(self.post("/api/fix/label", {**body, "newName": "../x.pdf"})[0], 400)
+        wrong = {**body, "newName": "X_labels_A_v3.pdf", "params": {**body["params"], "targetMm": {"w": 98, "h": 98}}}
+        status, text = self.post("/api/fix/label", wrong)
+        self.assertEqual(status, 400)
+        self.assertIn("fix the size first", text)
+
 
 class StartupTest(unittest.TestCase):
     def test_port_in_use_is_a_clear_exit(self):

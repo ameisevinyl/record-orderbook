@@ -166,7 +166,8 @@ class Handler(BaseHTTPRequestHandler):
                "/api/accept": self.accept, "/api/merge": self.merge,
                "/api/move": self.move, "/api/assign": self.assign,
                "/api/check/audio": self.check_audio, "/api/check/artwork": self.check_artwork,
-               "/api/spectrum": self.spectrum, "/api/profiles": self.profiles}.get(self.path)
+               "/api/spectrum": self.spectrum, "/api/profiles": self.profiles,
+               "/api/fix/label": self.fix_label}.get(self.path)
         if api is None:
             return self.reply(404, "not found")
         # A JSON content type makes browsers ask first (CORS preflight,
@@ -349,6 +350,30 @@ class Handler(BaseHTTPRequestHandler):
             raise JobError("profiles must be an object")
         icc.ensure_all(specs)
         self.json({})
+
+    def fix_label(self):
+        """A label's colour fix as the slot's next version (the page names
+        it); the in-use file is never touched (colourfix.py)."""
+        import colourfix
+        import icc
+        r = self.body()
+        folder = jobs.find(JOBS, r["job"])[1]
+        source, target = folder / jobs.plain(r["file"]), folder / jobs.plain(r["newName"])
+        if not source.is_file():
+            raise JobError(f"no file {r['file']}")
+        if target.exists():
+            raise Conflict(f"{r['newName']} exists already")
+        params, profile = r["params"], None
+        if params.get("profile"):
+            try:
+                profile = icc.ensure(params["profile"])
+            except icc.ProfileError:
+                profile = None  # only RGB needs it; colourfix says so
+        try:
+            colourfix.fix_label(source, params, target, profile)
+        except colourfix.FixError as error:
+            raise JobError(str(error)) from None
+        self.json({"name": r["newName"]})
 
     def check_artwork(self):
         """Streams {"file", "index", "count", "step"} as each file starts,
