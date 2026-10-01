@@ -209,8 +209,12 @@ export function prepareProject(raw, config){
   // Plant workflow state (the stage folder the job was last seen in, see
   // plant/jobs.py) and edit notes; no form field shows them, the tool
   // just carries them through load/save.
+  // plant.lines: the production logs (src/lib/lines.js); entries without a step are dropped.
   const plant = objectOrEmpty(project.plant, "project.plant");
-  project.plant = {...plant, stage: text(plant.stage, "project.plant.stage")};
+  const rawLines = plant.lines && typeof plant.lines === "object" && !Array.isArray(plant.lines) ? plant.lines : {};
+  const lines = Object.fromEntries(Object.entries(rawLines).filter(([, log]) => Array.isArray(log))
+    .map(([name, log]) => [name, log.filter(e => e && typeof e === "object" && !Array.isArray(e) && typeof e.step === "string")]));
+  project.plant = {...plant, stage: text(plant.stage, "project.plant.stage"), lines};
   project.history = arrayOrEmpty(project.history, "project.history").map((entry, i) => {
     const path = `project.history[${i}]`;
     entry = objectOrEmpty(entry, path);

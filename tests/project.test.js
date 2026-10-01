@@ -221,3 +221,9 @@ test("prepareProject: a format without proofs drops them", () => {
   const project = prepareProject({projectVersion:1, format:"10", proofs:{referenceCut:true, testpresses:3}}, config);
   assert.deepEqual(project.proofs, {referenceCut:false, testpresses:0});
 });
+
+test("prepareProject: plant.lines kept as logs of entries, junk dropped", () => {
+  const p = prepareProject({projectVersion:1, format:"12", plant:{lines:{labels:[{step:"approve", by:"staff"}, null, "x", {by:"staff"}], bad:"x"}}}, config);
+  assert.deepEqual(p.plant.lines, {labels:[{step:"approve", by:"staff"}]});
+  assert.deepEqual(prepareProject({projectVersion:1, format:"12"}, config).plant.lines, {});
+});
