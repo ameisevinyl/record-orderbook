@@ -167,7 +167,7 @@ class Handler(BaseHTTPRequestHandler):
                "/api/move": self.move, "/api/assign": self.assign,
                "/api/check/audio": self.check_audio, "/api/check/artwork": self.check_artwork,
                "/api/spectrum": self.spectrum, "/api/profiles": self.profiles,
-               "/api/fix/label": self.fix_label}.get(self.path)
+               "/api/fix/label": self.fix_label, "/api/project": self.save_project}.get(self.path)
         if api is None:
             return self.reply(404, "not found")
         # A JSON content type makes browsers ask first (CORS preflight,
@@ -350,6 +350,15 @@ class Handler(BaseHTTPRequestHandler):
             raise JobError("profiles must be an object")
         icc.ensure_all(specs)
         self.json({})
+
+    def save_project(self):
+        """project.json as the page decided it (a production log entry);
+        refused with 409 when it changed since the page read it."""
+        r = self.body()
+        folder = jobs.find(JOBS, r["job"])[1]
+        if not isinstance(r.get("project"), dict):
+            raise JobError("project must be an object")
+        self.json({"projectHash": jobs.write_project(folder, r["project"], r["basedOn"])})
 
     def fix_label(self):
         """A label's colour fix as the slot's next version (the page names

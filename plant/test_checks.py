@@ -189,7 +189,7 @@ class ArtworkWiringTest(unittest.TestCase):
                 result = checks.check_artwork(project, Path(tmp), {
                     "bad.pdf": {}, "good.pdf": {}, "../outside.pdf": {}, str(Path(tmp) / "outside.pdf"): {}})
             self.assertEqual(result["bad.pdf"], {"error": "can't check: boom"})
-            self.assertEqual(result["good.pdf"], {"ok": True})
+            self.assertEqual({k: v for k, v in result["good.pdf"].items() if k != "sha256"}, {"ok": True})
             self.assertEqual(result["../outside.pdf"], {"error": "not in the job"})
             self.assertEqual(result[str(Path(tmp) / "outside.pdf")], {"error": "not in the job"})
         finally:
@@ -240,6 +240,12 @@ class CacheTest(unittest.TestCase):
 
     def preview(self):
         return self.check()["L.pdf"]["preview"]
+
+    def test_results_carry_the_file_hash_fresh_and_cached(self):
+        import hashlib
+        digest = hashlib.sha256(b"%PDF one").hexdigest()
+        self.assertEqual(self.check()["L.pdf"]["sha256"], digest)
+        self.assertEqual(self.check()["L.pdf"]["sha256"], digest)
 
     def test_unchanged_file_is_not_checked_again(self):
         first = self.preview()

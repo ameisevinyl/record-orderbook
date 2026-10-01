@@ -244,7 +244,8 @@ def check_artwork(project_dir, out_dir, params_by_name, rescan=False,
                 result[name] = {"error": f"can't check: {error}"}
                 continue
             cache.put(path, name, params, facts, digest)
-        result[name] = facts
+        # The file's hash goes with its facts: production log entries tie to it.
+        result[name] = {**facts, "sha256": cache.used[name]["sha256"]}
     cache.save()
     return result
 

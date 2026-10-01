@@ -217,6 +217,18 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("fix the size first", text)
 
+    def test_project_save_is_safe(self):
+        folder = self.root / "20_DONE" / "X_a_261001-1432"
+        folder.mkdir()
+        (folder / "project.json").write_text('{"catalogue": "X"}')
+        digest = self.get("/api/job?job=X_a_261001-1432")[1]["projectHash"]
+        body = {"job": "X_a_261001-1432", "project": {"catalogue": "X", "plant": {"lines": {"labels": [{"step": "approve"}]}}}, "basedOn": digest}
+        status, reply = self.post("/api/project", body)
+        self.assertEqual(status, 200)
+        self.assertIn("projectHash", reply)
+        self.assertEqual(self.post("/api/project", body)[0], 409)
+        self.assertEqual(self.post("/api/project", {**body, "project": [], "basedOn": reply["projectHash"]})[0], 400)
+
 
 class StartupTest(unittest.TestCase):
     def test_port_in_use_is_a_clear_exit(self):

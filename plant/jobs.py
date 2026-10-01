@@ -194,8 +194,17 @@ def board(root):
             try:
                 note_stage(folder, stage, "disk")
                 project = read_project(folder)[0]
+                # What the board needs to derive the job's lines: its files
+                # and the last check results (read only, never re-checked here).
+                try:
+                    cached = json.loads((folder / ".checks" / "artwork.json").read_text())
+                except (OSError, ValueError):
+                    cached = {}
+                artwork = {name: {**e.get("facts", {}), "sha256": e.get("sha256")}
+                           for name, e in cached.items() if isinstance(e, dict)}
                 cards.append({"job": job, "catalogue": project.get("catalogue", ""),
-                              "title": project.get("albumTitle", ""), "artist": project.get("albumArtist", "")})
+                              "title": project.get("albumTitle", ""), "artist": project.get("albumArtist", ""),
+                              "project": project, "files": files(folder), "artwork": artwork})
             except (JobError, OSError) as error:
                 cards.append({"job": job, "error": str(error)})
         columns.append({"stage": stage, "jobs": cards})

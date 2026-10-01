@@ -70,7 +70,8 @@ class JobsTest(Tree):
         self.assertEqual([(h["by"], h["note"]) for h in project["history"]],
                          [("disk", "in 10_ORDERS/20_PRESS"), ("disk", "10_ORDERS/20_PRESS → 20_DONE")])
         done = next(c for c in board["stages"] if c["stage"] == "20_DONE")
-        self.assertEqual(done["jobs"], [{"job": "j", "catalogue": "X", "title": "", "artist": ""}])
+        self.assertEqual([{k: c[k] for k in ("job", "catalogue", "title", "artist")} for c in done["jobs"]],
+                         [{"job": "j", "catalogue": "X", "title": "", "artist": ""}])
         jobs.board(self.root)
         self.assertEqual(len(self.project(self.root / "20_DONE" / "j")["history"]), 2)
 
@@ -84,6 +85,16 @@ class JobsTest(Tree):
         self.assertIn("not valid JSON", press["jobs"][0]["error"])
         with self.assertRaisesRegex(JobError, "more than one job j"):
             jobs.find(self.root, "j")
+
+    def test_board_cards_carry_project_files_and_cached_artwork(self):
+        folder = self.job("20_DONE", "X_a_261001-1432", {"catalogue": "X"})
+        (folder / "L.pdf").write_bytes(b"%PDF")
+        (folder / ".checks").mkdir()
+        (folder / ".checks" / "artwork.json").write_text(json.dumps({"L.pdf": {"sha256": "abc", "facts": {"kind": "pdf"}}}))
+        card = next(c for s in jobs.board(self.root)["stages"] for c in s["jobs"] if c["job"] == "X_a_261001-1432")
+        self.assertEqual(card["project"]["catalogue"], "X")
+        self.assertEqual([f["name"] for f in card["files"]], ["L.pdf"])
+        self.assertEqual(card["artwork"], {"L.pdf": {"kind": "pdf", "sha256": "abc"}})
 
     def test_move_renames_and_logs(self):
         self.job("00_INBOX", "j", {"plant": {"stage": "00_INBOX"}})
