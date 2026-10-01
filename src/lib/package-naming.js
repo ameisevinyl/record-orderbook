@@ -91,16 +91,16 @@ export function previewFileName({catalogue, part, variant}){
   return parts.join("_") + "_v1_preview.jpg";
 }
 
-// YYMMDD, local date.
-export function dateStamp(date = new Date()){
-  const yy = String(date.getFullYear()).slice(-2);
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return yy + mm + dd;
+// YYMMDD-HHMM, local time — sorts as text, and is the customer's (or
+// the plant's) own clock, not UTC.
+export function timeStamp(date = new Date()){
+  const two = n => String(n).padStart(2, "0");
+  return String(date.getFullYear()).slice(-2) + two(date.getMonth() + 1) + two(date.getDate())
+    + "-" + two(date.getHours()) + two(date.getMinutes());
 }
 
 // yyyy-mm-dd, local date — human-readable, for document headers, as
-// opposed to dateStamp()'s compact form used in filenames.
+// opposed to timeStamp()'s compact form used in filenames.
 export function humanDate(date = new Date()){
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -108,10 +108,12 @@ export function humanDate(date = new Date()){
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// 260919_PNKRCK007_customer_example_com — the project package's file
-// name (also the single folder nested inside the zip).
-export function projectFileName({catalogue, customerEmail, date}){
-  const parts = [dateStamp(date), sanitizeFileName(catalogue)];
-  if(customerEmail && slug(customerEmail)) parts.push(slug(customerEmail));
-  return parts.join("_");
+// PNKRCK007_the_band_loud_record_261001-1432 — the project package's
+// file name (also the single folder nested inside the zip). Without the
+// timestamp it is the plant's job key. Artist and title tell two
+// productions with one catalogue number apart; no email, since the name
+// travels through transfer services.
+export function projectFileName({catalogue, artist, title, date}){
+  const cap = str => slug(str).slice(0, 32).replace(/_+$/, "");
+  return [sanitizeFileName(catalogue), cap(artist), cap(title), timeStamp(date)].filter(Boolean).join("_");
 }

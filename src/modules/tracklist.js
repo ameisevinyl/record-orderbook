@@ -899,9 +899,7 @@ function openSpecs(){
 // name and as the single folder nested inside it (unzipping then drops
 // one tidy folder rather than scattering files loose).
 function currentProjectFileName(project, date){
-  const customerEmail = project.shippingBilling && project.shippingBilling.billing
-    ? project.shippingBilling.billing.email : null;
-  return projectFileName({catalogue: project.catalogue, customerEmail, date});
+  return projectFileName({catalogue: project.catalogue, artist: project.albumArtist, title: project.albumTitle, date});
 }
 
 async function waitForAudioInspections(forSend){

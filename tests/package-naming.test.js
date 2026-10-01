@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   slug, fileExt, sanitizeFileName, mimeType, trackFileName, continuousSideFileName,
-  tracklistFileName, printedPartFileName, previewFileName, dateStamp, humanDate, projectFileName
+  tracklistFileName, printedPartFileName, previewFileName, timeStamp, humanDate, projectFileName
 } from "../src/lib/package-naming.js";
 
 test("slug lowercases and collapses non-alnum runs to single underscores", () => {
@@ -90,8 +90,10 @@ test("previewFileName builds catalogue/part/variant with a forced _preview.jpg s
   );
 });
 
-test("dateStamp formats as YYMMDD", () => {
-  assert.equal(dateStamp(new Date(2026, 8, 19)), "260919");
+test("timeStamp is YYMMDD-HHMM in local time", () => {
+  // Built from local fields, so the stamp must give them back whatever the time zone.
+  assert.equal(timeStamp(new Date(2026, 9, 1, 14, 32)), "261001-1432");
+  assert.equal(timeStamp(new Date(2026, 0, 5, 3, 7)), "260105-0307");
 });
 
 test("humanDate formats as yyyy-mm-dd", () => {
@@ -99,13 +101,17 @@ test("humanDate formats as yyyy-mm-dd", () => {
   assert.equal(humanDate(new Date(2026, 0, 5)), "2026-01-05");
 });
 
-test("projectFileName combines date, catalogue and customer email", () => {
-  assert.equal(
-    projectFileName({catalogue:"PNKRCK007", customerEmail:"a@b.com", date:new Date(2026, 8, 19)}),
-    "260919_PNKRCK007_a_b_com"
-  );
-  assert.equal(
-    projectFileName({catalogue:"PNKRCK007", date:new Date(2026, 8, 19)}),
-    "260919_PNKRCK007"
-  );
+test("projectFileName: catalogue, artist, title, local timestamp; no email", () => {
+  const date = new Date(2026, 9, 1, 14, 32);
+  assert.equal(projectFileName({catalogue:"PNKRCK007", artist:"The Band", title:"Loud Record", date}),
+    "PNKRCK007_the_band_loud_record_261001-1432");
+  assert.equal(projectFileName({catalogue:"PNKRCK007", date}), "PNKRCK007_261001-1432");
+  assert.equal(projectFileName({catalogue:"PNKRCK007", artist:"Böse Söhne", title:"", date}),
+    "PNKRCK007_boese_soehne_261001-1432");
+  assert.equal(projectFileName({catalogue:"", date}), "untitled-release_261001-1432");
+});
+
+test("projectFileName caps artist and title at 32 characters", () => {
+  const name = projectFileName({catalogue:"X1", artist:"a".repeat(40), title:"b ".repeat(30), date:new Date(2026, 9, 1, 0, 0)});
+  assert.equal(name, `X1_${"a".repeat(32)}_${"b_".repeat(16).slice(0, 31)}_261001-0000`);
 });
