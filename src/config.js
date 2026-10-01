@@ -99,8 +99,8 @@ export const CONFIG = {
       // blocked, not just have it silently refused.
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
-        // Resolution of a plant-side colour fix (a label rendered to one CMYK image).
-        fixDpi: 1200,
+        // Resolution of a plant-side fix per part (colour fix: labels; size/bleed fix: all).
+        fixDpi: { labels: 1200, innerSleeve: 400, outerCover: 400, inlay: 400 },
         // Max total ink (C+M+Y+K, %) per part. Labels are baked in the
         // oven before pressing, so they stay well below ISO Coated v2 300 %.
         inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
@@ -226,8 +226,8 @@ export const CONFIG = {
       recordWeightG: 100,
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
-        // Resolution of a plant-side colour fix (a label rendered to one CMYK image).
-        fixDpi: 1200,
+        // Resolution of a plant-side fix per part (colour fix: labels; size/bleed fix: all).
+        fixDpi: { labels: 1200, innerSleeve: 400, outerCover: 400, inlay: 400 },
         inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
         black: { kMinPct: 85, cmyMaxPct: 30 },
         checks: {
@@ -309,8 +309,8 @@ export const CONFIG = {
       recordWeightG: 40,
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
-        // Resolution of a plant-side colour fix (a label rendered to one CMYK image).
-        fixDpi: 1200,
+        // Resolution of a plant-side fix per part (colour fix: labels; size/bleed fix: all).
+        fixDpi: { labels: 1200, innerSleeve: 400, outerCover: 400, inlay: 400 },
         inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
         black: { kMinPct: 85, cmyMaxPct: 30 },
         checks: {

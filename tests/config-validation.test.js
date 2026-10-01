@@ -208,8 +208,11 @@ test("bigCenterDefault is a boolean, only on a format with a big center hole", (
 
 test("validates fixDpi and the print profiles", () => {
   const dpi = copy();
-  dpi.formats[0].printCheck.fixDpi = 0;
-  assert.throws(() => validateConfig(dpi), /CONFIG\.formats\[0\]\.printCheck\.fixDpi must be a positive integer/);
+  dpi.formats[0].printCheck.fixDpi.inlay = 0;
+  assert.throws(() => validateConfig(dpi), /CONFIG\.formats\[0\]\.printCheck\.fixDpi\.inlay must be a positive integer/);
+  const flat = copy();
+  flat.formats[0].printCheck.fixDpi = 1200;
+  assert.throws(() => validateConfig(flat), /CONFIG\.formats\[0\]\.printCheck\.fixDpi must be an object/);
 
   const url = copy();
   url.printProfiles.labels.url = "http://example.com/x.icc";

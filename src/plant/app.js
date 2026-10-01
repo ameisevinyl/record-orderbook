@@ -231,7 +231,7 @@ async function showJob(job, section, id){
       busy(`fixing colours of ${target}`);
       try{
         await postJson("/api/fix/label", {job, file: target, newName,
-          params: {...check.params, fixDpi: printCheck.fixDpi, profile: CONFIG.printProfiles.labels || null}});
+          params: {...check.params, fixDpi: printCheck.fixDpi.labels, profile: CONFIG.printProfiles.labels || null}});
       }catch(err){
         // A refused fix is logged as tried, so it isn't repeated on every
         // load; the line waits at colour for staff.
@@ -321,7 +321,7 @@ out.addEventListener("click", async e => {
       const newName = nextVersionName(versionOf(slot.name).base, ".pdf", view.names);
       busy(`fixing colours of ${slot.name}`);
       await postJson("/api/fix/label", {job: view.job, file: slot.name, newName,
-        params: {...check.params, fixDpi: getFormat(CONFIG, view.format).printCheck.fixDpi,
+        params: {...check.params, fixDpi: getFormat(CONFIG, view.format).printCheck.fixDpi.labels,
           profile: CONFIG.printProfiles.labels || null}});
     } else if(button.matches(".merge")){
       const plan = view.plans.find(p => p.job === button.dataset.job);

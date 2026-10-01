@@ -39,6 +39,8 @@ function severity(value, path){
   if(!SEVERITIES.has(value)) fail(path, "must be debug, info, warn, or error");
 }
 
+const PRINTED_PARTS = ["labels", "innerSleeve", "outerCover", "inlay"];
+
 function validatePrintCheck(value, path){
   const printCheck = object(value, path);
   number(printCheck.sizeToleranceMm, `${path}.sizeToleranceMm`, true);
@@ -46,7 +48,10 @@ function validatePrintCheck(value, path){
   number(dpi.min, `${path}.dpi.min`);
   number(dpi.max, `${path}.dpi.max`);
   if(dpi.min > dpi.max) fail(`${path}.dpi`, "min must not exceed max");
-  if(!Number.isInteger(printCheck.fixDpi) || printCheck.fixDpi <= 0) fail(`${path}.fixDpi`, "must be a positive integer");
+  const fixDpi = object(printCheck.fixDpi, `${path}.fixDpi`);
+  for(const part of PRINTED_PARTS){
+    if(!Number.isInteger(fixDpi[part]) || fixDpi[part] <= 0) fail(`${path}.fixDpi.${part}`, "must be a positive integer");
+  }
 
   const checks = object(printCheck.checks, `${path}.checks`);
   for(const name of CHECK_NAMES){
@@ -65,7 +70,7 @@ function validatePrintCheck(value, path){
   if(typeof checks.fonts.requireEmbedded !== "boolean") fail(`${path}.checks.fonts.requireEmbedded`, "must be a boolean");
 
   const ink = object(printCheck.inkLimitPct, `${path}.inkLimitPct`);
-  for(const part of ["labels", "innerSleeve", "outerCover", "inlay"]){
+  for(const part of PRINTED_PARTS){
     number(ink[part], `${path}.inkLimitPct.${part}`);
     if(ink[part] > 400) fail(`${path}.inkLimitPct.${part}`, "must not exceed 400");
   }
