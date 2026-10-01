@@ -217,6 +217,47 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("fix the size first", text)
 
+    def geometry_job(self):
+        import pymupdf
+        folder = self.root / "20_DONE" / "X_band_261001-1432"
+        folder.mkdir()
+        (folder / "project.json").write_text('{"catalogue": "X"}')
+        doc = pymupdf.open()
+        page = doc.new_page(width=96 * 72 / 25.4, height=96 * 72 / 25.4)
+        page.draw_rect(page.rect, color=None, fill=(0.6, 0.4, 0.4, 0))
+        doc.save(folder / "X_labels_A_v1.pdf")
+        params = {"page": 1, "targetMm": {"w": 98, "h": 98}, "trimMm": {"w": 92, "h": 92}, "round": True}
+        return folder, params, {"id": "keep", "scale": 1, "keep": "file", "fill": "mirror"}
+
+    def test_geometry_previews_are_made_once(self):
+        folder, params, keep = self.geometry_job()
+        body = {"job": "X_band_261001-1432", "file": "X_labels_A_v1.pdf", "params": params, "candidates": [keep]}
+        status, reply = self.post("/api/fix/geometry/preview", body)
+        self.assertEqual(status, 200)
+        name = reply["previews"]["keep"]
+        self.assertRegex(name, r"^X_labels_A_v1\.pdf\.[0-9a-f]{12}\.keep\.[0-9a-f]{8}\.png$")
+        made = (folder / ".checks" / name).stat().st_mtime_ns
+        self.assertEqual(self.post("/api/fix/geometry/preview", body), (200, reply))
+        self.assertEqual((folder / ".checks" / name).stat().st_mtime_ns, made)
+        other = {**body, "params": {**params, "targetMm": {"w": 99, "h": 99}}}
+        self.assertNotEqual(self.post("/api/fix/geometry/preview", other)[1]["previews"]["keep"], name)
+        self.assertEqual(self.post("/api/fix/geometry/preview", {**body, "candidates": [{**keep, "id": "../x"}]})[0], 400)
+
+    def test_geometry_fix_writes_the_next_version_once(self):
+        folder, params, keep = self.geometry_job()
+        body = {"job": "X_band_261001-1432", "file": "X_labels_A_v1.pdf", "newName": "X_labels_A_v2.pdf",
+                "params": {**params, "fixDpi": 100}, "candidate": keep}
+        self.assertEqual(self.post("/api/fix/geometry", body), (200, {"name": "X_labels_A_v2.pdf"}))
+        self.assertTrue((folder / "X_labels_A_v2.pdf").is_file())
+        self.assertEqual(self.post("/api/fix/geometry", body)[0], 409)
+        self.assertEqual(self.post("/api/fix/geometry", {**body, "newName": "../x.pdf"})[0], 400)
+
+    def test_geometry_refuses_an_unreadable_file(self):
+        folder, params, keep = self.geometry_job()
+        (folder / "X_labels_B_v1.pdf").write_bytes(b"nope")
+        body = {"job": "X_band_261001-1432", "file": "X_labels_B_v1.pdf", "params": params, "candidates": [keep]}
+        self.assertEqual(self.post("/api/fix/geometry/preview", body)[0], 400)
+
     def test_project_save_is_safe(self):
         folder = self.root / "20_DONE" / "X_a_261001-1432"
         folder.mkdir()

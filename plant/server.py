@@ -10,6 +10,7 @@ Run: uv run --project plant plant/server.py [--jobs <folder>]
 """
 import argparse
 import errno
+import hashlib
 import importlib.metadata
 import json
 import re
@@ -167,7 +168,8 @@ class Handler(BaseHTTPRequestHandler):
                "/api/move": self.move, "/api/assign": self.assign,
                "/api/check/audio": self.check_audio, "/api/check/artwork": self.check_artwork,
                "/api/spectrum": self.spectrum, "/api/profiles": self.profiles,
-               "/api/fix/label": self.fix_label, "/api/project": self.save_project}.get(self.path)
+               "/api/fix/label": self.fix_label, "/api/fix/geometry": self.fix_geometry,
+               "/api/fix/geometry/preview": self.fix_geometry_preview, "/api/project": self.save_project}.get(self.path)
         if api is None:
             return self.reply(404, "not found")
         # A JSON content type makes browsers ask first (CORS preflight,
@@ -360,18 +362,24 @@ class Handler(BaseHTTPRequestHandler):
             raise JobError("project must be an object")
         self.json({"projectHash": jobs.write_project(folder, r["project"], r["basedOn"])})
 
-    def fix_label(self):
-        """A label's colour fix as the slot's next version (the page names
-        it); the in-use file is never touched (colourfix.py)."""
-        import colourfix
-        import icc
-        r = self.body()
+    def fix_paths(self, r):
+        """(source, target) of a fix in the job: the source must exist, the
+        target must not — a fix never writes over a file."""
         folder = jobs.find(JOBS, r["job"])[1]
         source, target = folder / jobs.plain(r["file"]), folder / jobs.plain(r["newName"])
         if not source.is_file():
             raise JobError(f"no file {r['file']}")
         if target.exists():
             raise Conflict(f"{r['newName']} exists already")
+        return source, target
+
+    def fix_label(self):
+        """A label's colour fix as the slot's next version (the page names
+        it); the in-use file is never touched (colourfix.py)."""
+        import colourfix
+        import icc
+        r = self.body()
+        source, target = self.fix_paths(r)
         params, profile = r["params"], None
         if params.get("profile"):
             try:
@@ -383,6 +391,47 @@ class Handler(BaseHTTPRequestHandler):
         except colourfix.FixError as error:
             raise JobError(str(error)) from None
         self.json({"name": r["newName"]})
+
+    def fix_geometry(self):
+        """A size/bleed fix as the slot's next version (the page names it
+        and picks the candidate); the in-use file is never touched (geomfix.py)."""
+        import geomfix
+        r = self.body()
+        source, target = self.fix_paths(r)
+        try:
+            geomfix.render(source, r["params"], r["candidate"], target, r["params"]["fixDpi"])
+        except geomfix.FixError as error:
+            raise JobError(str(error)) from None
+        self.json({"name": r["newName"]})
+
+    def fix_geometry_preview(self):
+        """Previews of the size/bleed fixes the page computed, in .checks/
+        named by the file's content and the fix — made once."""
+        import checks
+        import geomfix
+        r = self.body()
+        folder = jobs.find(JOBS, r["job"])[1]
+        source = folder / jobs.plain(r["file"])
+        if not source.is_file():
+            raise JobError(f"no file {r['file']}")
+        out = folder / ".checks"
+        out.mkdir(exist_ok=True)
+        base = checks.preview_base(r["file"], jobs.sha256(source))
+        params, previews = r["params"], {}
+        for candidate in r["candidates"]:
+            # The geometry is in the name too: another product or format
+            # for the same file must not reuse a stale preview.
+            what = json.dumps([params["page"], params["targetMm"], params["trimMm"], params["round"],
+                               candidate["scale"], candidate["keep"], candidate["fill"]], sort_keys=True)
+            key = hashlib.sha256(what.encode()).hexdigest()[:8]
+            name = jobs.plain(f"{base}.{jobs.plain(candidate['id'])}.{key}.png")
+            if not (out / name).exists():
+                try:
+                    geomfix.render(source, params, candidate, out / name, geomfix.preview_dpi(params["targetMm"]))
+                except geomfix.FixError as error:
+                    raise JobError(str(error)) from None
+            previews[candidate["id"]] = name
+        self.json({"previews": previews})
 
     def check_artwork(self):
         """Streams {"file", "index", "count", "step"} as each file starts,
