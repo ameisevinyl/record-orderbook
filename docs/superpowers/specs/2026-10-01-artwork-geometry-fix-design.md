@@ -52,7 +52,7 @@ its centre on T's centre; whatever falls outside T is cropped.
 | id | applies when | scale | keep | fill |
 |---|---|---|---|---|
 | `fit` "Scale to fit" | Size row fails | max(Tw/Sw, Th/Sh) | file | — |
-| `keep` "Keep 1:1" | Size row fails and Sw ≥ trimW and Sh ≥ trimH | 1 | file | mirror |
+| `keep` "Keep 1:1" | Size row fails, Sw ≥ trimW and Sh ≥ trimH, crops at most `bleedMm` per side | 1 | file | mirror |
 | `rebuild` "Trim + rebuild bleed" | Size row ok, Bleed row "trimmed" | 1 | trim | mirror |
 | `zoom` "Zoom into bleed" | Size row ok, Bleed row "trimmed" | max(Tw/trimW, Th/trimH) | file | — |
 

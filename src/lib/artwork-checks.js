@@ -108,9 +108,12 @@ export function geometryFixes(facts, params){
   if(Math.abs(S.w - T.w) > tol || Math.abs(S.h - T.h) > tol){
     const fit = Math.max(T.w / S.w, T.h / S.h);
     const fixes = [make("fit", `Scale to fit · ×${fit.toFixed(3)}${crop(over(fit))}`, fit, "file", null)];
-    // Mirroring a file smaller than the trim would reach inside the cut.
-    if(S.w >= trim.w && S.h >= trim.h){
-      const o = over(1), mirror = Math.max(0, -o.w, -o.h);
+    // Mirroring a file smaller than the trim would reach inside the cut;
+    // cropping more than the bleed is no longer the same layout (and an
+    // oversized file at fixDpi would take gigabytes) — fit does that.
+    const o = over(1);
+    if(S.w >= trim.w && S.h >= trim.h && Math.max(o.w, o.h) <= params.bleedMm){
+      const mirror = Math.max(0, -o.w, -o.h);
       fixes.push(make("keep", `Keep 1:1${mirror > 0 ? ` · mirror ${mm(mirror)}` : ""}${crop(o)}`, 1, "file", "mirror"));
     }
     return fixes;

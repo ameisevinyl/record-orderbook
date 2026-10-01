@@ -132,12 +132,18 @@ test("geometryFixes: smaller than the trim — only scale to fit", () => {
 
 test("geometryFixes: other aspect — cover and crop centred", () => {
   const fixes = geometryFixes(geo({w: 212, h: 106}), rect);
-  assert.deepEqual(fixes.map(f => f.title), ["Scale to fit · ×1.000 · crops 53.0 mm", "Keep 1:1 · crops 53.0 mm"]);
+  assert.deepEqual(fixes.map(f => f.title), ["Scale to fit · ×1.000 · crops 53.0 mm"]);
+});
+
+test("geometryFixes: keep 1:1 crops at most the bleed — an oversized file only scales", () => {
+  assert.deepEqual(geometryFixes(geo({w: 110, h: 110}), rect).map(f => [f.id, f.title]),
+    [["fit", "Scale to fit · ×0.964"], ["keep", "Keep 1:1 · crops 2.0 mm"]]);
+  assert.deepEqual(geometryFixes(geo({w: 114, h: 114}), rect).map(f => f.id), ["fit"]);
 });
 
 test("geometryFixes: a 72 dpi tag on print pixels — fit shows the real detail", () => {
   const fixes = geometryFixes(geo({w: 1158 / 72 * 25.4, h: 1158 / 72 * 25.4}, {parsed: {declaredDpi: {x: 72, y: 72}}}), label7);
-  assert.deepEqual(fixes.map(f => [f.id, f.dpiAfter]), [["fit", 300], ["keep", 72]]);
+  assert.deepEqual(fixes.map(f => [f.id, f.dpiAfter]), [["fit", 300]]);
 });
 
 test("geometryFixes: nothing for a passing, broken or unmeasured file", () => {
