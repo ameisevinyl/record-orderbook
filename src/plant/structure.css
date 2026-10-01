@@ -24,6 +24,7 @@ header{ grid-column:1 / -1; }
 .art .under{ stroke:white; }
 .art .trim, .art .hole{ stroke:black; stroke-dasharray:5 4; }
 .art .bleed{ stroke:black; stroke-dasharray:1.5 3; }
+.geometry{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px; }
 
 /* CMYK readout over artwork previews; a fix shown next to the label in use. */
 #tip{ position:fixed; pointer-events:none; background:Canvas; color:CanvasText; border:1px solid;

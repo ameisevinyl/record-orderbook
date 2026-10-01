@@ -5,6 +5,7 @@ import { prepareProject } from "../src/lib/project.js";
 import { jobFiles } from "../src/lib/versions.js";
 import { artworkSlots } from "../src/lib/artwork-checks.js";
 import { getFormat } from "../src/lib/format-catalogue.js";
+import { CHECKLIST_ICON } from "../src/lib/print-artwork.js";
 import { escapeHtml, renderProduction, stageLabel, gapSection, renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged,
   renderHistory }
   from "../src/lib/plant-overview.js";
@@ -221,4 +222,24 @@ test("production: steps ticked, the current one with why and its action", () => 
 test("basic: suggests moving on when the lines are through", () => {
   assert.ok(renderBasic(project, CONFIG, place, [], true).includes("lines through — move on?"));
   assert.ok(!renderBasic(project, CONFIG, place, [], false).includes("move on?"));
+});
+
+test("artwork: size fix tiles with cut lines, detail and a use button", () => {
+  const params = {part: "labels", targetMm: {w: 106, h: 106}, trimMm: {w: 100, h: 100}, bleedMm: 3, round: true,
+    page: 1, inkLimitPct: 220, holeMm: 7.4, black: {kMinPct: 85, cmyMaxPct: 30}, toleranceMm: 0.5};
+  const checkable = [{title: "Label A", name: "lab_a_v1.pdf", params}];
+  const facts = {"lab_a_v1.pdf": {kind: "pdf", parsed: {pageSizeMm: {w: 104, h: 104}, imagePx: null, declaredDpi: null,
+    colorMode: "CMYK", spotColors: [], iccProfileName: null, trimBoxMm: null, encrypted: false, hasUnembeddedFonts: false,
+    pdfVersion: "1.4", pageCount: 1, effectiveDpi: {x: 300, y: 300}}, pageMm: {w: 104, h: 104}, trimRectMm: {x: 2, y: 2, w: 100, h: 100},
+    ink: {maxPct: 200, overPct: 0}, black: {richPct: 0}, bleed: {outerInkPct: 90, innerInkPct: 90}, preview: "a.png", overlay: "a.overlay.png"}};
+  const fixes = {"lab_a_v1.pdf": [
+    {candidate: {id: "fit", title: "Scale to fit · ×1.019", scale: 1.019, keep: "file", fill: null, dpiAfter: 294}, preview: "a.fit.png"},
+    {candidate: {id: "keep", title: "Keep 1:1 · mirror 1.0 mm", scale: 1, keep: "file", fill: "mirror", dpiAfter: 300}, preview: "a.keep.png"}]};
+  const html = renderArtwork(files, checkable, facts, printCheck, "/jobs/j1/", [], [], fixes);
+  assert.ok(html.includes('<img src="/jobs/j1/a.keep.png" alt="">'));
+  assert.ok(html.includes('<circle class="trim" cx="53" cy="53" r="50"'));
+  assert.ok(html.includes(`Scale to fit · ×1.019 · ${CHECKLIST_ICON.warn} detail 294 → 1200 dpi`));
+  assert.ok(html.includes("Keep 1:1 · mirror 1.0 mm · detail 300 → 1200 dpi"));
+  assert.ok(html.includes('<button type="button" class="geo" data-slot="2" data-id="keep">use this</button>'));
+  assert.ok(!renderArtwork(files, checkable, facts, printCheck, "/jobs/j1/", []).includes('class="geo"'));
 });

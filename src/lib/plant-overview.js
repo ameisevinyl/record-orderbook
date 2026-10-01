@@ -173,11 +173,29 @@ function cutLinesSvg(page, trim, bleedMm, round, holeMm){
     + `</svg>`;
 }
 
+// Size/bleed fix candidates of a file in use: each preview with the cut
+// lines where they'll be, the detail it really has, a button to use it.
+function geometryTilesHtml(fixes, params, printCheck, base, slotIndex){
+  const T = params.targetMm, trim = params.trimMm;
+  const rect = {x: (T.w - trim.w) / 2, y: (T.h - trim.h) / 2, ...trim};
+  const out = printCheck.fixDpi[params.part];
+  return `<div class="geometry">` + fixes.map(({candidate: c, preview}) => {
+    const low = c.dpiAfter !== null && c.dpiAfter < printCheck.dpi.min;
+    const detail = c.dpiAfter === null ? `${out} dpi` : `detail ${c.dpiAfter} → ${out} dpi`;
+    return `<figure><div class="art" style="aspect-ratio:${T.w} / ${T.h}">`
+      + `<img src="${escapeHtml(base + encodeURIComponent(preview))}" alt="">`
+      + cutLinesSvg(T, rect, params.bleedMm, params.round, params.holeMm) + `</div>`
+      + `<figcaption>${escapeHtml(c.title)} · ${low ? CHECKLIST_ICON.warn + " " : ""}${detail} `
+      + `<button type="button" class="geo" data-slot="${slotIndex}" data-id="${escapeHtml(c.id)}">use this</button></figcaption></figure>`;
+  }).join("") + `</div>`;
+}
+
 // A checked file: preview with cut lines and switchable problem areas,
 // then the checklist.
 // slotIndex: the slot's index for an in-use file (its "fix colours"
-// button), null for a compared newer version.
-function artFileHtml({title, params}, facts, printCheck, base, slotIndex){
+// button), null for a compared newer version. fixes: its size/bleed fix
+// previews.
+function artFileHtml({title, params}, facts, printCheck, base, slotIndex, fixes = []){
   let body = `<h3>${escapeHtml(title)}</h3>`;
   if(slotIndex !== null && fixable(facts, params, printCheck)){
     body += `<button type="button" class="fix" data-slot="${slotIndex}">fix colours</button>`;
@@ -190,6 +208,7 @@ function artFileHtml({title, params}, facts, printCheck, base, slotIndex){
       + `<img src="${url(facts.preview)}" alt=""><img class="overlay" hidden src="${url(facts.overlay)}" alt="">`
       + cutLinesSvg(facts.pageMm, facts.trimRectMm, params.bleedMm, params.round, params.holeMm) + `</div>`;
   }
+  if(slotIndex !== null && fixes.length) body += geometryTilesHtml(fixes, params, printCheck, base, slotIndex);
   const rows = artworkRows(facts, params, printCheck);
   return `<div class="art-file">${body}` + listTable(["", "Check", "Found", "Expected"], rows.map(r =>
     [CHECKLIST_ICON[r.severity], escapeHtml(r.feature), escapeHtml(r.detected), escapeHtml(r.expected || "")])) + `</div>`;
@@ -197,8 +216,9 @@ function artFileHtml({title, params}, facts, printCheck, base, slotIndex){
 
 // files: jobFiles(); checkable: artworkSlots() (printed parts with their
 // check params); facts: the artwork check's result, or null while it
-// runs. base: URL folder of the job's check output.
-export function renderArtwork(files, checkable, facts, printCheck, base, gaps, compare = []){
+// runs. base: URL folder of the job's check output. fixes: {name:
+// [{candidate, preview}]} — size/bleed fix previews (geometryFixes).
+export function renderArtwork(files, checkable, facts, printCheck, base, gaps, compare = [], fixes = {}){
   const slots = files.slots.filter(s => s.section === "artwork");
   const params = new Map(checkable.map(c => [c.name, c.params]));
   const verdict = slot => !params.has(slot.name) ? "" : !facts ? "checking"
@@ -209,7 +229,7 @@ export function renderArtwork(files, checkable, facts, printCheck, base, gaps, c
     slots.map(s => [escapeHtml(s.title) + page(s), fileCell(s), versionsCell(s), verdict(s)]));
   if(facts) body += checkable.map(c => {
     const slot = files.slots.find(s => s.name === c.name);
-    const own = artFileHtml(c, facts[c.name] || {error: "not checked"}, printCheck, base, slot ? slot.index : null);
+    const own = artFileHtml(c, facts[c.name] || {error: "not checked"}, printCheck, base, slot ? slot.index : null, fixes[c.name] || []);
     const newer = compare.find(v => v.of === c.name);
     return newer ? `<div class="compare">${own}${artFileHtml(newer, facts[newer.name] || {error: "not checked"}, printCheck, base, null)}</div>` : own;
   }).join("");
