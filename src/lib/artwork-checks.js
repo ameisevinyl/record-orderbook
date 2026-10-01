@@ -90,6 +90,8 @@ export function newerToCompare(slots, checkable){
   return checkable.flatMap(c => {
     const slot = slots.find(s => s.name === c.name);
     const newer = slot ? slot.others.filter(o => o.newer) : [];
-    return newer.length ? [{title: `${c.title} — ${newer[0].name}`, name: newer[0].name, params: c.params, of: c.name}] : [];
+    // A newer file is checked on its first page: the slot's page choice
+    // was for the file in use.
+    return newer.length ? [{title: `${c.title} — ${newer[0].name}`, name: newer[0].name, params: {...c.params, page: 1}, of: c.name}] : [];
   });
 }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { versionOf, nextVersionName, assignedName, jobFiles, mergeResend } from "../src/lib/versions.js";
+import { versionOf, nextVersionName, assignedName, jobFiles, mergeResend, useVersion } from "../src/lib/versions.js";
 
 const project = labelA => ({
   catalogue: "X",
@@ -88,4 +88,12 @@ test("mergeResend keeps a fix saved over the received file under the same name",
     [{name: "X_labels_A_v1.pdf", sha256: "customer v2"}], new Date(0));
   assert.deepEqual(r.copies, [{from: "X_labels_A_v1.pdf", to: "X_labels_A_v2.pdf"}]);
   assert.deepEqual(r.project.plant.received, {"X_labels_A_v1.pdf": "orig", "X_labels_A_v2.pdf": "customer v2"});
+});
+
+test("useVersion: the slot takes the file and starts again at page 1", () => {
+  const project = {labels: {sides: {A: {fileName: "X_labels_A_v1.pdf", page: 2}}}, sides: {A: {tracks: [{fileName: "a.wav"}]}}};
+  useVersion(project, ["labels", "sides", "A", "fileName"], "X_labels_A_v2.pdf");
+  assert.deepEqual(project.labels.sides.A, {fileName: "X_labels_A_v2.pdf", page: 1});
+  useVersion(project, ["sides", "A", "tracks", 0, "fileName"], "a_v2.wav");
+  assert.deepEqual(project.sides.A.tracks[0], {fileName: "a_v2.wav"}, "no page where the slot has none");
 });

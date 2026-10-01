@@ -31,6 +31,15 @@ export function assignedName(slotName, fileName, names){
   return nextVersionName(slot.base, fileExt(fileName), names);
 }
 
+// Staff make `name` the slot's file. A slot with a PDF page choice
+// starts again at page 1: the choice was for the old file (a colour fix,
+// for one, is a single page).
+export function useVersion(project, path, name){
+  setAt(project, path, name);
+  const parent = path.slice(0, -1).reduce((p, key) => p[key], project);
+  if("page" in parent) parent.page = 1;
+}
+
 // Per filled slot: its section (tracks and side files → audio, printed
 // parts → artwork), its position, other versions in the folder (newer
 // ones marked) and modification time; plus the unmanaged files: every

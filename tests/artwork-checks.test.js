@@ -102,5 +102,5 @@ test("newerToCompare: the newest newer version of each checked slot, same params
   const checkable = [{title: "Label A", name: "X_labels_A_v1.pdf", params: {part: "labels"}},
     {title: "Cover", name: "X_cover_v2.pdf", params: {part: "outerCover"}}];
   assert.deepEqual(newerToCompare(slots, checkable),
-    [{title: "Label A — X_labels_A_v3.pdf", name: "X_labels_A_v3.pdf", params: {part: "labels"}, of: "X_labels_A_v1.pdf"}]);
+    [{title: "Label A — X_labels_A_v3.pdf", name: "X_labels_A_v3.pdf", params: {part: "labels", page: 1}, of: "X_labels_A_v1.pdf"}]);
 });

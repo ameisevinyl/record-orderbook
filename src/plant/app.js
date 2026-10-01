@@ -6,12 +6,12 @@
 // rules here always run), then its spectrograms are made in the
 // background.
 import { CONFIG } from "../config.js";
-import { prepareProject, setAt, historyEntry } from "../lib/project.js";
+import { prepareProject, historyEntry } from "../lib/project.js";
 import { projectGaps } from "../lib/completeness.js";
 import { audioFindings, sideAudio } from "../lib/audio-checks.js";
 import { artworkSlots, newerToCompare } from "../lib/artwork-checks.js";
 import { getFormat } from "../lib/format-catalogue.js";
-import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf } from "../lib/versions.js";
+import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf, useVersion } from "../lib/versions.js";
 import { projectFileName } from "../lib/package-naming.js";
 import { renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
 import { renderNav, renderHome, renderInbox } from "../lib/plant-board.js";
@@ -227,7 +227,7 @@ out.addEventListener("click", async e => {
       const file = button.dataset.file;
       const newName = assignedName(slot.name, file, view.names);
       const project = structuredClone(view.raw);
-      setAt(project, slot.path, newName);
+      useVersion(project, slot.path, newName);
       project.history = [...(project.history || []),
         historyEntry(`${slot.title}: ${newName}${newName === file ? "" : ` (was ${file})`}`, new Date())];
       const {job} = await postJson("/api/assign", {job: view.job, file, newName, project, basedOn: view.hash,
