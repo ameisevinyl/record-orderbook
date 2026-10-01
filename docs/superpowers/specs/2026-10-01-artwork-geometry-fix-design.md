@@ -60,8 +60,10 @@ its centre on T's centre; whatever falls outside T is cropped.
   title ("crops 4 mm left/right").
 - `keep` mirrors where S is smaller than T and crops where it's larger.
 - A file smaller than the trim gets only `fit`: mirroring would reach inside the cut.
-- The Size and Bleed rows are the existing ones (`artworkRows`), so a candidate exists
-  exactly when the checks complain.
+- Size is judged on the data area as displayed (`facts.pageMm`, /Rotate applied) with
+  `sizeToleranceMm`, the Bleed condition is the Bleed row's "trimmed" (shared helper) — so
+  candidates come with the checks' complaints; a PDF whose /Rotate alone upsets the Size row
+  gets none.
 - KMPN012: `fit` (×1.021, 300 → 294 dpi) and `keep` (mirror 1 mm).
 
 ## Rendering (`plant/geomfix.py`)
@@ -93,7 +95,7 @@ render(path, params, candidate, out, dpi)   # writes out (.pdf, or .png for a pr
 ## Plant server (`plant/server.py`)
 
 - `POST /api/fix/geometry/preview` `{job, file, params, candidates}` → `{previews: {id: name}}`.
-  Name `<file>.<sha12>.<id>.png` in `.checks/`; an existing one is reused, so a reload
+  Name `<file>.<sha12>.<id>.<geometry8>.png` in `.checks/` (geometry8: hash of page, target, trim, round and the candidate); an existing one is reused, so a reload
   doesn't render again.
 - `POST /api/fix/geometry` `{job, file, newName, params, candidate}` → `{name}`. Writes the
   full-resolution PDF; 409 when `newName` exists. Same shape as `/api/fix/label`.

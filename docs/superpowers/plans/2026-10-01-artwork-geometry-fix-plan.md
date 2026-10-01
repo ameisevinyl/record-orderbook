@@ -16,7 +16,7 @@
 - Never overwrite: a fix is the slot's next `_v<N>.pdf`; the fix endpoint answers 409 when the name exists.
 - Colours kept: CMYK and grey read as their own numbers (colour management off), RGB stays RGB.
 - Every fixed file is written at `printCheck.fixDpi[part]`: `{ labels: 1200, innerSleeve: 400, outerCover: 400, inlay: 400 }`.
-- Previews only in `CONFIG.fixerStages`; named `<file>.<sha12>.<id>.png` in the job's `.checks/`, made once.
+- Previews only in `CONFIG.fixerStages`; named `<file>.<sha12>.<id>.<geometry8>.png` in the job's `.checks/`, made once.
 - A pick writes no line log entry (the colour fixer must still run on the new file).
 - Comments short, explain why; match the surrounding style. Commit messages short, imperative, precise, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Run `node --test tests/` and `uv run --project plant python -m unittest discover plant` before each commit that touches the respective side.
@@ -653,7 +653,7 @@ git commit -m "plant geomfix: render a size/bleed fix (scaled, centred, mirrored
 **Interfaces:**
 - Consumes: `geomfix.render`, `geomfix.preview_dpi`, `geomfix.FixError`, `checks.preview_base(name, digest)`, `jobs.sha256`, `jobs.plain`, `jobs.find`.
 - Produces:
-  - `POST /api/fix/geometry/preview` `{job, file, params, candidates: [{id, scale, keep, fill, …}]}` → `{previews: {id: "<file>.<sha12>.<id>.png"}}`; existing PNGs reused.
+  - `POST /api/fix/geometry/preview` `{job, file, params, candidates: [{id, scale, keep, fill, …}]}` → `{previews: {id: "<file>.<sha12>.<id>.<geometry8>.png"}}`; existing PNGs reused. `geometry8`: first 8 hex of the sha256 of the page, target, trim, round and the candidate's scale/keep/fill, so a changed product never reuses a stale preview. `server.py` imports `hashlib` and `json` at the top if not already.
   - `POST /api/fix/geometry` `{job, file, newName, params (with fixDpi number), candidate}` → `{name}`; 409 if `newName` exists, 400 on `FixError` or a bad name.
 
 - [ ] **Step 1: Write the failing tests** in `plant/test_server.py`, next to `test_fix_label_writes_the_next_version_once`:
@@ -677,10 +677,12 @@ git commit -m "plant geomfix: render a size/bleed fix (scaled, centred, mirrored
         status, reply = self.post("/api/fix/geometry/preview", body)
         self.assertEqual(status, 200)
         name = reply["previews"]["keep"]
-        self.assertRegex(name, r"^X_labels_A_v1\.pdf\.[0-9a-f]{12}\.keep\.png$")
+        self.assertRegex(name, r"^X_labels_A_v1\.pdf\.[0-9a-f]{12}\.keep\.[0-9a-f]{8}\.png$")
         made = (folder / ".checks" / name).stat().st_mtime_ns
         self.assertEqual(self.post("/api/fix/geometry/preview", body), (200, reply))
         self.assertEqual((folder / ".checks" / name).stat().st_mtime_ns, made)
+        other = {**body, "params": {**params, "targetMm": {"w": 99, "h": 99}}}
+        self.assertNotEqual(self.post("/api/fix/geometry/preview", other)[1]["previews"]["keep"], name)
         self.assertEqual(self.post("/api/fix/geometry/preview", {**body, "candidates": [{**keep, "id": "../x"}]})[0], 400)
 
     def test_geometry_fix_writes_the_next_version_once(self):
@@ -748,7 +750,12 @@ Pull the shared checks out of `fix_label`:
         base = checks.preview_base(r["file"], jobs.sha256(source))
         params, previews = r["params"], {}
         for candidate in r["candidates"]:
-            name = jobs.plain(f"{base}.{jobs.plain(candidate['id'])}.png")
+            # The geometry is in the name too: another product or format
+            # for the same file must not reuse a stale preview.
+            what = json.dumps([params["page"], params["targetMm"], params["trimMm"], params["round"],
+                               candidate["scale"], candidate["keep"], candidate["fill"]], sort_keys=True)
+            key = hashlib.sha256(what.encode()).hexdigest()[:8]
+            name = jobs.plain(f"{base}.{jobs.plain(candidate['id'])}.{key}.png")
             if not (out / name).exists():
                 try:
                     geomfix.render(source, params, candidate, out / name, geomfix.preview_dpi(params["targetMm"]))
@@ -932,9 +939,26 @@ curl -s -X POST http://127.0.0.1:8765/api/fix/geometry/preview -H 'Content-Type:
                  {"id": "keep", "scale": 1, "keep": "file", "fill": "mirror"}]}'
 ```
 
-Expected: `{"previews": {"fit": "KMPN012_labels_A_v1.pdf.d01268a7575c.fit.png", "keep": "….keep.png"}}`; view both PNGs (Read tool) — 98 mm, background continuous to the edge, no seam. Then ask the user to open the job in the plant view and pick one (browser check only with the user's OK).
+Expected: `{"previews": {"fit": "KMPN012_labels_A_v1.pdf.d01268a7575c.fit.<8 hex>.png", "keep": "…"}}`; view both PNGs (Read tool) — background continuous to the edge, no seam.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Check a written fix** — never in the sample job itself: copy it, write the fix there, check it.
+
+```bash
+cp -R plant/jobs/00_INBOX/KMPN012_aroop_roy_high_riding_261001-2236 plant/jobs/20_DONE/KMPN012_smoke_261001-0000
+curl -s -X POST http://127.0.0.1:8765/api/fix/geometry -H 'Content-Type: application/json' -d '{
+  "job": "KMPN012_smoke_261001-0000", "file": "KMPN012_labels_A_v1.pdf", "newName": "KMPN012_labels_A_v2.pdf",
+  "params": {"page": 1, "targetMm": {"w": 98, "h": 98}, "trimMm": {"w": 92, "h": 92}, "round": true, "fixDpi": 1200},
+  "candidate": {"id": "keep", "scale": 1, "keep": "file", "fill": "mirror"}}'
+cd plant && uv run --project . python -c "
+import artwork, json
+p = 'jobs/20_DONE/KMPN012_smoke_261001-0000/KMPN012_labels_A_v2.pdf'
+k, parsed, _ = artwork.structure(p, 1)
+print(json.dumps({x: parsed[x] for x in ('pageSizeMm', 'trimBoxMm', 'effectiveDpi', 'colorMode')}))"
+```
+
+Expected: `pageSizeMm` 98×98, `trimBoxMm` 92×92, `effectiveDpi` ≈ 1200, `colorMode` CMYK. Look at a 100 % crop of the v2 render around the logo: edges smooth, not blocky (the embedded image is upscaled by MuPDF; KMPN012's image has `/Interpolate true`). Then remove the copy with `trash plant/jobs/20_DONE/KMPN012_smoke_261001-0000` and ask the user to open the real job in the plant view and pick one (browser check only with the user's OK).
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/plant/app.js
