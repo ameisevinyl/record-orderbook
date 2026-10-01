@@ -227,6 +227,52 @@ def render(doc_page, clip, page_mm, dpi, colorspace, managed=True):
             pymupdf.TOOLS.set_icc(True)
 
 
+def pixels(path, kind, parsed, params, dpi):
+    """The data area as a Pillow image at dpi, in its own colours: CMYK and
+    grey as their numbers, RGB as RGB; a PDF on its data box as displayed
+    (/Rotate), a raster resampled with Lanczos. Returns (image, data size in mm)."""
+    if kind == "pdf":
+        doc = pymupdf.open(path)
+        page = doc[params["page"] - 1]
+        clip = (data_box(doc, page) * page.rotation_matrix).normalize()
+        page_mm = size_mm(clip)
+        # Only a PDF known to be RGB is RGB: "unknown" is mostly vector
+        # CMYK painted with cs/scn, read as its own numbers.
+        mode = parsed["colorMode"]
+        space = pymupdf.csRGB if mode == "RGB" else pymupdf.csGRAY if mode == "Gray" else pymupdf.csCMYK
+        pix = render(page, clip, page_mm, dpi, space, managed=mode == "RGB")
+        return Image.frombytes({1: "L", 3: "RGB", 4: "CMYK"}[pix.n], (pix.width, pix.height), pix.samples), page_mm
+    im = Image.open(path)
+    im.load()
+    if im.mode not in ("CMYK", "RGB", "L"):
+        im = im.convert("L" if im.mode in ("1", "LA", "I", "I;16") else "RGB")
+    dpi_in = parsed["declaredDpi"]
+    page_mm = ({"w": im.width / dpi_in["x"] * 25.4, "h": im.height / dpi_in["y"] * 25.4}
+               if dpi_in else dict(params["targetMm"]))
+    size = (round(page_mm["w"] / 25.4 * dpi), round(page_mm["h"] / 25.4 * dpi))
+    return (im if im.size == size else im.resize(size, Image.LANCZOS)), page_mm
+
+
+def raster_pdf(a, mode, page_mm, trim_mm):
+    """One image filling a page of page_mm (the BleedBox), TrimBox trim_mm centred."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=page_mm["w"] / MM_PER_PT, height=page_mm["h"] / MM_PER_PT)
+    space = {"CMYK": pymupdf.csCMYK, "RGB": pymupdf.csRGB, "L": pymupdf.csGRAY}[mode]
+    page.insert_image(page.rect, pixmap=pymupdf.Pixmap(space, a.shape[1], a.shape[0],
+                                                       numpy.ascontiguousarray(a).tobytes(), 0))
+    page.set_bleedbox(page.rect)
+    tx, ty = (page_mm["w"] - trim_mm["w"]) / 2 / MM_PER_PT, (page_mm["h"] - trim_mm["h"]) / 2 / MM_PER_PT
+    page.set_trimbox(pymupdf.Rect(tx, ty, tx + trim_mm["w"] / MM_PER_PT, ty + trim_mm["h"] / MM_PER_PT))
+    return doc
+
+
+def save_atomic(doc, out):
+    """Never a half-written file under the final name."""
+    part = out.with_name(f".{out.name}.part")
+    doc.save(part, deflate=True)
+    part.rename(out)
+
+
 def bands(shape, trim, bleed_mm, round_, dpi):
     """Boolean masks (the bleed band outside the trim, a band of the same
     width inside it) on the measuring grid, both EDGE_MM off the cut."""

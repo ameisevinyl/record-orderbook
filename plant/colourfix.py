@@ -6,12 +6,9 @@ PDF. CMYK keeps the file's own numbers, grey goes into K, RGB goes
 through the part's output profile (LittleCMS). Spec:
 docs/superpowers/specs/2026-10-01-label-colour-fix-design.md."""
 import numpy
-import pymupdf
-from PIL import Image, ImageCms
+from PIL import ImageCms
 
 import artwork
-
-MM_PER_PT = 25.4 / 72
 
 
 class FixError(Exception):
@@ -57,32 +54,7 @@ def _to_cmyk(im, profile_path):
 
 def _raster(path, kind, parsed, params, profile_path):
     """(CMYK array, data size in mm). CMYK and grey are read unmanaged."""
-    dpi = params["fixDpi"]
-    if kind == "pdf":
-        doc = pymupdf.open(path)
-        page = doc[params["page"] - 1]
-        clip = (artwork.data_box(doc, page) * page.rotation_matrix).normalize()
-        page_mm = artwork.size_mm(clip)
-        # Only a PDF known to be RGB goes through the profile. "unknown" is
-        # mostly vector CMYK painted with cs/scn, which colour_mode can't
-        # tell: read as its own numbers, never round-tripped through sRGB.
-        mode = parsed["colorMode"]
-        own = mode != "RGB"
-        space = pymupdf.csRGB if mode == "RGB" else pymupdf.csGRAY if mode == "Gray" else pymupdf.csCMYK
-        with artwork.ICC_LOCK:
-            pymupdf.TOOLS.set_icc(not own)
-            try:
-                pix = page.get_pixmap(dpi=dpi, clip=clip, colorspace=space, alpha=False)
-            finally:
-                pymupdf.TOOLS.set_icc(True)
-        im = Image.frombytes({1: "L", 3: "RGB", 4: "CMYK"}[pix.n], (pix.width, pix.height), pix.samples)
-    else:
-        im = Image.open(path)
-        im.load()
-        dpi_in = parsed["declaredDpi"]
-        page_mm = ({"w": im.width / dpi_in["x"] * 25.4, "h": im.height / dpi_in["y"] * 25.4}
-                   if dpi_in else dict(params["targetMm"]))
-        im = im.resize((round(page_mm["w"] / 25.4 * dpi), round(page_mm["h"] / 25.4 * dpi)), Image.LANCZOS)
+    im, page_mm = artwork.pixels(path, kind, parsed, params, params["fixDpi"])
     return _to_cmyk(im, profile_path), page_mm
 
 
@@ -100,15 +72,4 @@ def fix_label(path, params, out, profile_path=None):
                        f"{target['w']:g}×{target['h']:g} mm — fix the size first")
     cmyk, page_mm = _raster(path, kind, parsed, params, profile_path)
     fixed = fix_in_strips(cmyk, params["inkLimitPct"], params["black"]["kMinPct"])
-    w, h = page_mm["w"] / MM_PER_PT, page_mm["h"] / MM_PER_PT
-    trim = params["trimMm"]
-    tx, ty = (page_mm["w"] - trim["w"]) / 2 / MM_PER_PT, (page_mm["h"] - trim["h"]) / 2 / MM_PER_PT
-    doc = pymupdf.open()
-    page = doc.new_page(width=w, height=h)
-    pix = pymupdf.Pixmap(pymupdf.csCMYK, fixed.shape[1], fixed.shape[0], fixed.tobytes(), 0)
-    page.insert_image(page.rect, pixmap=pix)
-    page.set_bleedbox(page.rect)
-    page.set_trimbox(pymupdf.Rect(tx, ty, tx + trim["w"] / MM_PER_PT, ty + trim["h"] / MM_PER_PT))
-    part = out.with_name(f".{out.name}.part")
-    doc.save(part, deflate=True)
-    part.rename(out)
+    artwork.save_atomic(artwork.raster_pdf(fixed, "CMYK", page_mm, params["trimMm"]), out)

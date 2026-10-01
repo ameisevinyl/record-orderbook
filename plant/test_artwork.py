@@ -243,3 +243,52 @@ class ReviewFixesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PixelsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_cmyk_pdf_keeps_its_numbers(self):
+        path = self.dir / "a.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=50 * MM, height=50 * MM)
+        page.draw_rect(page.rect, color=None, fill=(0.6, 0.4, 0.4, 1))
+        doc.save(path)
+        kind, parsed, _ = artwork.structure(path, 1)
+        im, page_mm = artwork.pixels(path, kind, parsed, {"page": 1, "targetMm": {"w": 50, "h": 50}}, 100)
+        self.assertEqual(im.mode, "CMYK")
+        self.assertEqual(im.getpixel((97, 97)), (153, 102, 102, 255))
+        self.assertAlmostEqual(page_mm["w"], 50, places=3)
+
+    def test_rotated_pdf_as_displayed(self):
+        path = self.dir / "r.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=100 * MM, height=50 * MM)
+        page.draw_rect(page.rect, color=None, fill=(0, 0, 0, 1))
+        page.set_rotation(90)
+        doc.save(path)
+        kind, parsed, _ = artwork.structure(path, 1)
+        im, page_mm = artwork.pixels(path, kind, parsed, {"page": 1, "targetMm": {"w": 50, "h": 100}}, 50)
+        self.assertLess(im.width, im.height)
+        self.assertAlmostEqual(page_mm["h"], 100, places=3)
+
+    def test_raster_resampled_to_dpi(self):
+        path = self.dir / "t.tif"
+        Image.new("CMYK", (300, 300), (0, 0, 0, 255)).save(path, dpi=(300, 300))
+        kind, parsed, _ = artwork.structure(path, 1)
+        im, page_mm = artwork.pixels(path, kind, parsed, {"page": 1, "targetMm": {"w": 25.4, "h": 25.4}}, 150)
+        self.assertEqual(im.size, (150, 150))
+        self.assertAlmostEqual(page_mm["w"], 25.4, places=3)
+
+    def test_raster_pdf_boxes(self):
+        import numpy
+        doc = artwork.raster_pdf(numpy.zeros((10, 20), numpy.uint8), "L", {"w": 106, "h": 53}, {"w": 100, "h": 47})
+        page = doc[0]
+        self.assertAlmostEqual(page.rect.width / MM, 106, places=3)
+        self.assertAlmostEqual(page.trimbox.x0 / MM, 3, places=3)
+        self.assertEqual(pymupdf.Pixmap(doc, page.get_images(full=True)[0][0]).n, 1)
