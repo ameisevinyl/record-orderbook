@@ -13,7 +13,7 @@ import { sideAudio } from "./audio-checks.js";
 import { artworkRows, artworkVerdict, fixable } from "./artwork-checks.js";
 import { CHECKLIST_ICON } from "./print-artwork.js";
 
-export const SECTIONS = [["basic", "Basic"], ["artwork", "Artwork"], ["audio", "Audio"],
+export const SECTIONS = [["basic", "Basic"], ["production", "Production"], ["artwork", "Artwork"], ["audio", "Audio"],
   ["shipping", "Shipping & billing"], ["unmanaged", "Unmanaged files"], ["history", "History"]];
 
 export function escapeHtml(value){
@@ -77,7 +77,8 @@ function versionsCell(slot){
 
 // place: {job, stage, stages} — the job's folder name, its stage and the
 // stages it may move to.
-export function renderBasic(project, config, place, gaps){
+// through: every production line is ready, so the job can move on.
+export function renderBasic(project, config, place, gaps, through = false){
   const format = getFormat(config, project.format);
   const parts = format.printableParts || {};
   const productName = (category, id) => {
@@ -111,10 +112,43 @@ export function renderBasic(project, config, place, gaps){
     ...(project.proofs.testpresses > 0 ? [["Testpresses", String(project.proofs.testpresses)]] : []),
     ["Stage", `${escapeHtml(stageLabel(place.stage))} <select id="moveTo">${options}</select> `
       + `<button type="button" id="move">Move</button> <button type="button" id="rescan">Rescan</button> `
+      + (through ? "lines through — move on? " : "")
       + `<a href="/api/zip?job=${encodeURIComponent(place.job)}" download>Download zip</a>`],
     // Date and who only: the note is in History.
     ["Last change", last ? `${when(last.savedAt)} ${escapeHtml(last.by)}` : ""]
   ]) + gapsHtml(gaps, "basic"));
+}
+
+// --- Production ------------------------------------------------------
+
+// The action a line's current step offers: [by, button text] pairs.
+const LINE_ACTIONS = {
+  check: [["staff", "accept"]],
+  approve: [["customer", "approved by customer"], ["staff", "approved by staff"]],
+  send: [["staff", "sent"]],
+  back: [["staff", "back, fine"]]
+};
+
+// states: lineState() per line; partners: CONFIG.partners (a send step picks from them).
+export function renderProduction(states, partners){
+  return section("production", states.map(s => {
+    if(s.checking) return `<h3>${escapeHtml(s.line)}</h3><p>checking…</p>`;
+    const steps = s.steps.map(x => x.state === "done" ? `✓ ${escapeHtml(x.step)}` : x.state === "current"
+      ? `<b>${escapeHtml(x.step)}</b>` : escapeHtml(x.step)).join(" → ");
+    let body = `<h3>${escapeHtml(s.line)}${s.done ? " ✓" : s.waiting ? " (waiting)" : ""}</h3><p>${steps}</p>`;
+    if(s.step){
+      const current = s.steps.find(x => x.step === s.step);
+      if(s.why) body += `<p>${escapeHtml(s.why)}</p>`;
+      body += "<p>";
+      if(current.kind === "send"){
+        const list = partners[s.step.split(":")[1]] || [];
+        body += `<select class="partner">${list.map(p => `<option>${escapeHtml(p)}</option>`).join("")}</select> `;
+      }
+      body += LINE_ACTIONS[current.kind].map(([by, label]) => `<button type="button" class="line-act" data-line="${escapeHtml(s.line)}"`
+        + ` data-step="${escapeHtml(s.step)}" data-by="${by}">${label}</button>`).join(" ") + "</p>";
+    }
+    return body;
+  }).join(""));
 }
 
 // --- 2 Artwork -------------------------------------------------------

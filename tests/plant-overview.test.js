@@ -5,7 +5,7 @@ import { prepareProject } from "../src/lib/project.js";
 import { jobFiles } from "../src/lib/versions.js";
 import { artworkSlots } from "../src/lib/artwork-checks.js";
 import { getFormat } from "../src/lib/format-catalogue.js";
-import { escapeHtml, stageLabel, gapSection, renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged,
+import { escapeHtml, renderProduction, stageLabel, gapSection, renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged,
   renderHistory }
   from "../src/lib/plant-overview.js";
 
@@ -197,4 +197,28 @@ test("artwork: fix button on a warning label, comparison side by side, readout d
   assert.ok(html.includes('<div class="compare"><div class="art-file"><h3>Label A</h3>'));
   assert.ok(html.includes("<h3>Label A — lab_a_v2.pdf</h3>"));
   assert.ok(html.includes('data-cmyk="/jobs/j1/a1.cmyk" data-w="1600" data-h="1600"'));
+});
+
+test("production: steps ticked, the current one with why and its action", () => {
+  const st = (step, kind, extra = {}) => ({line: "labels", steps: [{step: "size", kind: "check", state: "done"},
+    {step, kind, state: "current"}], step, why: "Label A: 96 <mm>", ready: false, done: false, waiting: false, checking: false, ...extra});
+  const partners = {printer: ["in-house", "Druck & Co"]};
+  const check = renderProduction([st("bleed", "check")], partners);
+  assert.ok(check.startsWith('<section id="production">'));
+  assert.ok(check.includes("✓ size"));
+  assert.ok(check.includes("Label A: 96 &lt;mm&gt;"));
+  assert.ok(check.includes('<button type="button" class="line-act" data-line="labels" data-step="bleed" data-by="staff">accept</button>'));
+  const approve = renderProduction([st("approve", "approve")], partners);
+  assert.ok(approve.includes('data-step="approve" data-by="customer">approved by customer</button>'));
+  assert.ok(approve.includes('data-step="approve" data-by="staff">approved by staff</button>'));
+  const send = renderProduction([st("send:printer", "send")], partners);
+  assert.ok(send.includes('<select class="partner"><option>in-house</option><option>Druck &amp; Co</option></select>'));
+  assert.ok(send.includes('data-step="send:printer" data-by="staff">sent</button>'));
+  assert.ok(renderProduction([st("back:printed", "back")], partners).includes(">back, fine</button>"));
+  assert.ok(renderProduction([{line: "labels", steps: [], checking: true}], partners).includes("checking"));
+});
+
+test("basic: suggests moving on when the lines are through", () => {
+  assert.ok(renderBasic(project, CONFIG, place, [], true).includes("lines through — move on?"));
+  assert.ok(!renderBasic(project, CONFIG, place, [], false).includes("move on?"));
 });
