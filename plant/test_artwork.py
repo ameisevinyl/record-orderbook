@@ -108,6 +108,15 @@ class MeasureTest(unittest.TestCase):
     def facts(self, path, **over):
         return artwork.facts(path, {**LABEL, **over}, self.dir, path.name)
 
+    def test_preview_is_retina_sized_with_raw_cmyk(self):
+        path = self.dir / "p.pdf"
+        pdf(path, fills=[((0, 0, 106, 106), (0.6, 0.4, 0.4, 1))])
+        f = self.facts(path)
+        self.assertEqual(f["previewPx"]["w"], 1600)
+        data = (self.dir / f["cmyk"]).read_bytes()
+        self.assertEqual(len(data), f["previewPx"]["w"] * f["previewPx"]["h"] * 4)
+        self.assertEqual([round(v / 2.55) for v in data[:4]], [60, 40, 40, 100])
+
     def test_ink_over_limit_and_rich_black(self):
         path = self.dir / "rich.pdf"
         pdf(path, fills=[((0, 0, 106, 106), (0.6, 0.6, 0.6, 1))])

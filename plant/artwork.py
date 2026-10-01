@@ -178,7 +178,7 @@ def structure(path, page_no):
 
 MEASURE_DPI = 72      # 1 px ≈ 0.35 mm, averages like a densitometer spot
 INKED_PCT = 5         # a pixel with more coverage counts as printed
-PREVIEW_PX = 800      # long side of the preview PNG
+PREVIEW_PX = 1600     # long side of the preview: sharp on Retina at the ≤ 800 CSS px it's shown
 EDGE_MM = 0.5         # bands keep off the cut line: anti-aliasing, cutting tolerance
 MAX_GRID_PX = 3000    # long side of the measuring grid: bounds memory for huge pages
 OVER = (220, 0, 0, 170)       # overlay: over the ink limit
@@ -277,9 +277,14 @@ def facts(path, params, out_dir, base):
     bleed, tol = params["bleedMm"], params["toleranceMm"]
     no_bleed = page_mm["w"] < trim["w"] + 2 * bleed - tol or page_mm["h"] < trim["h"] + 2 * bleed - tol
 
-    preview, overlay = base + ".png", base + ".overlay.png"
-    shown = render(doc_page, clip, page_mm, PREVIEW_PX / max(page_mm["w"], page_mm["h"]) * 25.4, pymupdf.csRGB)
+    preview, overlay, raw = base + ".png", base + ".overlay.png", base + ".cmyk"
+    preview_dpi = PREVIEW_PX / max(page_mm["w"], page_mm["h"]) * 25.4
+    shown = render(doc_page, clip, page_mm, preview_dpi, pymupdf.csRGB)
     shown.save(out_dir / preview)
+    # The readout's numbers: the same CMYK the Ink row measures.
+    numbers = render(doc_page, clip, page_mm, preview_dpi, pymupdf.csCMYK,
+                     managed=parsed["colorMode"] not in ("CMYK", "Gray"))
+    (out_dir / raw).write_bytes(numbers.samples)
     layer = numpy.zeros((*total.shape, 4), numpy.uint8)
     layer[over] = OVER
     layer[rich] = RICH
@@ -292,4 +297,5 @@ def facts(path, params, out_dir, base):
         "black": {"richPct": share(rich)},
         "bleed": {"outerInkPct": None if no_bleed else share(inked, outer), "innerInkPct": share(inked, inner)},
         "preview": preview, "overlay": overlay,
+        "cmyk": raw, "previewPx": {"w": numbers.width, "h": numbers.height},
     }
