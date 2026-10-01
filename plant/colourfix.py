@@ -30,6 +30,16 @@ def fix_pixels(cmyk, ink_limit, k_min):
     return numpy.round(out * 2.55).clip(0, 255).astype(numpy.uint8)
 
 
+STRIP = 256  # rows per pass: the float copies stay small at 1200 dpi
+
+
+def fix_in_strips(cmyk, ink_limit, k_min):
+    out = numpy.empty_like(cmyk)
+    for y in range(0, cmyk.shape[0], STRIP):
+        out[y:y + STRIP] = fix_pixels(cmyk[y:y + STRIP], ink_limit, k_min)
+    return out
+
+
 def _to_cmyk(im, profile_path):
     if im.mode == "CMYK":
         return numpy.asarray(im)
@@ -53,9 +63,12 @@ def _raster(path, kind, parsed, params, profile_path):
         page = doc[params["page"] - 1]
         clip = (artwork.data_box(doc, page) * page.rotation_matrix).normalize()
         page_mm = artwork.size_mm(clip)
+        # Only a PDF known to be RGB goes through the profile. "unknown" is
+        # mostly vector CMYK painted with cs/scn, which colour_mode can't
+        # tell: read as its own numbers, never round-tripped through sRGB.
         mode = parsed["colorMode"]
-        own = mode in ("CMYK", "Gray")
-        space = pymupdf.csCMYK if mode == "CMYK" else pymupdf.csGRAY if mode == "Gray" else pymupdf.csRGB
+        own = mode != "RGB"
+        space = pymupdf.csRGB if mode == "RGB" else pymupdf.csGRAY if mode == "Gray" else pymupdf.csCMYK
         with artwork.ICC_LOCK:
             pymupdf.TOOLS.set_icc(not own)
             try:
@@ -86,7 +99,7 @@ def fix_label(path, params, out, profile_path=None):
         raise FixError(f"the label is {size['w']:.1f}×{size['h']:.1f} mm, expected "
                        f"{target['w']:g}×{target['h']:g} mm — fix the size first")
     cmyk, page_mm = _raster(path, kind, parsed, params, profile_path)
-    fixed = fix_pixels(cmyk, params["inkLimitPct"], params["black"]["kMinPct"])
+    fixed = fix_in_strips(cmyk, params["inkLimitPct"], params["black"]["kMinPct"])
     w, h = page_mm["w"] / MM_PER_PT, page_mm["h"] / MM_PER_PT
     trim = params["trimMm"]
     tx, ty = (page_mm["w"] - trim["w"]) / 2 / MM_PER_PT, (page_mm["h"] - trim["h"]) / 2 / MM_PER_PT

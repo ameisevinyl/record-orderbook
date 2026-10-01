@@ -109,3 +109,32 @@ class FixTest(unittest.TestCase):
         colourfix.fix_label(src, {**PARAMS, "page": 2}, out)
         _, _, pix = self.image(out)
         self.assertEqual([round(v / 2.55) for v in pix.pixel(10, 10)], [0, 0, 0, 50])
+
+
+class ReviewFixesTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_vector_cmyk_painted_with_cs_scn_keeps_its_numbers_without_a_profile(self):
+        # InDesign/Illustrator paint with "cs … scn"; colour_mode can't tell, so it reads "unknown".
+        src, out = self.dir / "vec.pdf", self.dir / "vec_v2.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=106 * MM, height=106 * MM)
+        xref = doc.get_new_xref()
+        doc.update_object(xref, "<< /Length 0 >>")
+        doc.update_stream(xref, b"/DeviceCMYK cs 0 0 0 0.5 scn 0 0 400 400 re f")
+        doc.xref_set_key(page.xref, "Contents", f"{xref} 0 R")
+        doc.save(src)
+        colourfix.fix_label(src, PARAMS, out)  # no profile: CMYK needs none
+        doc2 = pymupdf.open(out)
+        (img, *_), = doc2[0].get_images(full=True)
+        self.assertEqual([round(v / 2.55) for v in pymupdf.Pixmap(doc2, img).pixel(10, 10)], [0, 0, 0, 50])
+
+    def test_strips_give_the_same_result_as_the_whole(self):
+        rng = numpy.random.default_rng(1)
+        a = rng.integers(0, 256, (1300, 7, 4), dtype=numpy.uint8)
+        self.assertTrue(numpy.array_equal(colourfix.fix_in_strips(a, 220, 85), colourfix.fix_pixels(a, 220, 85)))
