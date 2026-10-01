@@ -47,7 +47,7 @@ JPEG with 35% rich black, and a clean pure-K label. Every result came out at max
     // Output profile per printed part, for converting RGB artwork.
     // Downloaded by the plant server into plant/icc/ when missing;
     // never committed.
-    labels: { name: "ISO Coated v2 (ECI)", url: "https://eci.org/_media/downloads/icc_profiles_from_eci/eci_offset_2009.zip",
+    labels: { name: "ISO Coated v2 (ECI)", url: "https://eci.org/lib/exe/eci_offset_2009.zip",
               file: "ISOcoated_v2_eci.icc" }
   }
   ```

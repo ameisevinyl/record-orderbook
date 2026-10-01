@@ -205,3 +205,19 @@ test("bigCenterDefault is a boolean, only on a format with a big center hole", (
   assert.throws(() => validateConfig(noHole), /bigCenterDefault needs centerHole\.big/);
   assert.equal(CONFIG.formats[seven].bigCenterDefault, true);
 });
+
+test("validates fixDpi and the print profiles", () => {
+  const dpi = copy();
+  dpi.formats[0].printCheck.fixDpi = 0;
+  assert.throws(() => validateConfig(dpi), /CONFIG\.formats\[0\]\.printCheck\.fixDpi must be a positive integer/);
+
+  const url = copy();
+  url.printProfiles.labels.url = "http://example.com/x.icc";
+  assert.throws(() => validateConfig(url), /CONFIG\.printProfiles\.labels\.url must start with https:\/\//);
+
+  const file = copy();
+  file.printProfiles.labels.file = "../x.icc";
+  assert.throws(() => validateConfig(file), /CONFIG\.printProfiles\.labels\.file must be a plain \.icc file name/);
+
+  assert.equal(CONFIG.printProfiles.labels.file, "ISOcoated_v2_eci.icc");
+});

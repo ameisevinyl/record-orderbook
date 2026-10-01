@@ -99,6 +99,8 @@ export const CONFIG = {
       // blocked, not just have it silently refused.
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
+        // Resolution of a plant-side colour fix (a label rendered to one CMYK image).
+        fixDpi: 1200,
         // Max total ink (C+M+Y+K, %) per part. Labels are baked in the
         // oven before pressing, so they stay well below ISO Coated v2 300 %.
         inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
@@ -224,6 +226,8 @@ export const CONFIG = {
       recordWeightG: 100,
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
+        // Resolution of a plant-side colour fix (a label rendered to one CMYK image).
+        fixDpi: 1200,
         inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
         black: { kMinPct: 85, cmyMaxPct: 30 },
         checks: {
@@ -305,6 +309,8 @@ export const CONFIG = {
       recordWeightG: 40,
       printCheck: {
         sizeToleranceMm: 0.5, dpi: { min: 300, max: 1200 },
+        // Resolution of a plant-side colour fix (a label rendered to one CMYK image).
+        fixDpi: 1200,
         inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
         black: { kMinPct: 85, cmyMaxPct: 30 },
         checks: {
@@ -430,6 +436,13 @@ export const CONFIG = {
     testpressDefaultQty: 3,
     testpressRecommendedFromQty: 1000
   },
+  // Output profile per printed part, for turning RGB artwork into CMYK
+  // in a plant-side fix. The plant server downloads it into plant/icc/
+  // when missing (a .zip: the member with this file name); never committed.
+  printProfiles: {
+    labels: { name: "ISO Coated v2 (ECI)", url: "https://eci.org/lib/exe/eci_offset_2009.zip", file: "ISOcoated_v2_eci.icc" }
+  },
+
 
   // UI language for the info-panel text below. Only "en" has content
   // today — German and Spanish are planned; once real translations

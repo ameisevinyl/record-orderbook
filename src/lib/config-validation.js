@@ -46,6 +46,7 @@ function validatePrintCheck(value, path){
   number(dpi.min, `${path}.dpi.min`);
   number(dpi.max, `${path}.dpi.max`);
   if(dpi.min > dpi.max) fail(`${path}.dpi`, "min must not exceed max");
+  if(!Number.isInteger(printCheck.fixDpi) || printCheck.fixDpi <= 0) fail(`${path}.fixDpi`, "must be a positive integer");
 
   const checks = object(printCheck.checks, `${path}.checks`);
   for(const name of CHECK_NAMES){
@@ -148,6 +149,17 @@ function validateProofs(value){
   integer(proofs.testpressRecommendedFromQty, "CONFIG.proofs.testpressRecommendedFromQty", true);
 }
 
+function validatePrintProfiles(value){
+  const profiles = object(value, "CONFIG.printProfiles");
+  for(const [part, entry] of Object.entries(profiles)){
+    const path = `CONFIG.printProfiles.${part}`;
+    object(entry, path);
+    string(entry.name, `${path}.name`);
+    if(typeof entry.url !== "string" || !entry.url.startsWith("https://")) fail(`${path}.url`, "must start with https://");
+    if(typeof entry.file !== "string" || !/^[^/\\]+\.icc$/i.test(entry.file) || entry.file.startsWith(".")) fail(`${path}.file`, "must be a plain .icc file name");
+  }
+}
+
 function validatePlant(value){
   const plant = object(value, "CONFIG.plant");
   const imprint = object(plant.imprint, "CONFIG.plant.imprint");
@@ -245,6 +257,7 @@ export function validateConfig(config){
 
   validateVinylColor(config.vinylColor);
   validateProofs(config.proofs);
+  validatePrintProfiles(config.printProfiles);
 
   string(config.locale, "CONFIG.locale");
   validateInfoText(config.infoText);
