@@ -232,6 +232,7 @@ async function showJob(job, section, id){
           if(id !== latest) return;
           fixes[c.name] = candidates.map(candidate => ({candidate, preview: previews[candidate.id]}));
         }catch(err){
+          if(id !== latest) return;
           error.textContent = `Couldn't preview size fixes of ${c.name}: ${err.message}`;
         }
       }
