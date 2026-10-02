@@ -1,6 +1,7 @@
 # Artwork geometry fix — design
 
-Status: approved in conversation 2026-10-01, pending written-spec review. Deep checks,
+Status: implemented on branch geometry-fix; its page flow (candidate tiles, previews on
+pick) is superseded by `2026-10-02-artwork-fix-flow-design.md`. Deep checks,
 next to the label colour fix (`2026-10-01-label-colour-fix-design.md`).
 
 ## Context
