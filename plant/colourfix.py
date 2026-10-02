@@ -111,6 +111,10 @@ def fix(path, params, out, profile_path):
     transform, ramp = lab_transform(profile_path)
     black = params["black"]
     fixed, counts = fix_in_strips(cmyk, transform, ramp, params["inkLimitPct"], black["kMinPct"], black["neutralTolPct"])
+    # CMYK that no rule changes (a dark colour under the limit the Black
+    # check flags) would be proposed again after every accept.
+    if not counts.any() and parsed["colorMode"] not in ("RGB", "Gray"):
+        raise FixError("nothing to fix by rule — a dark colour under the ink limit; needs correction by hand")
     doc = artwork.raster_pdf(fixed, "CMYK", page_mm, params["trimMm"])
     artwork.pdfx(doc, profile_path, params["profile"])
     artwork.save_atomic(doc, out)

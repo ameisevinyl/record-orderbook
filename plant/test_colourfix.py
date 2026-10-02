@@ -119,6 +119,14 @@ class FixTest(unittest.TestCase):
         self.assertLess(abs(before - after), 2)
         self.assertIn("neutral → K 100.0 %", detail)
 
+    def test_nothing_to_change_is_refused(self):
+        # A dark colour under the limit: the Black check flags it, no rule changes it.
+        src = self.dir / "navy.pdf"
+        cmyk_pdf(src, fill=(1, 0.8, 0.6, 0.3))
+        with self.assertRaisesRegex(colourfix.FixError, "nothing to fix by rule"):
+            colourfix.fix(src, {**PARAMS, "inkLimitPct": 300}, self.dir / "navy_v2.pdf", GENERIC_CMYK)
+        self.assertFalse((self.dir / "navy_v2.pdf").exists())
+
     def test_fixed_file_is_pdfx(self):
         src, out = self.dir / "a.pdf", self.dir / "a_v2.pdf"
         cmyk_pdf(src)
@@ -151,13 +159,13 @@ class FixTest(unittest.TestCase):
     def test_uses_the_chosen_page(self):
         src, out = self.dir / "two.pdf", self.dir / "two_v2.pdf"
         doc = pymupdf.open()
-        for fill in [(0, 0, 0, 0), (0, 0, 0, 0.5)]:
+        for fill in [(0, 0, 0, 0), (0.3, 0.3, 0.3, 0.9)]:  # page 2: rich black, page 1 nothing to fix
             page = doc.new_page(width=106 * MM, height=106 * MM)
             page.draw_rect(page.rect, color=None, fill=fill)
         doc.save(src)
         colourfix.fix(src, {**PARAMS, "page": 2}, out, GENERIC_CMYK)
         _, _, pix = self.image(out)
-        self.assertEqual([round(v / 2.55) for v in pix.pixel(10, 10)], [0, 0, 0, 50])
+        self.assertEqual([round(v / 2.55) for v in pix.pixel(10, 10)], [0, 0, 0, 100])
 
 
 @unittest.skipUnless(GENERIC_CMYK.is_file(), "needs a CMYK profile")
@@ -169,20 +177,20 @@ class ReviewFixesTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_vector_cmyk_painted_with_cs_scn_keeps_its_numbers_without_a_profile(self):
+    def test_vector_cmyk_painted_with_cs_scn_is_read_as_its_own_numbers(self):
         # InDesign/Illustrator paint with "cs … scn"; colour_mode can't tell, so it reads "unknown".
         src, out = self.dir / "vec.pdf", self.dir / "vec_v2.pdf"
         doc = pymupdf.open()
         page = doc.new_page(width=106 * MM, height=106 * MM)
         xref = doc.get_new_xref()
         doc.update_object(xref, "<< /Length 0 >>")
-        doc.update_stream(xref, b"/DeviceCMYK cs 0 0 0 0.5 scn 0 0 400 400 re f")
+        doc.update_stream(xref, b"/DeviceCMYK cs 0 0 0 0.9 scn 0 0 400 400 re f")  # K 90: own numbers → pure K
         doc.xref_set_key(page.xref, "Contents", f"{xref} 0 R")
         doc.save(src)
         colourfix.fix(src, PARAMS, out, GENERIC_CMYK)
         doc2 = pymupdf.open(out)
         (img, *_), = doc2[0].get_images(full=True)
-        self.assertEqual([round(v / 2.55) for v in pymupdf.Pixmap(doc2, img).pixel(10, 10)], [0, 0, 0, 50])
+        self.assertEqual([round(v / 2.55) for v in pymupdf.Pixmap(doc2, img).pixel(10, 10)], [0, 0, 0, 100])
 
     def test_strips_give_the_same_result_as_the_whole(self):
         rng = numpy.random.default_rng(1)
