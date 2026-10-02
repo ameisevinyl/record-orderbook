@@ -6,6 +6,7 @@ customer page's rules (buildChecklistRows) judge it unchanged.
 import io
 import re
 import threading
+from pathlib import Path
 
 import numpy
 import pymupdf
@@ -45,8 +46,8 @@ def icc_name(data):
         return "embedded ICC profile (name unavailable)"
 
 
-def pdf_icc_name(doc):
-    # Output intent first (PDF/X): Catalog /OutputIntents [<< /DestOutputProfile n 0 R >>].
+def output_intent_name(doc):
+    """The PDF/X OutputIntent's profile: Catalog /OutputIntents [<< /DestOutputProfile n 0 R >>]."""
     kind, value = doc.xref_get_key(doc.pdf_catalog(), "OutputIntents")
     if kind == "xref":
         kind, value = "array", doc.xref_object(int(value.split()[0]), compressed=True)
@@ -54,6 +55,14 @@ def pdf_icc_name(doc):
         kind, value = doc.xref_get_key(int(ref), "DestOutputProfile")
         if kind == "xref":
             return icc_name(doc.xref_stream(int(value.split()[0])))
+    return None
+
+
+def pdf_icc_name(doc):
+    # Output intent first (PDF/X), else any embedded profile.
+    name = output_intent_name(doc)
+    if name:
+        return name
     for xref in range(1, doc.xref_length()):
         m = re.search(r"/ICCBased\s+(\d+)\s+0\s+R", doc.xref_object(xref, compressed=True))
         if m:
@@ -121,7 +130,7 @@ def pdf_structure(path, page_no):
     if doc.needs_pass:
         # Nothing past the trailer is readable without the password.
         return {"pageSizeMm": None, "imagePx": None, "declaredDpi": None, "colorMode": "unknown",
-                "spotColors": [], "iccProfileName": None, "trimBoxMm": None, "encrypted": True,
+                "spotColors": [], "iccProfileName": None, "outputIntent": None, "trimBoxMm": None, "encrypted": True,
                 "hasUnembeddedFonts": None, "pdfVersion": None, "pageCount": doc.page_count,
                 "effectiveDpi": None}, []
     if not 1 <= page_no <= doc.page_count:
@@ -138,6 +147,7 @@ def pdf_structure(path, page_no):
         "colorMode": colour_mode(doc, page),
         "spotColors": spot_colours(doc),
         "iccProfileName": pdf_icc_name(doc),
+        "outputIntent": output_intent_name(doc),
         "trimBoxMm": size_mm(page.trimbox) if has_box(doc, page, "TrimBox") else None,
         "encrypted": bool(doc.is_encrypted or doc.metadata.get("encryption")),
         "hasUnembeddedFonts": bool(fonts),
@@ -162,6 +172,7 @@ def raster_structure(path):
         "colorMode": {"CMYK": "CMYK", "RGB": "RGB", "L": "Gray", "1": "Gray"}.get(mode, "unknown"),
         "spotColors": [],
         "iccProfileName": icc_name(icc) if icc else None,
+        "outputIntent": None,
         "trimBoxMm": None, "encrypted": None, "hasUnembeddedFonts": None, "pdfVersion": None,
         "pageCount": 1, "effectiveDpi": None,
     }, []
@@ -267,10 +278,32 @@ def raster_pdf(a, mode, page_mm, trim_mm):
 
 
 def save_atomic(doc, out):
-    """Never a half-written file under the final name."""
+    """As PDF 1.3 — MuPDF writes 1.7 for a new file; the header is patched,
+    no object streams are written — never half-written under the final name."""
+    data = re.sub(rb"^%PDF-1\.\d", b"%PDF-1.3", doc.tobytes(deflate=True), count=1)
     part = out.with_name(f".{out.name}.part")
-    doc.save(part, deflate=True)
+    part.write_bytes(data)
     part.rename(out)
+
+
+def pdfx(doc, profile_path, profile):
+    """Marks doc PDF/X-1a:2001: the part's profile as OutputIntent, the GTS
+    keys in Info. The pixel numbers stay as they are."""
+    icc = doc.get_new_xref()
+    doc.update_object(icc, "<< /N 4 >>")
+    doc.update_stream(icc, Path(profile_path).read_bytes())
+    intent = doc.get_new_xref()
+    doc.update_object(intent, "<< /Type /OutputIntent /S /GTS_PDFX"
+                      f" /OutputConditionIdentifier {pymupdf.get_pdf_str(profile['conditionId'])}"
+                      f" /Info {pymupdf.get_pdf_str(profile['name'])} /RegistryName (http://www.color.org)"
+                      f" /DestOutputProfile {icc} 0 R >>")
+    doc.xref_set_key(doc.pdf_catalog(), "OutputIntents", f"[{intent} 0 R]")
+    if doc.xref_get_key(-1, "Info")[0] == "null":
+        doc.set_metadata({"producer": "record-orderbook plant"})
+    info = int(doc.xref_get_key(-1, "Info")[1].split()[0])
+    doc.xref_set_key(info, "GTS_PDFXVersion", "(PDF/X-1:2001)")
+    doc.xref_set_key(info, "GTS_PDFXConformance", "(PDF/X-1a:2001)")
+    doc.xref_set_key(info, "Trapped", "/False")
 
 
 def bands(shape, trim, bleed_mm, round_, dpi):

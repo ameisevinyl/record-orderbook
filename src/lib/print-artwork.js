@@ -50,6 +50,7 @@
 //                 "1.4"), or null for JPEG/TIFF/an unreadable file.
 // - pageCount   — pages in the PDF (1 for JPEG/TIFF).
 // - effectiveDpi — {x,y}, plant only: lowest resolution of any placed image.
+// - outputIntent — plant only: the PDF/X OutputIntent's profile name, or null.
 
 // ---- format sniffing (magic bytes, not file extension) ----------------
 

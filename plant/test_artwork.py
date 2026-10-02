@@ -285,6 +285,34 @@ class PixelsTest(unittest.TestCase):
         self.assertEqual(im.size, (150, 150))
         self.assertAlmostEqual(page_mm["w"], 25.4, places=3)
 
+    def test_saved_as_pdf_13_without_object_streams(self):
+        import numpy
+        out = self.dir / "o.pdf"
+        artwork.save_atomic(artwork.raster_pdf(numpy.zeros((4, 4, 4), numpy.uint8), "CMYK",
+                                               {"w": 10, "h": 10}, {"w": 8, "h": 8}), out)
+        data = out.read_bytes()
+        self.assertTrue(data.startswith(b"%PDF-1.3"))
+        self.assertNotIn(b"/ObjStm", data)
+
+    @unittest.skipUnless(Path(GENERIC_CMYK).is_file(), "needs a CMYK profile")
+    def test_pdfx_sets_the_output_intent(self):
+        import numpy
+        out = self.dir / "x.pdf"
+        doc = artwork.raster_pdf(numpy.zeros((4, 4, 4), numpy.uint8), "CMYK", {"w": 10, "h": 10}, {"w": 8, "h": 8})
+        artwork.pdfx(doc, GENERIC_CMYK, {"name": "Generic", "conditionId": "FOGRA39"})
+        artwork.save_atomic(doc, out)
+        _, parsed, _ = artwork.structure(out, 1)
+        self.assertEqual(parsed["outputIntent"], artwork.icc_name(Path(GENERIC_CMYK).read_bytes()))
+        self.assertEqual(parsed["pdfVersion"], "1.3")
+        saved = pymupdf.open(out)
+        info = int(saved.xref_get_key(-1, "Info")[1].split()[0])
+        self.assertEqual(saved.xref_get_key(info, "GTS_PDFXConformance")[1], "PDF/X-1a:2001")
+
+    def test_no_output_intent(self):
+        path = self.dir / "n.pdf"
+        pdf(path)
+        self.assertIsNone(artwork.structure(path, 1)[1]["outputIntent"])
+
     def test_raster_pdf_boxes(self):
         import numpy
         doc = artwork.raster_pdf(numpy.zeros((10, 20), numpy.uint8), "L", {"w": 106, "h": 53}, {"w": 100, "h": 47})
