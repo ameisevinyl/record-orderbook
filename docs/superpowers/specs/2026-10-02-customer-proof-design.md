@@ -9,7 +9,8 @@ artwork fix flow (`2026-10-02-artwork-fix-flow-design.md`): `artwork.pixels`,
 Before a printed part goes to the printer, the customer approves how it will look: the
 artwork as it will print, with where it is cut and punched. The plant view shows this to
 staff; the customer needs it as a file. Customers look at it on an RGB screen, so the file
-carries the colours as printed, converted for the screen.
+carries the print colours with their profile; the customer's viewer converts them for
+the screen.
 
 ## Decisions
 
@@ -26,14 +27,15 @@ carries the colours as printed, converted for the screen.
 ## The proof file (`plant/proof.py`)
 
 - **Page** = the file's data size in mm (trim + bleed), as in the check preview.
-- **Artwork:** one raster at `PROOF_DPI = 300`, JPEG quality 90, colour space
-  `[/ICCBased <sRGB>]` — viewers (Preview, Acrobat, browsers) colour-manage by it.
-- **Colour:** the file's own numbers (`artwork.pixels`) through the part's print profile
-  (`CONFIG.printProfiles`, `icc.ensure`) to sRGB with LittleCMS, relative colorimetric
-  with black point compensation — paper shows white. RGB first goes sRGB → print profile
-  as in the colour fix (so the proof shows what would print); grey is K.
-- **No OutputIntent.** A PDF/X OutputIntent names a print condition; on screen the image's
-  own sRGB tag is what counts.
+- **Artwork:** one CMYK raster at `PROOF_DPI = 300`, JPEG quality 90, colour space
+  `[/ICCBased <print profile>]` — the part's print profile (`CONFIG.printProfiles`,
+  `icc.ensure`). The viewer (Acrobat, Apple ColorSync in Preview) converts it to the
+  customer's screen; the proof itself stays in the print colours. A CMYK JPEG as Pillow
+  writes it is Adobe-inverted, hence `/Decode [1 0 1 0 1 0 1 0]`.
+- **Colour:** the file's own CMYK numbers (`artwork.pixels`). RGB goes sRGB → print
+  profile as in the colour fix (so the proof shows what would print); grey is K.
+- **No OutputIntent, no PDF/X keys.** The image's own ICC tag is what every viewer reads;
+  PDF/X-1a doesn't allow ICCBased colour, and the proof isn't a print file.
 - **Lines:** vector, the trim (rect, or circle when round) and the centre hole: dashed
   black on a white line of the same width, as on the preview.
 - Written as PDF 1.3 with `artwork.save_atomic`.
@@ -51,6 +53,7 @@ carries the colours as printed, converted for the screen.
 ## Testing
 
 - JS: `proofName`; `cutLinesSvg` draws no bleed line.
-- Python `plant/test_proof.py`: page size = data size; the image is ICCBased sRGB; a known
-  CMYK patch lands near the profile's sRGB value; trim and hole are drawn; an existing
+- Python `plant/test_proof.py`: page size = data size; the image is CMYK, ICCBased with the
+  print profile, and its numbers match the source's (JPEG tolerance); an RGB source is
+  converted; trim and hole are drawn; an existing
   target is refused.
