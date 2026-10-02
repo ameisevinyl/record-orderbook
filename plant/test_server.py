@@ -227,6 +227,16 @@ class HttpTest(unittest.TestCase):
         self.assertIn("print profile", text)
         self.assertFalse((folder / "X_labels_A_v2.pdf").exists())
 
+    def test_proof_once_and_only_of_a_finished_file(self):
+        folder, body = self.fix_job()
+        proof = {"job": body["job"], "file": body["file"], "newName": "X_proof_labels_A_v1.pdf",
+                 "params": {**body["params"], "holeMm": 7.4}}
+        status, text = self.post("/api/proof", proof)
+        self.assertEqual(status, 400, "no OutputIntent: not through the fix flow")
+        self.assertIn("finish the fix flow", text)
+        (folder / "X_proof_labels_A_v1.pdf").write_bytes(b"made before")
+        self.assertEqual(self.post("/api/proof", proof)[0], 409)
+
     def test_trash_saves_the_log_then_moves(self):
         folder, body = self.fix_job()
         (folder / "X_labels_A_v2.pdf").write_bytes(b"x")
@@ -303,6 +313,9 @@ class HelpersTest(unittest.TestCase):
                 (folder / "spectrum").mkdir()
                 (folder / "spectrum" / "A1.wav.png").write_bytes(b"1")
                 self.assertEqual(static_target("/jobs/p/spectrum/A1.wav.png"), folder / "spectrum" / "A1.wav.png")
+                self.assertEqual(static_target("/jobs/p/files/a.pdf"), folder / "a.pdf")
+                self.assertIsNone(static_target("/jobs/p/files/.checks"))
+                self.assertIsNone(static_target("/jobs/p/files/nope.pdf"))
                 self.assertIsNone(static_target("/jobs/p/other/A1.wav.png"))
                 self.assertIsNone(static_target("/jobs/p/spectrum/..%2Fa.pdf"))
                 self.assertIsNone(static_target("/jobs/p/../p/a.pdf"))

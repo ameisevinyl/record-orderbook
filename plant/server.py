@@ -36,6 +36,7 @@ TYPES = {
     ".css": "text/css; charset=utf-8",
     ".mp3": "audio/mpeg",
     ".png": "image/png",
+    ".pdf": "application/pdf",
 }
 CHUNK = 1 << 20
 
@@ -84,8 +85,9 @@ def missing(lib_version=lib_version, tool_version=tool_version):
 
 def static_target(url_path):
     """File under src/, check output (/jobs/<job>/<file> from the job's
-    .checks/) or a spectrogram (/jobs/<job>/spectrum/<file>), for a GET
-    path, or None."""
+    .checks/), a spectrogram (/jobs/<job>/spectrum/<file>) or a job's own
+    file (/jobs/<job>/files/<file>, e.g. a proof to open), for a GET path,
+    or None."""
     path = unquote(urlsplit(url_path).path)
     if path in ("/", "/index.html"):
         return INDEX
@@ -96,6 +98,8 @@ def static_target(url_path):
                 target = jobs.find(JOBS, parts[0])[1] / ".checks" / jobs.plain(parts[1])
             elif len(parts) == 3 and parts[1] == "spectrum":
                 target = jobs.find(JOBS, parts[0])[1] / "spectrum" / jobs.plain(parts[2])
+            elif len(parts) == 3 and parts[1] == "files":
+                target = jobs.find(JOBS, parts[0])[1] / jobs.plain(parts[2])
             else:
                 return None
         except JobError:
@@ -172,7 +176,8 @@ class Handler(BaseHTTPRequestHandler):
                "/api/move": self.move, "/api/assign": self.assign,
                "/api/check/audio": self.check_audio, "/api/check/artwork": self.check_artwork,
                "/api/spectrum": self.spectrum, "/api/profiles": self.profiles,
-               "/api/fix": self.fix, "/api/trash": self.trash, "/api/project": self.save_project}.get(self.path)
+               "/api/fix": self.fix, "/api/proof": self.proof,
+               "/api/trash": self.trash, "/api/project": self.save_project}.get(self.path)
         if api is None:
             return self.reply(404, "not found")
         # A JSON content type makes browsers ask first (CORS preflight,
@@ -402,6 +407,18 @@ class Handler(BaseHTTPRequestHandler):
         except (geomfix.FixError, colourfix.FixError) as error:
             raise JobError(str(error)) from None
         self.json({"name": r["newName"], "detail": detail})
+
+    def proof(self):
+        """The customer proof of a finished file, under the name the page
+        gives (proofFileName); never over a file."""
+        import proof
+        r = self.body()
+        source, target = self.fix_paths(r)
+        try:
+            proof.make(source, r["params"], target)
+        except proof.ProofError as error:
+            raise JobError(str(error)) from None
+        self.json({"name": r["newName"]})
 
     def trash(self):
         """Saves project.json (the page's log of it, 409 when it changed),
