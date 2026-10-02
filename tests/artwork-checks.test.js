@@ -24,7 +24,7 @@ test("artworkSlots: labels unless whitelabel, printed parts only, page and limit
     targetMm: {w: label.diameterMm + 2 * label.bleedMm, h: label.diameterMm + 2 * label.bleedMm},
     trimMm: {w: label.diameterMm, h: label.diameterMm},
     inkLimitPct: 220, black: printCheck.black, toleranceMm: printCheck.sizeToleranceMm,
-    holeMm: getFormat(CONFIG, "12").centerHole.normal
+    holeMm: getFormat(CONFIG, "12").centerHole.normal, fixDpi: printCheck.fixDpi.labels, profile: CONFIG.printProfiles.labels
   });
   assert.equal(slots[1].params.inkLimitPct, 300);
   assert.equal(slots[1].params.round, false);

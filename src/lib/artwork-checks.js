@@ -21,7 +21,8 @@ export function artworkSlots(project, config){
     if(!slot.fileName) return;
     slots.push({title, name: slot.fileName, params: {
       part, ...sizes, page: slot.page, inkLimitPct: printCheck.inkLimitPct[part],
-      black: printCheck.black, toleranceMm: printCheck.sizeToleranceMm
+      black: printCheck.black, toleranceMm: printCheck.sizeToleranceMm,
+      fixDpi: printCheck.fixDpi[part], profile: config.printProfiles[part]
     }});
   };
 
@@ -47,7 +48,7 @@ export function artworkSlots(project, config){
 
 // Ink right inside the cut but hardly any in the bleed: the artwork was
 // trimmed to the finished size.
-function bleedTrimmed(facts){
+export function bleedTrimmed(facts){
   const {outerInkPct: outer, innerInkPct: inner} = facts.bleed;
   return outer !== null && inner >= EDGE_INKED_PCT && outer < BLEED_EMPTY_PCT;
 }
@@ -69,6 +70,14 @@ function measuredRows(facts, params, checks){
   rows.push({feature: "Bleed", severity: resolveSeverity(checks.bleed.severity, !noBleed && !trimmed),
     detected: noBleed ? "no bleed in the file" : trimmed ? "empty — artwork looks trimmed" : "ok",
     expected: noBleed ? `${params.bleedMm} mm bleed` : trimmed ? `artwork into the ${params.bleedMm} mm bleed` : null});
+
+  // The OutputIntent a PDF/X-1a for this part carries (plant facts only).
+  if(params.profile && "outputIntent" in facts.parsed){
+    const own = facts.parsed.outputIntent;
+    const ok = own === params.profile.name;
+    rows.push({feature: "Output intent", severity: resolveSeverity(checks.colorProfile.severity, ok),
+      detected: own || "none", expected: ok ? null : params.profile.name});
+  }
   return rows;
 }
 

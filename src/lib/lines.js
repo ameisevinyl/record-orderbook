@@ -14,7 +14,7 @@ import { versionOf } from "./versions.js";
 const ROWS = {
   size: ["Size"], resolution: ["Resolution"],
   pdf: ["File", "Pages", "PDF version", "Encryption", "Fonts", "Colour profile", "TrimBox"],
-  bleed: ["Bleed"], colour: ["Colour mode", "Ink", "Black"]
+  bleed: ["Bleed"], colour: ["Colour mode", "Ink", "Black", "Output intent"]
 };
 const BAD = new Set(["warn", "error"]);
 const kindOf = step => ROWS[step] ? "check" : step === "approve" ? "approve" : step.split(":")[0];
