@@ -39,7 +39,7 @@ let gone = "";
 async function api(path, body){
   const res = await fetch(path, body === undefined ? {} : body.raw ? {method: "POST", ...body, body: body.raw}
     : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
-  if(!res.ok) throw new Error(await res.text());
+  if(!res.ok) throw Object.assign(new Error(await res.text()), {status: res.status});
   return res;
 }
 const getJson = async path => (await api(path)).json();
@@ -214,7 +214,7 @@ async function showJob(job, section, id){
     const artworkFacts = await readStream(await api("/api/check/artwork",
       {job, rescan: full, artwork: Object.fromEntries([...checkable.map(c => [c.name, c.params]), ...proposed])}), onStep);
     if(id !== latest) return;
-    const flows = Object.fromEntries(checkable.map(c => [c.name, slotFlow(log, artworkFacts[c.name], c.params, printCheck, view.names)]));
+    const flows = Object.fromEntries(checkable.map(c => [c.name, slotFlow(log, c.name, artworkFacts[c.name], c.params, printCheck, view.names)]));
     replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps, flows));
     const states = lines.map(n => lineState(project, CONFIG, n, artworkFacts));
     Object.assign(view, {project, artworkFacts, flows});
@@ -238,15 +238,21 @@ async function showJob(job, section, id){
           Object.assign(entry, {to: newName, result: "proposed", detail: reply.detail});
           note = `${c.title}: ${current.step} fix proposed — ${reply.detail} (${newName})`;
         }catch(err){
-          if(id !== latest) return;
+          // Only a refusal of the file (400) is logged; anything else (a
+          // profile that can't be fetched, a clash) is tried on the next load.
+          if(err.status !== 400){
+            if(id === latest) error.textContent = `Couldn't ${current.step}-fix ${c.name}: ${err.message}`;
+            return;
+          }
           Object.assign(entry, {result: "refused", error: err.message});
           note = `${c.title}: ${current.step} fix refused — ${err.message}`;
         }
-        const raw = structuredClone(view.raw);
+        // This job's project as read, not view's: the page may show another one by now.
+        const raw = structuredClone(data.project);
         raw.plant = raw.plant || {};
         raw.plant.fixes = [...(raw.plant.fixes || []), entry];
         raw.history = [...(raw.history || []), historyEntry(note, new Date())];
-        await postJson("/api/project", {job, project: raw, basedOn: view.hash});
+        await postJson("/api/project", {job, project: raw, basedOn: data.projectHash});
         if(id === latest) route();
         return;
       }

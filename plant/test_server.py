@@ -223,7 +223,7 @@ class HttpTest(unittest.TestCase):
     def test_fix_without_its_profile_is_refused(self):
         folder, body = self.fix_job()
         status, text = self.post("/api/fix", {**body, "step": "colour", "fix": {"kind": "assign", "detail": "x"}})
-        self.assertEqual(status, 400)
+        self.assertEqual(status, 503, "unavailable for now, not a refusal of the file")
         self.assertIn("print profile", text)
         self.assertFalse((folder / "X_labels_A_v2.pdf").exists())
 

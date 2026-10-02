@@ -126,6 +126,11 @@ def files(request):
     return [jobs.plain(name) for name in names]
 
 
+class Unavailable(Exception):
+    """Can't be done right now (a profile download): the page doesn't log it
+    as a refusal of the file, the next load tries again."""
+
+
 class Handler(BaseHTTPRequestHandler):
     def reply(self, code, body, content_type="text/plain; charset=utf-8"):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
@@ -183,6 +188,8 @@ class Handler(BaseHTTPRequestHandler):
             api()
         except Conflict as error:
             self.reply(409, str(error))
+        except Unavailable as error:
+            self.reply(503, str(error))
         except (JobError, KeyError, TypeError) as error:
             self.reply(400, str(error) if isinstance(error, JobError) else f"bad request: {error}")
         except OSError as error:
@@ -390,7 +397,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     profile = icc.ensure(params["profile"])
                 except icc.ProfileError as error:
-                    raise JobError(f"print profile: {error}") from None
+                    raise Unavailable(f"print profile: {error}") from None
                 detail = run(source, params, target, profile)
         except (geomfix.FixError, colourfix.FixError) as error:
             raise JobError(str(error)) from None
