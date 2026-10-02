@@ -100,6 +100,8 @@ test("artwork: after the check, verdict and a preview block per checked slot", (
   assert.ok(html.includes('<div class="art-file"><h3>Label A</h3>'));
   assert.ok(html.includes('src="/jobs/j1/lab%20%3Ca%3E.png"'));
   assert.ok(html.includes('<circle class="trim" cx="53" cy="53" r="50"'));
+  assert.ok(html.includes('<circle class="hole" cx="53" cy="53" r="3.7"'));
+  assert.ok(!html.includes('class="bleed"'), "no bleed line: only cut and punch");
   assert.ok(html.includes("max 330 %"));
 });
 

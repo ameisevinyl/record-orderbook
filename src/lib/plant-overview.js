@@ -157,20 +157,19 @@ export function renderProduction(states, partners){
 
 const VERDICT = {ok: "OK", review: "review", customer: "needs customer"};
 
-// Trim and a label's center hole (dashed) and bleed (dotted) in page
-// millimetres; the SVG stretches over the preview, so the lines sit
-// where the cut and the punch will be. Each line lies on a white line
-// of the same width, so it reads on dark and light designs alike.
-function cutLinesSvg(page, trim, bleedMm, round, holeMm){
+// Trim and a label's center hole, dashed, in page millimetres; the SVG
+// stretches over the preview, so the lines sit where the cut and the
+// punch will be. Each line lies on a white line of the same width, so it
+// reads on dark and light designs alike.
+function cutLinesSvg(page, trim, round, holeMm){
   const n = v => Math.round(v * 100) / 100;
   const cx = n(trim.x + trim.w / 2), cy = n(trim.y + trim.h / 2);
-  const shape = grow => round
-    ? `cx="${cx}" cy="${cy}" r="${n(trim.w / 2 + grow)}"`
-    : `x="${n(trim.x - grow)}" y="${n(trim.y - grow)}" width="${n(trim.w + 2 * grow)}" height="${n(trim.h + 2 * grow)}"`;
-  const tag = round ? "circle" : "rect";
+  const [tag, shape] = round
+    ? ["circle", `cx="${cx}" cy="${cy}" r="${n(trim.w / 2)}"`]
+    : ["rect", `x="${n(trim.x)}" y="${n(trim.y)}" width="${n(trim.w)}" height="${n(trim.h)}"`];
   const line = (cls, el, attrs) => `<${el} class="under" ${attrs}/><${el} class="${cls}" ${attrs}/>`;
   return `<svg viewBox="0 0 ${n(page.w)} ${n(page.h)}" preserveAspectRatio="none">`
-    + line("trim", tag, shape(0)) + line("bleed", tag, shape(bleedMm))
+    + line("trim", tag, shape)
     + (holeMm ? line("hole", "circle", `cx="${cx}" cy="${cy}" r="${n(holeMm / 2)}"`) : "")
     + `</svg>`;
 }
@@ -186,7 +185,7 @@ function artFileHtml({title, params}, facts, printCheck, base, flow = null){
       + `<div class="art" style="aspect-ratio:${facts.pageMm.w} / ${facts.pageMm.h}"`
       + (facts.cmyk ? ` data-cmyk="${url(facts.cmyk)}" data-w="${facts.previewPx.w}" data-h="${facts.previewPx.h}"` : "") + `>`
       + `<img src="${url(facts.preview)}" alt=""><img class="overlay" hidden src="${url(facts.overlay)}" alt="">`
-      + cutLinesSvg(facts.pageMm, facts.trimRectMm, params.bleedMm, params.round, params.holeMm) + `</div>`;
+      + cutLinesSvg(facts.pageMm, facts.trimRectMm, params.round, params.holeMm) + `</div>`;
   }
   const rows = artworkRows(facts, params, printCheck);
   body += listTable(["", "Check", "Found", "Expected"], rows.map(r =>
