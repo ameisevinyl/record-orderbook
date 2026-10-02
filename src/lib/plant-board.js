@@ -4,6 +4,7 @@
 // plant-overview.js: every value is escaped here.
 
 import { escapeHtml, stageLabel, SECTIONS, listTable } from "./plant-overview.js";
+import { productionTitle } from "./project.js";
 
 const jobLink = job => `#/job/${encodeURIComponent(job)}`;
 
@@ -59,7 +60,7 @@ export function renderHome({stages, inbox, problems}){
 export function renderInbox(item, info, plans){
   const p = info.project;
   let html = `<h2>Received</h2>` + listTable(["Item", "Catalogue #", "Title", "Artist", "Files"],
-    [[escapeHtml(item), escapeHtml(p.catalogue), escapeHtml(p.albumTitle), escapeHtml(p.albumArtist), String(info.files.length)]]);
+    [[escapeHtml(item), escapeHtml(p.catalogue), escapeHtml(productionTitle(p)), escapeHtml(p.albumArtist), String(info.files.length)]]);
   html += plans.map(({job, stage, changed}) => `<h2>Resend of ${escapeHtml(job)} (${escapeHtml(stageLabel(stage))})</h2>`
     + (changed.length ? `<ul>${changed.map(c => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`
       : "<p>No file changes; form fields are taken over.</p>")

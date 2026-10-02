@@ -55,7 +55,7 @@ test("mergeResend keeps unchanged files and the staff's choice, adds changed one
   const oldFiles = [{name: "X_A1_song_v1.wav", sha256: "wav"}, {name: "X_labels_A_v1.pdf", sha256: "orig"},
     {name: "X_labels_A_v2.pdf", sha256: "fix"}];
   const resent = project("X_labels_A_v1.pdf");
-  resent.albumTitle = "New title";
+  resent.productionTitle = "New title";
   delete resent.plant;
   resent.history = [];
 
@@ -63,7 +63,7 @@ test("mergeResend keeps unchanged files and the staff's choice, adds changed one
     [{name: "X_A1_song_v1.wav", sha256: "wav"}, {name: "X_labels_A_v1.pdf", sha256: "orig"}], new Date(0));
   assert.deepEqual(r.copies, []);
   assert.equal(r.project.labels.sides.A.fileName, "X_labels_A_v2.pdf");
-  assert.equal(r.project.albumTitle, "New title");
+  assert.equal(r.project.productionTitle, "New title");
   assert.deepEqual(r.project.plant, {...old.plant, received: {}});
   assert.deepEqual(r.project.history.map(h => h.note), ["earlier", "resend: no file changes"]);
 

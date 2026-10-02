@@ -6,7 +6,7 @@
 // rules here always run), then its spectrograms are made in the
 // background.
 import { CONFIG } from "../config.js";
-import { prepareProject, historyEntry } from "../lib/project.js";
+import { prepareProject, historyEntry, productionTitle } from "../lib/project.js";
 import { projectGaps } from "../lib/completeness.js";
 import { audioFindings, sideAudio } from "../lib/audio-checks.js";
 import { artworkSlots } from "../lib/artwork-checks.js";
@@ -268,7 +268,7 @@ async function showJob(job, section, id){
 // A job changed through this page is named like a customer's save of it
 // now: catalogue#_artist_title_<plant's local time>, old names included.
 function jobName(project){
-  return projectFileName({catalogue: project.catalogue, artist: project.albumArtist, title: project.albumTitle, date: new Date()});
+  return projectFileName({catalogue: project.catalogue, artist: project.albumArtist, title: productionTitle(project), date: new Date()});
 }
 
 // Buttons of the job and inbox views; each ends by reloading from disk.

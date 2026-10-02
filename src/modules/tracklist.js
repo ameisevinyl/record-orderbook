@@ -128,12 +128,12 @@ function createTrackRow(side){
   const gapCustom = row.querySelector(".gapcustom");
 
   // Most releases are single-artist — a new track starts "linked": its
-  // artist field is read-only and mirrors Album Artist live (see
+  // artist field is read-only and mirrors Artist live (see
   // syncAlbumArtistToLinkedTracks), so nobody has to retype it on every
   // row and it can never drift out of sync while typing. "change"
   // unlocks it into an ordinary input for the various-artists case —
   // from then on it's this track's own value, no longer linked. "revert"
-  // undoes that: re-links the field and snaps it back to Album Artist.
+  // undoes that: re-links the field and snaps it back to Artist.
   row.querySelector(".artist").value = document.getElementById("albumArtist").value;
   row.querySelector(".artist-change").addEventListener("click", ()=>{
     setArtistLinked(row, false);
@@ -169,7 +169,7 @@ function createTrackRow(side){
 }
 
 // Single place that flips a track's artist field between linked
-// (read-only, mirrors Album Artist) and its own value — used by
+// (read-only, mirrors Artist) and its own value — used by
 // "change", "revert", and project reload, so the readOnly flag, the
 // change/revert link visibility, and the value stay consistent no
 // matter which of those three sets the state.
@@ -760,7 +760,7 @@ export function initTracklist(){
     applyDefaultMatrix();
     updateChecklist();
   });
-  document.getElementById("albumTitle").addEventListener("input", updateChecklist);
+  document.getElementById("productionTitle").addEventListener("input", updateChecklist);
   document.getElementById("albumArtist").addEventListener("input", syncAlbumArtistToLinkedTracks);
 
   // Native changes cover tracklist, quantity, and address controls.
@@ -843,7 +843,7 @@ function buildProjectObject(forSend = false){
     catalogue: document.getElementById("catalogue").value,
     format: document.getElementById("format").value,
     soundsystem: document.getElementById("soundsystem").checked,
-    albumTitle: document.getElementById("albumTitle").value,
+    productionTitle: document.getElementById("productionTitle").value,
     albumArtist: document.getElementById("albumArtist").value,
     notes: document.getElementById("notes").value,
     sides: { A: serializeSide("A", forSend), B: serializeSide("B", forSend) },
@@ -899,7 +899,7 @@ function openSpecs(){
 // name and as the single folder nested inside it (unzipping then drops
 // one tidy folder rather than scattering files loose).
 function currentProjectFileName(project, date){
-  return projectFileName({catalogue: project.catalogue, artist: project.albumArtist, title: project.albumTitle, date});
+  return projectFileName({catalogue: project.catalogue, artist: project.albumArtist, title: project.productionTitle, date});
 }
 
 async function waitForAudioInspections(forSend){
@@ -925,6 +925,10 @@ async function waitForAudioInspections(forSend){
 // draft audio and whitelabel artwork; send packages contain only files
 // used by the production choices in project.json.
 async function buildProjectZip(forSend = false){
+  if(!document.getElementById("catalogue").value.trim()){
+    document.getElementById("catalogue").focus();
+    throw new Error("enter the catalogue number first — it names the project and every file in it");
+  }
   await waitForAudioInspections(forSend);
   const date = new Date();
   const project = buildProjectObject(forSend);
@@ -1033,7 +1037,7 @@ async function loadProject(file){
   // format-change handlers run before we apply their saved state below.
   document.getElementById("format").dispatchEvent(new Event("change"));
   document.getElementById("soundsystem").checked = !!p.soundsystem;
-  document.getElementById("albumTitle").value = p.albumTitle || "";
+  document.getElementById("productionTitle").value = p.productionTitle;
   document.getElementById("albumArtist").value = p.albumArtist || "";
   document.getElementById("notes").value = p.notes || "";
   applyVinylColor(p.vinylColor);

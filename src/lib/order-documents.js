@@ -9,7 +9,7 @@ import { parseQuantity } from "./shipping.js";
 
 function documentHeader(project, label, date){
   const cat = project.catalogue || "(no catalogue number)";
-  const title = project.albumTitle || "(no title)";
+  const title = project.productionTitle || "(no title)";
   const artist = project.albumArtist || "(no artist)";
   const cut = project.soundsystem ? "soundsystem" : "normal";
   const referenceCut = (project.proofs || {}).referenceCut ? "Reference cut: yes\n" : "";

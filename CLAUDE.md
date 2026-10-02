@@ -8,7 +8,8 @@ A single browser page a record pressing plant hands to its customers
 (label owners, artists) to assemble one release's order: tracklist and
 playing time per side, printed parts (labels, inner sleeve, cover, inlay),
 vinyl colour and quantity, billing and shipping addresses. All fields
-belong to one release record (catalogue number, format, title, artist).
+belong to one release record (catalogue number, format, production
+title, artist).
 Not built for one specific plant — a plant configures it via `CONFIG` and
 gives it to its own customers.
 
@@ -92,9 +93,11 @@ yourself. Be short and precise.
 - Printed parts: `<catalogue#>_<part>_<side-or-variant>_v<rev>.<ext>` —
   e.g. `PNKRCK007_labels_A_v1.pdf`
 - Project folder / zip name: `<catalogue#>_<artist>_<title>_<YYMMDD-HHMM>` —
-  e.g. `PNKRCK007_the_band_loud_record_261001-1432`. Local time (the
-  customer's on save, the plant server's on a change); artist and title
-  slugged, max 32 chars each, left out when empty. No email: the name
+  e.g. `PNKRCK007_the_band_loud_record_261001-1432`. The catalogue number
+  is required to save; artist and production title are optional. Local
+  time (the customer's on save, the plant server's on a change); artist
+  and title slugged, max 32 chars each, left out when empty, `untitled`
+  when both are. No email: the name
   travels through transfer services. Without the stamp it is the job's
   key (`job_key` in `plant/jobs.py`). A plant job folder is renamed when
   its content changes through the plant view (merging a resend, using a

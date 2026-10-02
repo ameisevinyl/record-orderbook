@@ -103,7 +103,7 @@ export function renderBasic(project, config, place, gaps, through = false){
   const last = project.history.at(-1);
   return section("basic", fieldTable([
     ["Catalogue #", escapeHtml(project.catalogue)],
-    ["Title", escapeHtml(project.albumTitle)],
+    ["Title", escapeHtml(project.productionTitle)],
     ["Artist", escapeHtml(project.albumArtist)],
     ["Format", escapeHtml(format.label)],
     ["Quantity", qty.length ? qty.map(row => `${escapeHtml(row.qty)} ${escapeHtml(colorLabel(row.color))}`).join(", ")

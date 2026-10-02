@@ -220,8 +220,10 @@ def board(root):
                     cached = {}
                 artwork = {name: {**e.get("facts", {}), "sha256": e.get("sha256")}
                            for name, e in cached.items() if isinstance(e, dict)}
+                # albumTitle: the production title of a version 1 project.json
+                title = project.get("productionTitle", project.get("albumTitle", ""))
                 cards.append({"job": job, "catalogue": project.get("catalogue", ""),
-                              "title": project.get("albumTitle", ""), "artist": project.get("albumArtist", ""),
+                              "title": title, "artist": project.get("albumArtist", ""),
                               "project": project, "files": files(folder), "artwork": artwork})
             except (JobError, OSError) as error:
                 cards.append({"job": job, "error": str(error)})

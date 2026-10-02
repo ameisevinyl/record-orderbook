@@ -1,4 +1,10 @@
-export const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 2;
+
+// A project.json as it is on disk (the plant reads it unprepared): version
+// 1 called the production title albumTitle.
+export function productionTitle(raw){
+  return raw.productionTitle ?? raw.albumTitle ?? "";
+}
 
 export function includeSideFile({forSend, blank, continuous, kind}){
   if(!forSend) return true;
@@ -77,8 +83,13 @@ export function prepareProject(raw, config){
   const format = formats.find(entry => entry.id === project.format);
   if(!format) throw new Error(`Unknown format ID "${String(project.format)}"`);
 
+  if(version < 2){
+    // A 7" is no album: version 2 calls it the production title.
+    project.productionTitle = project.albumTitle;
+    delete project.albumTitle;
+  }
   project.projectVersion = PROJECT_VERSION;
-  for(const field of ["catalogue", "albumTitle", "albumArtist", "notes"]){
+  for(const field of ["catalogue", "productionTitle", "albumArtist", "notes"]){
     project[field] = text(project[field], `project.${field}`);
   }
   project.soundsystem = bool(project.soundsystem, "project.soundsystem");

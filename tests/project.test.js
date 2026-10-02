@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROJECT_VERSION, includeSideFile, prepareProject, referencedProjectFiles, assertProjectFiles, historyEntry, fileSlots, setAt } from "../src/lib/project.js";
+import { PROJECT_VERSION, productionTitle, includeSideFile, prepareProject, referencedProjectFiles, assertProjectFiles, historyEntry, fileSlots, setAt } from "../src/lib/project.js";
 
 const config = {
   formats: [
@@ -36,9 +36,10 @@ test("includeSideFile preserves drafts in saves and only active audio in sends",
 });
 
 test("prepareProject accepts and normalizes a current project", () => {
-  const project = prepareProject({projectVersion:1, format:"12", catalogue:"CAT-1"}, config);
-  assert.equal(PROJECT_VERSION, 1);
-  assert.equal(project.projectVersion, 1);
+  const project = prepareProject({projectVersion:2, format:"12", catalogue:"CAT-1", productionTitle:"Loud"}, config);
+  assert.equal(PROJECT_VERSION, 2);
+  assert.equal(project.projectVersion, 2);
+  assert.equal(project.productionTitle, "Loud");
   assert.equal(project.catalogue, "CAT-1");
   assert.deepEqual(project.sides.A.tracks, []);
   assert.equal(project.sides.A.rpm, "33");
@@ -54,6 +55,18 @@ test("prepareProject accepts and normalizes a current project", () => {
   assert.deepEqual(project.shippingBilling.shipping, []);
 });
 
+test("prepareProject: version 1's album title is the production title", () => {
+  const project = prepareProject({projectVersion:1, format:"12", albumTitle:"Single"}, config);
+  assert.equal(project.productionTitle, "Single");
+  assert.equal("albumTitle" in project, false);
+});
+
+test("productionTitle reads a project.json as it is on disk, old or new", () => {
+  assert.equal(productionTitle({productionTitle:"New"}), "New");
+  assert.equal(productionTitle({projectVersion:1, albumTitle:"Old"}), "Old");
+  assert.equal(productionTitle({}), "");
+});
+
 test("prepareProject migrates an unversioned project without mutating or losing fields", () => {
   const raw = {
     format: "12", albumTitle: "Known title",
@@ -66,8 +79,9 @@ test("prepareProject migrates an unversioned project without mutating or losing 
   const project = prepareProject(raw, config);
 
   assert.equal(raw.projectVersion, undefined);
-  assert.equal(project.projectVersion, 1);
-  assert.equal(project.albumTitle, "Known title");
+  assert.equal(project.projectVersion, 2);
+  assert.equal(project.productionTitle, "Known title");
+  assert.equal("albumTitle" in project, false);
   assert.equal(project.sides.A.tracks[0].title, "Track");
   assert.equal(project.labels.bigCenter, false);
   assert.equal(project.coverSleeve.cover.note, "keep");
@@ -87,7 +101,7 @@ test("prepareProject rejects malformed roots and arrays", () => {
 
 test("prepareProject rejects invalid and future versions", () => {
   assert.throws(() => prepareProject({projectVersion:"1", format:"12"}, config), /Invalid project version/);
-  assert.throws(() => prepareProject({projectVersion:2, format:"12"}, config), /Unsupported project version: 2/);
+  assert.throws(() => prepareProject({projectVersion:3, format:"12"}, config), /Unsupported project version: 3/);
 });
 
 test("prepareProject accepts disabled configured formats and rejects unknown formats", () => {

@@ -11,7 +11,7 @@ import { escapeHtml, renderProduction, stageLabel, gapSection, renderBasic, rend
   from "../src/lib/plant-overview.js";
 
 const project = prepareProject({
-  projectVersion: 1, format: "12", catalogue: "PNKRCK007", albumTitle: "<b>Loud</b>", albumArtist: "Band",
+  projectVersion: 2, format: "12", catalogue: "PNKRCK007", productionTitle: "<b>Loud</b>", albumArtist: "Band",
   notes: "call first",
   sides: {A: {rpm: "33", tracks: [{title: "One", length: "3:00", fileName: "one_v1.wav"},
     {title: "Two", length: "2:00", fileName: "two_v1.wav"}]}, B: {blank: true}},

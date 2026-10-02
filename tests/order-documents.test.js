@@ -30,7 +30,7 @@ function side(overrides = {}){
 function project(overrides = {}){
   return {
     catalogue:"TEST001", format:"7", soundsystem:false,
-    albumTitle:"Test Release", albumArtist:"Test Artist", notes:"",
+    productionTitle:"Test Release", albumArtist:"Test Artist", notes:"",
     sides:{A:side(), B:side({blank:true, matrixInscription:"TEST B"})},
     labels:{bigCenter:false, sides:{A:{whitelabel:true}, B:{whitelabel:true}}},
     coverSleeve:{
@@ -136,7 +136,7 @@ test("summary includes packaging manifest and complete billing/shipping details"
 
 test("normal cut and blank optional values render without throwing", () => {
   const p = project({
-    catalogue:"", albumTitle:"", albumArtist:"", notes:undefined,
+    catalogue:"", productionTitle:"", albumArtist:"", notes:undefined,
     sides:{A:side({rpm:"", matrixInscription:"", tracks:[{}]}), B:side({blank:true})},
     labels:{bigCenter:false, sides:{}}, coverSleeve:{}, vinylColor:undefined,
     shippingBilling:{billing:{}, shipping:[{}]}

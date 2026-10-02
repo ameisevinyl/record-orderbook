@@ -119,9 +119,10 @@ export function humanDate(date = new Date()){
 // PNKRCK007_the_band_loud_record_261001-1432 — the project package's
 // file name (also the single folder nested inside the zip). Without the
 // timestamp it is the plant's job key. Artist and title tell two
-// productions with one catalogue number apart; no email, since the name
-// travels through transfer services.
+// productions with one catalogue number apart, "untitled" stands in for
+// both; no email, since the name travels through transfer services.
 export function projectFileName({catalogue, artist, title, date}){
   const cap = str => slug(str).slice(0, 32).replace(/_+$/, "");
-  return [sanitizeFileName(catalogue), cap(artist), cap(title), timeStamp(date)].filter(Boolean).join("_");
+  const named = [cap(artist), cap(title)].filter(Boolean);
+  return [sanitizeFileName(catalogue), ...(named.length ? named : ["untitled"]), timeStamp(date)].join("_");
 }

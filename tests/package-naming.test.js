@@ -106,14 +106,15 @@ test("humanDate formats as yyyy-mm-dd", () => {
   assert.equal(humanDate(new Date(2026, 0, 5)), "2026-01-05");
 });
 
-test("projectFileName: catalogue, artist, title, local timestamp; no email", () => {
+test("projectFileName: catalogue, artist, title, local timestamp; untitled without both; no email", () => {
   const date = new Date(2026, 9, 1, 14, 32);
   assert.equal(projectFileName({catalogue:"PNKRCK007", artist:"The Band", title:"Loud Record", date}),
     "PNKRCK007_the_band_loud_record_261001-1432");
-  assert.equal(projectFileName({catalogue:"PNKRCK007", date}), "PNKRCK007_261001-1432");
   assert.equal(projectFileName({catalogue:"PNKRCK007", artist:"Böse Söhne", title:"", date}),
     "PNKRCK007_boese_soehne_261001-1432");
-  assert.equal(projectFileName({catalogue:"", date}), "untitled-release_261001-1432");
+  assert.equal(projectFileName({catalogue:"PNKRCK007", title:"Loud Record", date}), "PNKRCK007_loud_record_261001-1432");
+  assert.equal(projectFileName({catalogue:"PNKRCK007", date}), "PNKRCK007_untitled_261001-1432");
+  assert.equal(projectFileName({catalogue:"PNKRCK007", artist:"  ", title:"!!", date}), "PNKRCK007_untitled_261001-1432");
 });
 
 test("projectFileName caps artist and title at 32 characters", () => {
