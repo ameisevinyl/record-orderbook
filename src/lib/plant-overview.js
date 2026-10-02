@@ -124,6 +124,7 @@ export function renderBasic(project, config, place, gaps, through = false){
 
 // The action a line's current step offers: [by, button text] pairs.
 const LINE_ACTIONS = {
+  check: [["staff", "accept"]],
   approve: [["customer", "approved by customer"], ["staff", "approved by staff"]],
   send: [["staff", "sent"]],
   back: [["staff", "back, fine"]]
@@ -136,9 +137,10 @@ export function renderProduction(states, partners){
     let body = `<h3>${escapeHtml(s.line)}${s.done ? " ✓" : s.waiting ? " (waiting)" : ""}</h3>`;
     if(s.step){
       const current = s.steps.find(x => x.step === s.step);
-      // Check steps are the artwork fix flow's: only their why here.
-      if(current.kind === "check") return body + `<p>artwork: ${escapeHtml(s.why)}</p>`;
-      if(s.why) body += `<p>${escapeHtml(s.why)}</p>`;
+      // A check step's fixes are the artwork flow's; here only why, and
+      // accept for a file staff keep as it is.
+      if(current.kind === "check") body += `<p>artwork: ${escapeHtml(s.why)}</p>`;
+      else if(s.why) body += `<p>${escapeHtml(s.why)}</p>`;
       body += "<p>";
       if(current.kind === "send"){
         const list = partners[s.step.split(":")[1]] || [];

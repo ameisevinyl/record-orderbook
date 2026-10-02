@@ -181,7 +181,7 @@ test("basic: reference cut and testpresses only when ordered", () => {
   assert.ok(html.includes('<tr><th scope="row">Testpresses</th><td>3</td></tr>'));
 });
 
-test("production: no step strip; at a check the why, else the current action", () => {
+test("production: no step strip; the current step's why and its action", () => {
   const st = (step, kind, extra = {}) => ({line: "labels", steps: [{step: "size", kind: "check", state: "done"},
     {step, kind, state: "current"}], step, why: "Label A: 96 <mm>", ready: false, done: false, waiting: false, checking: false, ...extra});
   const partners = {printer: ["in-house", "Druck & Co"]};
@@ -189,7 +189,7 @@ test("production: no step strip; at a check the why, else the current action", (
   assert.ok(check.startsWith('<section id="production">'));
   assert.ok(!check.includes("→") && !check.includes("✓ size"), "no step strip");
   assert.ok(check.includes("<p>artwork: Label A: 96 &lt;mm&gt;</p>"));
-  assert.ok(!check.includes("line-act"), "check steps are the fix flow's");
+  assert.ok(check.includes('<button type="button" class="line-act" data-line="labels" data-step="bleed" data-by="staff">accept</button>'));
   const approve = renderProduction([st("approve", "approve")], partners);
   assert.ok(approve.includes('data-step="approve" data-by="customer">approved by customer</button>'));
   assert.ok(approve.includes('data-step="approve" data-by="staff">approved by staff</button>'));
