@@ -30,13 +30,13 @@ test("assignedName keeps a hand-saved version, renames anything else", () => {
 
 test("jobFiles lists other versions per slot, newest first, and unmanaged files", () => {
   const files = ["X_A1_song_v1.wav", "X_labels_A_v1.pdf", "X_labels_A_v2.pdf", "X_labels_A_v3.pdf",
-    "cover_final.pdf", "order_summary.txt"].map(name => ({name, size: 1}));
+    "cover_final.pdf", "X_proof_labels_A_v2.pdf", "order_summary.txt"].map(name => ({name, size: 1}));
   const {slots, unmanaged} = jobFiles(project("X_labels_A_v2.pdf"), files);
   const label = slots.find(s => s.title === "Label A");
   assert.deepEqual(label.others, [{name: "X_labels_A_v3.pdf", newer: true}, {name: "X_labels_A_v1.pdf", newer: false}]);
   assert.equal(label.present, true);
   assert.deepEqual(slots.map(s => s.title), ["A1", "Label A"]);
-  assert.deepEqual(unmanaged, [{name: "cover_final.pdf", size: 1}]);
+  assert.deepEqual(unmanaged, [{name: "cover_final.pdf", size: 1}, {name: "X_proof_labels_A_v2.pdf", size: 1}]);
 });
 
 test("jobFiles: section, index and modification time per slot; every file off the naming convention is unmanaged", () => {

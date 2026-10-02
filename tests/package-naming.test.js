@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   slug, fileExt, sanitizeFileName, mimeType, trackFileName, continuousSideFileName,
-  tracklistFileName, printedPartFileName, previewFileName, timeStamp, humanDate, projectFileName
+  tracklistFileName, printedPartFileName, previewFileName, proofFileName, timeStamp, humanDate, projectFileName
 } from "../src/lib/package-naming.js";
 
 test("slug lowercases and collapses non-alnum runs to single underscores", () => {
@@ -77,6 +77,11 @@ test("printedPartFileName builds catalogue/part/variant/version", () => {
     printedPartFileName({catalogue:"PNKRCK007", part:"cover", ext:".pdf"}),
     "PNKRCK007_cover_v1.pdf"
   );
+});
+
+test("proofFileName puts proof_ after the catalogue number, the version it shows stays", () => {
+  assert.equal(proofFileName("PNKRCK007", "PNKRCK007_labels_A_v2.pdf"), "PNKRCK007_proof_labels_A_v2.pdf");
+  assert.equal(proofFileName("PNK/007", "PNK-007_cover_v3.pdf"), "PNK-007_proof_cover_v3.pdf");
 });
 
 test("previewFileName builds catalogue/part/variant with a forced _preview.jpg suffix", () => {
