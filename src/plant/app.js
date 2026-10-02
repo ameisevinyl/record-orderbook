@@ -9,13 +9,14 @@ import { CONFIG } from "../config.js";
 import { prepareProject, historyEntry } from "../lib/project.js";
 import { projectGaps } from "../lib/completeness.js";
 import { audioFindings, sideAudio } from "../lib/audio-checks.js";
-import { artworkSlots, newerToCompare, geometryFixes } from "../lib/artwork-checks.js";
+import { artworkSlots } from "../lib/artwork-checks.js";
+import { slotFlow } from "../lib/fix-flow.js";
 import { getFormat } from "../lib/format-catalogue.js";
 import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf, useVersion } from "../lib/versions.js";
 import { projectFileName } from "../lib/package-naming.js";
 import { renderBasic, renderProduction, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
 import { renderNav, renderHome, renderInbox, renderBoard } from "../lib/plant-board.js";
-import { lineState, logEntry, fixerTargets } from "../lib/lines.js";
+import { lineState, logEntry } from "../lib/lines.js";
 
 const zipInput = document.getElementById("zipInput");
 const folderInput = document.getElementById("folderInput");
@@ -176,9 +177,6 @@ async function showJob(job, section, id){
   const files = jobFiles(project, data.files);
   const gaps = projectGaps(project, CONFIG, data.files);
   const checkable = artworkSlots(project, CONFIG);
-  // A newer version of a checked slot (e.g. a colour fix) is checked and
-  // shown next to the one in use.
-  const compare = newerToCompare(files.slots, checkable);
   const printCheck = getFormat(CONFIG, project.format).printCheck;
   // The audio the slots point at: checks and spectrograms run on these
   // only, never on unmanaged files or versions not in use.
@@ -187,12 +185,16 @@ async function showJob(job, section, id){
   const base = `/jobs/${encodeURIComponent(job)}/`;
   view = {job, raw: data.project, hash: data.projectHash, stamp: data.stamp,
     names: data.files.map(f => f.name), slots: files.slots, checkable, format: project.format};
+  const log = (data.project.plant || {}).fixes || [];
+  // A proposed fix's file is checked too (on its first page), so its box shows all its checks.
+  const proposed = checkable.flatMap(c => log.filter(e => e.file === c.name && e.result === "proposed" && view.names.includes(e.to))
+    .map(e => [e.to, {...c.params, page: 1}]));
   const full = rescan;
   rescan = false;
   const lines = Object.keys(CONFIG.lines);
   out.innerHTML = renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps)
     + renderProduction(lines.map(n => lineState(project, CONFIG, n, null)), CONFIG.partners)
-    + renderArtwork(files, checkable, null, printCheck, base, gaps, compare)
+    + renderArtwork(files, checkable, null, printCheck, base, gaps)
     + renderAudio(project, files, null, [], base, gaps)
     + renderShipping(project, gaps)
     + renderUnmanaged(files)
@@ -210,74 +212,44 @@ async function showJob(job, section, id){
     what = "check the artwork of";
     busy("checking artwork");
     const artworkFacts = await readStream(await api("/api/check/artwork",
-      {job, rescan: full, artwork: Object.fromEntries([...checkable, ...compare].map(s => [s.name, s.params]))}), onStep);
+      {job, rescan: full, artwork: Object.fromEntries([...checkable.map(c => [c.name, c.params]), ...proposed])}), onStep);
     if(id !== latest) return;
-    replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps, compare));
+    const flows = Object.fromEntries(checkable.map(c => [c.name, slotFlow(log, artworkFacts[c.name], c.params, printCheck, view.names)]));
+    replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps, flows));
     const states = lines.map(n => lineState(project, CONFIG, n, artworkFacts));
-    Object.assign(view, {project, artworkFacts});
+    Object.assign(view, {project, artworkFacts, flows});
     replace("production", renderProduction(states, CONFIG.partners));
     replace("basic", renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps,
       states.length > 0 && states.every(s => s.ready)));
 
-    // Size and bleed fixes: a preview per candidate (made once per file
-    // content), under the file for staff to pick; only where fixers run.
-    const fixes = {};
+    // One fix per load where fixers run: the first slot whose step has a
+    // fix and no pending proposal gets one, as its next version; the reload
+    // checks it and shows it for accept or dismiss.
     if((CONFIG.fixerStages || []).includes(data.stage)){
-      for(const c of checkable){
-        const candidates = geometryFixes(artworkFacts[c.name], c.params);
-        if(!candidates.length) continue;
-        busy(`previewing size fixes of ${c.name}`);
+      const c = checkable.find(c => { const f = flows[c.name]; return f.current && f.current.fix && !f.proposal; });
+      if(c){
+        const {current} = flows[c.name];
+        const newName = nextVersionName(versionOf(c.name).base, ".pdf", view.names);
+        const entry = {step: current.step, file: c.name, sha256: artworkFacts[c.name].sha256, at: new Date().toISOString()};
+        busy(`${current.step} fix of ${c.name}`);
+        let note;
         try{
-          const {previews} = await postJson("/api/fix/geometry/preview", {job, file: c.name, params: c.params, candidates});
-          if(id !== latest) return;
-          fixes[c.name] = candidates.map(candidate => ({candidate, preview: previews[candidate.id]}));
+          const reply = await postJson("/api/fix", {job, file: c.name, newName, step: current.step, params: c.params, fix: current.fix});
+          Object.assign(entry, {to: newName, result: "proposed", detail: reply.detail});
+          note = `${c.title}: ${current.step} fix proposed — ${reply.detail} (${newName})`;
         }catch(err){
           if(id !== latest) return;
-          error.textContent = `Couldn't preview size fixes of ${c.name}: ${err.message}`;
+          Object.assign(entry, {result: "refused", error: err.message});
+          note = `${c.title}: ${current.step} fix refused — ${err.message}`;
         }
-      }
-      if(Object.keys(fixes).length) replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps, compare, fixes));
-    }
-    view.fixes = fixes;
-
-    // A line standing at a step with a fixer runs it by itself: one file
-    // per load, the fix becomes the slot's file ("use"), the log records
-    // it, and the reload checks the fix and runs the next.
-    for(const name of lines){
-      const [target] = fixerTargets(project, CONFIG, name, artworkFacts, data.stage, view.names);
-      if(!target) continue;
-      const slot = files.slots.find(s => s.name === target);
-      const check = checkable.find(c => c.name === target);
-      const newName = nextVersionName(versionOf(target).base, ".pdf", view.names);
-      busy(`fixing colours of ${target}`);
-      try{
-        await postJson("/api/fix/label", {job, file: target, newName,
-          params: {...check.params, fixDpi: printCheck.fixDpi.labels, profile: CONFIG.printProfiles.labels || null}});
-      }catch(err){
-        // A refused fix is logged as tried, so it isn't repeated on every
-        // load; the line waits at colour for staff.
         const raw = structuredClone(view.raw);
         raw.plant = raw.plant || {};
-        raw.plant.lines = raw.plant.lines || {};
-        raw.plant.lines[name] = [...(raw.plant.lines[name] || []),
-          {step: "colour", by: "fixer", at: new Date().toISOString(), from: {[target]: artworkFacts[target].sha256}, error: err.message}];
-        raw.history = [...(raw.history || []), historyEntry(`${name}: colour fix of ${target} refused — ${err.message}`, new Date())];
+        raw.plant.fixes = [...(raw.plant.fixes || []), entry];
+        raw.history = [...(raw.history || []), historyEntry(note, new Date())];
         await postJson("/api/project", {job, project: raw, basedOn: view.hash});
-        error.textContent = `Couldn't fix the colours of ${target}: ${err.message}`;
-        break;
+        if(id === latest) route();
+        return;
       }
-      const raw = structuredClone(view.raw);
-      useVersion(raw, slot.path, newName);
-      raw.plant = raw.plant || {};
-      raw.plant.lines = raw.plant.lines || {};
-      raw.plant.lines[name] = [...(raw.plant.lines[name] || []),
-        {step: "colour", by: "fixer", at: new Date().toISOString(), from: {[target]: artworkFacts[target].sha256}, to: newName}];
-      raw.history = [...(raw.history || []), historyEntry(`${name}: colour fixed, ${target} → ${newName}`, new Date())];
-      const {job: renamed} = await postJson("/api/assign", {job, file: newName, newName, project: raw,
-        basedOn: view.hash, name: jobName(raw)});
-      if(renamed !== job) location.hash = `#/job/${encodeURIComponent(renamed)}`;
-      else route();
-      return;
     }
     // Last: the mastering engineer's spectrograms, in the background; the
     // change poll below shows their progress.
@@ -297,7 +269,7 @@ function jobName(project){
 // A 409 (someone changed the job meanwhile) shows its message; the next
 // reload shows their change.
 out.addEventListener("click", async e => {
-  const button = e.target.closest(".use, #move, #rescan, .merge, #accept, .fix, .geo, .line-act");
+  const button = e.target.closest(".use, #move, #rescan, .merge, #accept, .accept, .dismiss, .trash, .trash-old, .line-act");
   if(!button || !view || task) return;
   error.textContent = "";
   if(button.id === "rescan"){
@@ -335,36 +307,35 @@ out.addEventListener("click", async e => {
       raw.plant.lines[line] = [...(raw.plant.lines[line] || []), logEntry(view.project, CONFIG, line, view.artworkFacts, fields)];
       raw.history = [...(raw.history || []), historyEntry(`${line}: ${step} — ${button.textContent}${fields.to ? ` (${fields.to})` : ""}`, new Date())];
       await postJson("/api/project", {job: view.job, project: raw, basedOn: view.hash});
-    } else if(button.matches(".geo")){
-      // A size/bleed fix: written as the slot's next version and used —
-      // picking is the decision. No line log: the new file passes by its checks.
+    } else if(button.matches(".accept, .dismiss")){
       const slot = view.slots[Number(button.dataset.slot)];
-      const check = view.checkable.find(c => c.name === slot.name);
-      const {candidate} = view.fixes[slot.name].find(f => f.candidate.id === button.dataset.id);
-      const newName = nextVersionName(versionOf(slot.name).base, ".pdf", view.names);
-      busy(`fixing the size of ${slot.name}`);
-      await postJson("/api/fix/geometry", {job: view.job, file: slot.name, newName, candidate,
-        params: {...check.params, fixDpi: getFormat(CONFIG, view.format).printCheck.fixDpi[check.params.part]}});
+      const {proposal} = view.flows[slot.name];
+      const accepted = button.matches(".accept");
       const project = structuredClone(view.raw);
-      useVersion(project, slot.path, newName);
-      const detail = candidate.dpiAfter === null ? "" : `, detail ${candidate.dpiAfter} dpi`;
-      project.history = [...(project.history || []),
-        historyEntry(`${slot.title}: size fix (${candidate.title}), ${slot.name} → ${newName}${detail}`, new Date())];
-      const {job} = await postJson("/api/assign", {job: view.job, file: newName, newName, project, basedOn: view.hash,
-        name: jobName(project)});
-      if(job !== view.job){
-        location.hash = `#/job/${encodeURIComponent(job)}`;
-        return;
+      project.plant = project.plant || {};
+      project.plant.fixes = [...(project.plant.fixes || []),
+        {step: proposal.step, file: proposal.file, sha256: proposal.sha256, to: proposal.to,
+          at: new Date().toISOString(), result: accepted ? "accepted" : "dismissed"}];
+      project.history = [...(project.history || []), historyEntry(`${slot.title}: ${proposal.step} — ${proposal.detail} `
+        + (accepted ? `accepted (${slot.name} → ${proposal.to})` : `dismissed, ${proposal.to} trashed`), new Date())];
+      if(accepted){
+        useVersion(project, slot.path, proposal.to);
+        const {job} = await postJson("/api/assign", {job: view.job, file: proposal.to, newName: proposal.to, project,
+          basedOn: view.hash, name: jobName(project)});
+        if(job !== view.job){
+          location.hash = `#/job/${encodeURIComponent(job)}`;
+          return;
+        }
+      } else {
+        await postJson("/api/trash", {job: view.job, files: [proposal.to], project, basedOn: view.hash});
       }
-    } else if(button.matches(".fix")){
-      // The fix becomes the slot's next version; "use" decides.
+    } else if(button.matches(".trash, .trash-old")){
+      // Unused versions into the job's .trash/ — recoverable by hand.
       const slot = view.slots[Number(button.dataset.slot)];
-      const check = view.checkable.find(c => c.name === slot.name);
-      const newName = nextVersionName(versionOf(slot.name).base, ".pdf", view.names);
-      busy(`fixing colours of ${slot.name}`);
-      await postJson("/api/fix/label", {job: view.job, file: slot.name, newName,
-        params: {...check.params, fixDpi: getFormat(CONFIG, view.format).printCheck.fixDpi.labels,
-          profile: CONFIG.printProfiles.labels || null}});
+      const trashed = button.matches(".trash") ? [button.dataset.file] : slot.others.map(o => o.name);
+      const project = structuredClone(view.raw);
+      project.history = [...(project.history || []), historyEntry(`${slot.title}: trashed ${trashed.join(", ")}`, new Date())];
+      await postJson("/api/trash", {job: view.job, files: trashed, project, basedOn: view.hash});
     } else if(button.matches(".merge")){
       const plan = view.plans.find(p => p.job === button.dataset.job);
       const {job} = await postJson("/api/merge", {item: view.item, job: plan.job, copies: plan.copies,

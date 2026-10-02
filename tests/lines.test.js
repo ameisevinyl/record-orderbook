@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
 import { prepareProject } from "../src/lib/project.js";
-import { lineState, logEntry, fixerTargets } from "../src/lib/lines.js";
+import { lineState, logEntry } from "../src/lib/lines.js";
 
 function job(log = [], labels = {A: {fileName: "K_labels_A_v1.pdf"}, B: {fileName: "K_labels_B_v1.pdf"}}){
   return prepareProject({projectVersion: 1, format: "7", catalogue: "K", labels: {sides: labels},
@@ -47,17 +47,12 @@ test("accept by hand passes a failing check until the file changes; a changed fi
   assert.equal(lineState(job(sent), CONFIG, "labels", {...both(), "K_labels_B_v1.pdf": good("b9")}).step, "approve");
 });
 
-test("fixer entries never complete a step; fixerTargets skips tried sources and fixer outputs", () => {
+test("old fixer entries never complete a step", () => {
   const atColour = {"K_labels_A_v1.pdf": facts({parsed: {...facts().parsed, pageSizeMm: {w: 98, h: 98}}, pageMm: {w: 98, h: 98},
     bleed: {outerInkPct: 90, innerInkPct: 90}}), "K_labels_B_v1.pdf": good("b1")};
   assert.equal(lineState(job(), CONFIG, "labels", atColour).step, "colour");
-  assert.deepEqual(fixerTargets(job(), CONFIG, "labels", atColour), ["K_labels_A_v1.pdf"]);
   const tried = [{step: "colour", by: "fixer", at: "t", from: {"K_labels_A_v1.pdf": "a1"}, to: "K_labels_A_v2.pdf"}];
   assert.equal(lineState(job(tried), CONFIG, "labels", atColour).step, "colour");
-  assert.deepEqual(fixerTargets(job(tried), CONFIG, "labels", atColour), []);
-  const onOutput = job(tried, {A: {fileName: "K_labels_A_v2.pdf"}, B: {fileName: "K_labels_B_v1.pdf"}});
-  assert.deepEqual(fixerTargets(onOutput, CONFIG, "labels", {"K_labels_A_v2.pdf": atColour["K_labels_A_v1.pdf"], "K_labels_B_v1.pdf": good("b1")}), []);
-  assert.deepEqual(fixerTargets(job(), CONFIG, "labels", kmpn()), [], "not at colour yet");
 });
 
 test("whitelabel side left out; checking while there are no results; logEntry carries the files", () => {
@@ -74,14 +69,4 @@ test("review: an accept on a file without hash counts", () => {
   const e = logEntry(job(), CONFIG, "labels", missing, {step: "pdf", by: "staff"});
   assert.equal(e.files["K_labels_A_v1.pdf"], null);
   assert.notEqual(lineState(job([e]), CONFIG, "labels", missing).step, "pdf");
-});
-
-test("review: the fixer runs only in the configured stages, and not while a newer version waits", () => {
-  const atColour = {"K_labels_A_v1.pdf": facts({parsed: {...facts().parsed, pageSizeMm: {w: 98, h: 98}}, pageMm: {w: 98, h: 98},
-    bleed: {outerInkPct: 90, innerInkPct: 90}}), "K_labels_B_v1.pdf": good("b1")};
-  const names = ["K_labels_A_v1.pdf", "K_labels_B_v1.pdf"];
-  assert.deepEqual(fixerTargets(job(), CONFIG, "labels", atColour, "00_INBOX", names), ["K_labels_A_v1.pdf"]);
-  assert.deepEqual(fixerTargets(job(), CONFIG, "labels", atColour, "20_DONE", names), [], "a finished job is only looked at");
-  assert.deepEqual(fixerTargets(job(), CONFIG, "labels", atColour, "00_INBOX", [...names, "K_labels_A_v2.pdf"]), [],
-    "a fix already written but not used: the comparison shows it");
 });

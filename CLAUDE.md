@@ -69,7 +69,8 @@ yourself. Be short and precise.
    state lives in its `project.json` (`plant.stage`, `history`), which
    stays hand-editable. Files are never overwritten: a fix or a resent
    file becomes the next `_v<N>`, and the slot in `project.json` points
-   at the version that counts. A received zip or unpacked folder in
+   at the version that counts; versions not in use can be trashed
+   from the plant view into the job's `.trash/` (recoverable by hand). A received zip or unpacked folder in
    `00_INBOX` (copied in, synced, or loaded in the plant view) becomes a
    new job or merges into the job with its catalogue number
    (`mergeResend` in `src/lib/versions.js`; a zip with the key of an
@@ -159,10 +160,13 @@ configured on purpose — keep it that way unless asked.
   the page decides (`src/lib/versions.js`). Spec:
   `docs/superpowers/specs/2026-09-29-job-folders-design.md`.
   Each fact is shown once. Artwork previews carry their raw CMYK, shown
-  under the pointer; a warning label offers a colour fix, shown next to
-  the version in use. Production lines (`src/lib/lines.js`,
+  under the pointer. The fix flow (`src/lib/fix-flow.js`) proposes one
+  fix at a time per printed part — size → pdf → colour, the last making
+  it PDF/X-1a — accept uses it, dismiss trashes it; log `plant.fixes`.
+  Spec: `docs/superpowers/specs/2026-10-02-artwork-fix-flow-design.md`.
+  Production lines (`src/lib/lines.js`,
   `CONFIG.lines`): per product its steps — checks (live from the check
-  results; the colour fixer runs by itself), approve, send to a partner,
+  results), approve, send to a partner,
   back — where a line stands is derived on every scan; `plant.lines` in
   `project.json` keeps an append-only log whose entries count while their
   files keep their sha256. Spec:

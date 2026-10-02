@@ -19,17 +19,25 @@
   information — exports often set it to the page), preview + overlay
   PNG. Rules: `src/lib/artwork-checks.js`. Spec:
   `docs/superpowers/specs/2026-09-25-artwork-checks-design.md`.
-- `colourfix.py` — labels only (oven before pressing): the data area as
-  one CMYK image at `printCheck.fixDpi.labels`, K ≥ `black.kMinPct` → pure K,
-  ink over `inkLimitPct.labels` → C, M, Y scaled with K kept; CMYK read
-  as its own numbers, grey into K, RGB through `CONFIG.printProfiles`
-  (`icc.py` downloads them into the gitignored `plant/icc/`). Written as
-  the slot's next `_v<N>.pdf`; "use" decides. Spec:
-  `docs/superpowers/specs/2026-10-01-label-colour-fix-design.md`.
-- `geomfix.py` — size and bleed fix, all printed parts: the candidate
-  the page picked (`geometryFixes` in `src/lib/artwork-checks.js`:
-  fit, keep 1:1, rebuild bleed, zoom), the source in its own colours
-  at `fixDpi[part]` (rasters resampled with Lanczos), kept region as
-  is, the rest mirrored (`numpy.pad` symmetric; radial for labels),
-  one raster PDF; previews the same as PNG. Spec:
+- `colourfix.py` — the colour step, every printed part: the data area
+  as one CMYK image at `printCheck.fixDpi[part]`, K ≥ `black.kMinPct` →
+  pure K, neutral greys (C, M, Y within `black.neutralTolPct`) → K only
+  at the same L* through the part's profile, ink over
+  `inkLimitPct[part]` → C, M, Y scaled with K kept; CMYK read as its own
+  numbers, grey into K, RGB through `CONFIG.printProfiles[part]`
+  (`icc.py` downloads them into the gitignored `plant/icc/`). Written
+  PDF/X-1a (`artwork.pdfx`); `assign` only marks a file PDF/X-1a. Specs:
+  `docs/superpowers/specs/2026-10-01-label-colour-fix-design.md`,
+  `docs/superpowers/specs/2026-10-02-artwork-fix-flow-design.md`.
+- `geomfix.py` — the size and pdf steps: the fix the page's flow
+  (`src/lib/fix-flow.js`) hands it — scale, crop/mirror 1:1, rebuild
+  the bleed, or rasterize — the source in its own colours at
+  `fixDpi[part]` (rasters resampled with Lanczos), kept region as is,
+  the rest mirrored (`numpy.pad` symmetric; radial for labels), one
+  raster PDF 1.3. Spec:
   `docs/superpowers/specs/2026-10-01-artwork-geometry-fix-design.md`.
+- Fix flow (`src/lib/fix-flow.js`, spec
+  `docs/superpowers/specs/2026-10-02-artwork-fix-flow-design.md`): per
+  slot size → pdf → colour, one proposal per load (`/api/fix`, the
+  slot's next `_v<N>.pdf`), accept = use, dismiss = `/api/trash` into
+  the job's `.trash/`; log `plant.fixes`.

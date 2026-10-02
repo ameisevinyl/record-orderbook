@@ -1,8 +1,8 @@
-"""Plant-side size and bleed fix for printed parts: the candidate staff
-picked (geometryFixes in src/lib/artwork-checks.js) — the source scaled
-and centred on the data size, the kept region as it is, the rest mirrored
-from its edge — as one raster PDF at fixDpi in the file's own colours.
-Spec: docs/superpowers/specs/2026-10-01-artwork-geometry-fix-design.md."""
+"""Plant-side size and pdf steps of the fix flow (src/lib/fix-flow.js):
+the source scaled and centred on the data size, the kept region as it is,
+the rest mirrored from its edge — as one raster PDF 1.3 at fixDpi in the
+file's own colours. Specs: docs/superpowers/specs/2026-10-01-artwork-geometry-fix-design.md,
+docs/superpowers/specs/2026-10-02-artwork-fix-flow-design.md."""
 import numpy
 import pymupdf
 
