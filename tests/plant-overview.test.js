@@ -5,7 +5,6 @@ import { prepareProject } from "../src/lib/project.js";
 import { jobFiles } from "../src/lib/versions.js";
 import { artworkSlots } from "../src/lib/artwork-checks.js";
 import { getFormat } from "../src/lib/format-catalogue.js";
-import { CHECKLIST_ICON } from "../src/lib/print-artwork.js";
 import { escapeHtml, renderProduction, stageLabel, gapSection, renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged,
   renderHistory }
   from "../src/lib/plant-overview.js";
@@ -182,33 +181,15 @@ test("basic: reference cut and testpresses only when ordered", () => {
   assert.ok(html.includes('<tr><th scope="row">Testpresses</th><td>3</td></tr>'));
 });
 
-test("artwork: fix button on a warning label, comparison side by side, readout data", () => {
-  const params = {part: "labels", targetMm: {w: 106, h: 106}, trimMm: {w: 100, h: 100}, bleedMm: 3, round: true,
-    page: 1, inkLimitPct: 220, holeMm: 7.4, black: {kMinPct: 85, cmyMaxPct: 30}, toleranceMm: 0.5};
-  const checkable = [{title: "Label A", name: "lab_a_v1.pdf", params}];
-  const one = (ink, name) => ({kind: "pdf", parsed: {pageSizeMm: {w: 106, h: 106}, imagePx: null, declaredDpi: null,
-    colorMode: "CMYK", spotColors: [], iccProfileName: null, trimBoxMm: null, encrypted: false, hasUnembeddedFonts: false,
-    pdfVersion: "1.4", pageCount: 1, effectiveDpi: null}, pageMm: {w: 106, h: 106}, trimRectMm: {x: 3, y: 3, w: 100, h: 100},
-    ink: {maxPct: ink, overPct: ink > 220 ? 10 : 0}, black: {richPct: 0}, bleed: {outerInkPct: 90, innerInkPct: 90},
-    preview: `${name}.png`, overlay: `${name}.overlay.png`, cmyk: `${name}.cmyk`, previewPx: {w: 1600, h: 1600}});
-  const facts = {"lab_a_v1.pdf": one(330, "a1"), "lab_a_v2.pdf": one(220, "a2")};
-  const compare = [{title: "Label A — lab_a_v2.pdf", name: "lab_a_v2.pdf", params, of: "lab_a_v1.pdf"}];
-  const html = renderArtwork(files, checkable, facts, printCheck, "/jobs/j1/", [], compare);
-  assert.ok(html.includes('<button type="button" class="fix" data-slot="2">fix colours</button>'));
-  assert.ok(html.includes('<div class="compare"><div class="art-file"><h3>Label A</h3>'));
-  assert.ok(html.includes("<h3>Label A — lab_a_v2.pdf</h3>"));
-  assert.ok(html.includes('data-cmyk="/jobs/j1/a1.cmyk" data-w="1600" data-h="1600"'));
-});
-
-test("production: steps ticked, the current one with why and its action", () => {
+test("production: no step strip; at a check the why, else the current action", () => {
   const st = (step, kind, extra = {}) => ({line: "labels", steps: [{step: "size", kind: "check", state: "done"},
     {step, kind, state: "current"}], step, why: "Label A: 96 <mm>", ready: false, done: false, waiting: false, checking: false, ...extra});
   const partners = {printer: ["in-house", "Druck & Co"]};
   const check = renderProduction([st("bleed", "check")], partners);
   assert.ok(check.startsWith('<section id="production">'));
-  assert.ok(check.includes("✓ size"));
-  assert.ok(check.includes("Label A: 96 &lt;mm&gt;"));
-  assert.ok(check.includes('<button type="button" class="line-act" data-line="labels" data-step="bleed" data-by="staff">accept</button>'));
+  assert.ok(!check.includes("→") && !check.includes("✓ size"), "no step strip");
+  assert.ok(check.includes("<p>artwork: Label A: 96 &lt;mm&gt;</p>"));
+  assert.ok(!check.includes("line-act"), "check steps are the fix flow's");
   const approve = renderProduction([st("approve", "approve")], partners);
   assert.ok(approve.includes('data-step="approve" data-by="customer">approved by customer</button>'));
   assert.ok(approve.includes('data-step="approve" data-by="staff">approved by staff</button>'));
@@ -224,22 +205,37 @@ test("basic: suggests moving on when the lines are through", () => {
   assert.ok(!renderBasic(project, CONFIG, place, [], false).includes("move on?"));
 });
 
-test("artwork: size fix tiles with cut lines, detail and a use button", () => {
+test("artwork: flow per slot — proposal with its checks and accept/dismiss, manual line, trash", () => {
   const params = {part: "labels", targetMm: {w: 106, h: 106}, trimMm: {w: 100, h: 100}, bleedMm: 3, round: true,
     page: 1, inkLimitPct: 220, holeMm: 7.4, black: {kMinPct: 85, cmyMaxPct: 30}, toleranceMm: 0.5};
   const checkable = [{title: "Label A", name: "lab_a_v1.pdf", params}];
-  const facts = {"lab_a_v1.pdf": {kind: "pdf", parsed: {pageSizeMm: {w: 104, h: 104}, imagePx: null, declaredDpi: null,
+  const one = (w, name) => ({kind: "pdf", parsed: {pageSizeMm: {w, h: w}, imagePx: null, declaredDpi: null,
     colorMode: "CMYK", spotColors: [], iccProfileName: null, trimBoxMm: null, encrypted: false, hasUnembeddedFonts: false,
-    pdfVersion: "1.4", pageCount: 1, effectiveDpi: {x: 300, y: 300}}, pageMm: {w: 104, h: 104}, trimRectMm: {x: 2, y: 2, w: 100, h: 100},
-    ink: {maxPct: 200, overPct: 0}, black: {richPct: 0}, bleed: {outerInkPct: 90, innerInkPct: 90}, preview: "a.png", overlay: "a.overlay.png"}};
-  const fixes = {"lab_a_v1.pdf": [
-    {candidate: {id: "fit", title: "Scale to fit · ×1.019", scale: 1.019, keep: "file", fill: null, dpiAfter: 294}, preview: "a.fit.png"},
-    {candidate: {id: "keep", title: "Keep 1:1 · mirror 1.0 mm", scale: 1, keep: "file", fill: "mirror", dpiAfter: 300}, preview: "a.keep.png"}]};
-  const html = renderArtwork(files, checkable, facts, printCheck, "/jobs/j1/", [], [], fixes);
-  assert.ok(html.includes('<img src="/jobs/j1/a.keep.png" alt="">'));
-  assert.ok(html.includes('<circle class="trim" cx="53" cy="53" r="50"'));
-  assert.ok(html.includes(`Scale to fit · ×1.019 · ${CHECKLIST_ICON.warn} detail 294 → 1200 dpi`));
-  assert.ok(html.includes("Keep 1:1 · mirror 1.0 mm · detail 300 → 1200 dpi"));
-  assert.ok(html.includes('<button type="button" class="geo" data-slot="2" data-id="keep">use this</button>'));
-  assert.ok(!renderArtwork(files, checkable, facts, printCheck, "/jobs/j1/", []).includes('class="geo"'));
+    pdfVersion: "1.3", pageCount: 1, effectiveDpi: null}, pageMm: {w, h: w}, trimRectMm: {x: 3, y: 3, w: 100, h: 100},
+    ink: {maxPct: 200, overPct: 0}, black: {richPct: 0}, bleed: {outerInkPct: 90, innerInkPct: 90},
+    preview: `${name}.png`, overlay: `${name}.overlay.png`});
+  const facts = {"lab_a_v1.pdf": one(104, "a1"), "lab_a_v2.pdf": one(106, "a2")};
+  const proposal = {step: "size", file: "lab_a_v1.pdf", sha256: "s", to: "lab_a_v2.pdf", at: "t", result: "proposed",
+    detail: "crop/add bleed 1:1, mirror 1.0 mm"};
+  const flows = {"lab_a_v1.pdf": {current: {step: "size", fix: {kind: "geometry"}}, proposal}};
+  const html = renderArtwork(files, checkable, facts, printCheck, "/jobs/j1/", [], flows);
+  assert.ok(html.includes('<div class="proposal"><h4>size: crop/add bleed 1:1, mirror 1.0 mm — lab_a_v2.pdf</h4>'));
+  assert.ok(html.includes('src="/jobs/j1/a2.png"'));
+  assert.ok(html.includes('<button type="button" class="accept" data-slot="2">accept</button>'));
+  assert.ok(html.includes('<button type="button" class="dismiss" data-slot="2">dismiss</button>'));
+  const manual = renderArtwork(files, checkable, facts, printCheck, "/jobs/j1/", [],
+    {"lab_a_v1.pdf": {current: {step: "size", manual: "aspect <ratio>"}, proposal: null}});
+  assert.ok(manual.includes('<p class="manual">size: aspect &lt;ratio&gt; — fix the file and save it into the job folder (same name, or any name + use)</p>'));
+});
+
+test("artwork: trash per other version; trash old versions only when the flow is through", () => {
+  const checkable = artworkSlots(project, CONFIG);
+  const name = checkable[0].name;
+  const slot = files.slots.find(s => s.name === name);
+  const withOthers = {...files, slots: files.slots.map(s => s === slot ? {...s, others: [{name: "old_v0.pdf", newer: false}]} : s)};
+  const through = renderArtwork(withOthers, checkable, null, printCheck, "/jobs/j1/", [], {[name]: {current: null, proposal: null}});
+  assert.ok(through.includes(`<button type="button" class="trash" data-slot="${slot.index}" data-file="old_v0.pdf">trash</button>`));
+  assert.ok(through.includes(`<button type="button" class="trash-old" data-slot="${slot.index}">trash old versions (1)</button>`));
+  const open = renderArtwork(withOthers, checkable, null, printCheck, "/jobs/j1/", [], {[name]: {current: {step: "pdf", fix: {}}, proposal: null}});
+  assert.ok(!open.includes("trash-old"));
 });

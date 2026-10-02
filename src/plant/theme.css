@@ -90,10 +90,6 @@ button:focus-visible, select:focus-visible, a:focus-visible{
   background:var(--ink); color:var(--bg); border-color:var(--ink);
 }
 
-/* An in-use file and a newer version side by side (plant-overview.js). */
-.compare{ margin:0 0 18px; }
-
-/* Size/bleed fix candidates under a file (plant-overview.js). */
-.geometry{ margin:12px 0 0; }
-.geometry figure{ margin:0; }
-.geometry figcaption{ margin:6px 0 0; }
+/* A pending fix under its file; a step only a person can fix (plant-overview.js). */
+.proposal{ margin:12px 0 18px; padding-left:12px; border-left:3px solid var(--ink-dim); }
+.manual{ color:var(--danger); font-weight:700; }

@@ -10,7 +10,7 @@ import { colorLabel } from "./vinyl-color.js";
 import { parseQuantity } from "./shipping.js";
 import { sideTiming, ADDRESS_FIELD_LABELS } from "./completeness.js";
 import { sideAudio } from "./audio-checks.js";
-import { artworkRows, artworkVerdict, fixable } from "./artwork-checks.js";
+import { artworkRows, artworkVerdict } from "./artwork-checks.js";
 import { CHECKLIST_ICON } from "./print-artwork.js";
 
 export const SECTIONS = [["basic", "Basic"], ["production", "Production"], ["artwork", "Artwork"], ["audio", "Audio"],
@@ -66,11 +66,12 @@ function fileCell(slot){
   return escapeHtml(slot.name) + (slot.present ? ` (${when(slot.modified)})` : " — missing");
 }
 
-// A slot's other versions, each with "use" (newer ones marked).
+// A slot's other versions, each with "use" and "trash" (newer ones marked).
 function versionsCell(slot){
   if(!slot) return "";
   return slot.others.map(o => `${escapeHtml(o.name)}${o.newer ? " (newer)" : ""} `
-    + `<button type="button" class="use" data-file="${escapeHtml(o.name)}" data-slot="${slot.index}">use</button>`).join("<br>");
+    + `<button type="button" class="use" data-file="${escapeHtml(o.name)}" data-slot="${slot.index}">use</button> `
+    + `<button type="button" class="trash" data-slot="${slot.index}" data-file="${escapeHtml(o.name)}">trash</button>`).join("<br>");
 }
 
 // --- 1 Basic ---------------------------------------------------------
@@ -123,7 +124,6 @@ export function renderBasic(project, config, place, gaps, through = false){
 
 // The action a line's current step offers: [by, button text] pairs.
 const LINE_ACTIONS = {
-  check: [["staff", "accept"]],
   approve: [["customer", "approved by customer"], ["staff", "approved by staff"]],
   send: [["staff", "sent"]],
   back: [["staff", "back, fine"]]
@@ -133,11 +133,11 @@ const LINE_ACTIONS = {
 export function renderProduction(states, partners){
   return section("production", states.map(s => {
     if(s.checking) return `<h3>${escapeHtml(s.line)}</h3><p>checking…</p>`;
-    const steps = s.steps.map(x => x.state === "done" ? `✓ ${escapeHtml(x.step)}` : x.state === "current"
-      ? `<b>${escapeHtml(x.step)}</b>` : escapeHtml(x.step)).join(" → ");
-    let body = `<h3>${escapeHtml(s.line)}${s.done ? " ✓" : s.waiting ? " (waiting)" : ""}</h3><p>${steps}</p>`;
+    let body = `<h3>${escapeHtml(s.line)}${s.done ? " ✓" : s.waiting ? " (waiting)" : ""}</h3>`;
     if(s.step){
       const current = s.steps.find(x => x.step === s.step);
+      // Check steps are the artwork fix flow's: only their why here.
+      if(current.kind === "check") return body + `<p>artwork: ${escapeHtml(s.why)}</p>`;
       if(s.why) body += `<p>${escapeHtml(s.why)}</p>`;
       body += "<p>";
       if(current.kind === "send"){
@@ -173,33 +173,11 @@ function cutLinesSvg(page, trim, bleedMm, round, holeMm){
     + `</svg>`;
 }
 
-// Size/bleed fix candidates of a file in use: each preview with the cut
-// lines where they'll be, the detail it really has, a button to use it.
-function geometryTilesHtml(fixes, params, printCheck, base, slotIndex){
-  const T = params.targetMm, trim = params.trimMm;
-  const rect = {x: (T.w - trim.w) / 2, y: (T.h - trim.h) / 2, ...trim};
-  const out = printCheck.fixDpi[params.part];
-  return `<div class="geometry">` + fixes.map(({candidate: c, preview}) => {
-    const low = c.dpiAfter !== null && c.dpiAfter < printCheck.dpi.min;
-    const detail = c.dpiAfter === null ? `${out} dpi` : `detail ${c.dpiAfter} → ${out} dpi`;
-    return `<figure><div class="art" style="aspect-ratio:${T.w} / ${T.h}">`
-      + `<img src="${escapeHtml(base + encodeURIComponent(preview))}" alt="">`
-      + cutLinesSvg(T, rect, params.bleedMm, params.round, params.holeMm) + `</div>`
-      + `<figcaption>${escapeHtml(c.title)} · ${low ? CHECKLIST_ICON.warn + " " : ""}${detail} `
-      + `<button type="button" class="geo" data-slot="${slotIndex}" data-id="${escapeHtml(c.id)}">use this</button></figcaption></figure>`;
-  }).join("") + `</div>`;
-}
-
 // A checked file: preview with cut lines and switchable problem areas,
-// then the checklist.
-// slotIndex: the slot's index for an in-use file (its "fix colours"
-// button), null for a compared newer version. fixes: its size/bleed fix
-// previews.
-function artFileHtml({title, params}, facts, printCheck, base, slotIndex, fixes = []){
+// then the checklist; under it, when the flow stopped, what a person has
+// to fix. flow: the slot's slotFlow(), null for a proposal's own file.
+function artFileHtml({title, params}, facts, printCheck, base, flow = null){
   let body = `<h3>${escapeHtml(title)}</h3>`;
-  if(slotIndex !== null && fixable(facts, params, printCheck)){
-    body += `<button type="button" class="fix" data-slot="${slotIndex}">fix colours</button>`;
-  }
   if(facts.preview){
     const url = file => escapeHtml(base + encodeURIComponent(file));
     body += `<label><input type="checkbox" class="show-overlay"> problem areas</label>`
@@ -208,30 +186,46 @@ function artFileHtml({title, params}, facts, printCheck, base, slotIndex, fixes 
       + `<img src="${url(facts.preview)}" alt=""><img class="overlay" hidden src="${url(facts.overlay)}" alt="">`
       + cutLinesSvg(facts.pageMm, facts.trimRectMm, params.bleedMm, params.round, params.holeMm) + `</div>`;
   }
-  if(slotIndex !== null && fixes.length) body += geometryTilesHtml(fixes, params, printCheck, base, slotIndex);
   const rows = artworkRows(facts, params, printCheck);
-  return `<div class="art-file">${body}` + listTable(["", "Check", "Found", "Expected"], rows.map(r =>
-    [CHECKLIST_ICON[r.severity], escapeHtml(r.feature), escapeHtml(r.detected), escapeHtml(r.expected || "")])) + `</div>`;
+  body += listTable(["", "Check", "Found", "Expected"], rows.map(r =>
+    [CHECKLIST_ICON[r.severity], escapeHtml(r.feature), escapeHtml(r.detected), escapeHtml(r.expected || "")]));
+  if(flow && flow.current && flow.current.manual){
+    body += `<p class="manual">${escapeHtml(flow.current.step)}: ${escapeHtml(flow.current.manual)}`
+      + ` — fix the file and save it into the job folder (same name, or any name + use)</p>`;
+  }
+  return `<div class="art-file">${body}</div>`;
+}
+
+// A pending fix: what it did, its own preview with cut lines and all its
+// checks, accept or dismiss.
+function proposalHtml(proposal, facts, params, printCheck, base, slotIndex){
+  return `<div class="proposal"><h4>${escapeHtml(proposal.step)}: ${escapeHtml(proposal.detail)} — ${escapeHtml(proposal.to)}</h4>`
+    + artFileHtml({title: proposal.to, params: {...params, page: 1}}, facts || {error: "not checked"}, printCheck, base)
+    + `<p><button type="button" class="accept" data-slot="${slotIndex}">accept</button> `
+    + `<button type="button" class="dismiss" data-slot="${slotIndex}">dismiss</button></p></div>`;
 }
 
 // files: jobFiles(); checkable: artworkSlots() (printed parts with their
 // check params); facts: the artwork check's result, or null while it
-// runs. base: URL folder of the job's check output. fixes: {name:
-// [{candidate, preview}]} — size/bleed fix previews (geometryFixes).
-export function renderArtwork(files, checkable, facts, printCheck, base, gaps, compare = [], fixes = {}){
+// runs. base: URL folder of the job's check output. flows: {name:
+// slotFlow()} — the fix flow per slot.
+export function renderArtwork(files, checkable, facts, printCheck, base, gaps, flows = {}){
   const slots = files.slots.filter(s => s.section === "artwork");
   const params = new Map(checkable.map(c => [c.name, c.params]));
   const verdict = slot => !params.has(slot.name) ? "" : !facts ? "checking"
     : VERDICT[artworkVerdict(artworkRows(facts[slot.name] || {error: "not checked"}, params.get(slot.name), printCheck))];
+  // Through every step: the other versions can all go.
+  const through = slot => flows[slot.name] && flows[slot.name].current === null && slot.others.length
+    ? ` <button type="button" class="trash-old" data-slot="${slot.index}">trash old versions (${slot.others.length})</button>` : "";
   const page = slot => params.has(slot.name) && params.get(slot.name).page > 1 ? `, page ${params.get(slot.name).page}` : "";
   let body = gapsHtml(gaps, "artwork");
   if(slots.length) body += listTable(["Slot", "File", "Other versions", "Verdict"],
-    slots.map(s => [escapeHtml(s.title) + page(s), fileCell(s), versionsCell(s), verdict(s)]));
+    slots.map(s => [escapeHtml(s.title) + page(s), fileCell(s), versionsCell(s), verdict(s) + through(s)]));
   if(facts) body += checkable.map(c => {
     const slot = files.slots.find(s => s.name === c.name);
-    const own = artFileHtml(c, facts[c.name] || {error: "not checked"}, printCheck, base, slot ? slot.index : null, fixes[c.name] || []);
-    const newer = compare.find(v => v.of === c.name);
-    return newer ? `<div class="compare">${own}${artFileHtml(newer, facts[newer.name] || {error: "not checked"}, printCheck, base, null)}</div>` : own;
+    const flow = flows[c.name] || null;
+    const own = artFileHtml(c, facts[c.name] || {error: "not checked"}, printCheck, base, flow);
+    return own + (flow && flow.proposal && slot ? proposalHtml(flow.proposal, facts[flow.proposal.to], c.params, printCheck, base, slot.index) : "");
   }).join("");
   return section("artwork", body || "<p>No artwork.</p>");
 }
