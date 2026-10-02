@@ -59,14 +59,24 @@ export function fixStep(facts, params, printCheck, closed = []){
     : {kind: "assign", detail: `assigned ${params.profile.name}, colours unchanged`}};
 }
 
-// A slot's place in the flow from the fixes log (entries of this file
-// content only): the current step, and the pending proposal — proposed,
-// its file still there, not dismissed since. A refused fix stops the flow.
-export function slotFlow(log, facts, params, printCheck, names){
-  const mine = facts ? log.filter(e => e.sha256 === facts.sha256) : [];
-  const last = step => mine.filter(e => e.step === step).at(-1);
+// The steps staff dismissed for this file, and for every file it was
+// accepted from: an accepted fix keeps what was already said no to.
+function dismissedFor(log, name, sha){
+  const own = log.filter(e => e.file === name && e.sha256 === sha);
+  const last = step => own.filter(e => e.step === step).at(-1);
   const closed = FIX_STEPS.filter(s => (last(s) || {}).result === "dismissed");
-  const current = fixStep(facts, params, printCheck, closed);
+  const from = log.find(e => e.result === "accepted" && e.to === name);
+  return from ? [...new Set([...closed, ...dismissedFor(log, from.file, from.sha256)])] : closed;
+}
+
+// A slot's place in the flow from the fixes log (entries of this slot's
+// file and content only — two slots may hold the same file): the current
+// step, and the pending proposal — proposed, its file still there, not
+// dismissed since. A refused fix stops the flow.
+export function slotFlow(log, name, facts, params, printCheck, names){
+  const mine = facts ? log.filter(e => e.file === name && e.sha256 === facts.sha256) : [];
+  const last = step => mine.filter(e => e.step === step).at(-1);
+  const current = fixStep(facts, params, printCheck, facts ? dismissedFor(log, name, facts.sha256) : []);
   if(!current || current.manual) return {current, proposal: null};
   const entry = last(current.step);
   if(entry && entry.result === "refused") return {current: {step: current.step, manual: `fix refused — ${entry.error}`}, proposal: null};

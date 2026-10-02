@@ -52,11 +52,29 @@ test("fixStep colour: only the profile → assign; ink, black or mode → colour
 test("slotFlow: pending proposal, dismissed step skipped, refused shown as manual, other content ignored", () => {
   const kmpn = sized(96.012, 96.012);
   const proposed = {step: "size", file: "K_labels_A_v1.pdf", sha256: "s1", to: "K_labels_A_v2.pdf", at: "t", result: "proposed", detail: "x"};
-  assert.equal(slotFlow([proposed], kmpn, params, printCheck, ["K_labels_A_v2.pdf"]).proposal, proposed);
-  assert.equal(slotFlow([proposed], kmpn, params, printCheck, []).proposal, null, "proposal file trashed by hand");
+  assert.equal(slotFlow([proposed], "K_labels_A_v1.pdf", kmpn, params, printCheck, ["K_labels_A_v2.pdf"]).proposal, proposed);
+  assert.equal(slotFlow([proposed], "K_labels_A_v1.pdf", kmpn, params, printCheck, []).proposal, null, "proposal file trashed by hand");
   const dismissed = [proposed, {...proposed, result: "dismissed"}];
-  assert.equal(slotFlow(dismissed, kmpn, params, printCheck, []).current, null, "size dismissed, pdf and colour pass");
+  assert.equal(slotFlow(dismissed, "K_labels_A_v1.pdf", kmpn, params, printCheck, []).current, null, "size dismissed, pdf and colour pass");
   const refused = [{step: "size", file: "K_labels_A_v1.pdf", sha256: "s1", at: "t", result: "refused", error: "boom"}];
-  assert.deepEqual(slotFlow(refused, kmpn, params, printCheck, []).current, {step: "size", manual: "fix refused — boom"});
-  assert.equal(slotFlow([{...proposed, sha256: "other"}], kmpn, params, printCheck, ["K_labels_A_v2.pdf"]).proposal, null);
+  assert.deepEqual(slotFlow(refused, "K_labels_A_v1.pdf", kmpn, params, printCheck, []).current, {step: "size", manual: "fix refused — boom"});
+  assert.equal(slotFlow([{...proposed, sha256: "other"}], "K_labels_A_v1.pdf", kmpn, params, printCheck, ["K_labels_A_v2.pdf"]).proposal, null);
+});
+
+test("slotFlow: two slots with the same content keep their own log", () => {
+  const kmpn = f({pageMm: {w: 96.012, h: 96.012}, parsed: {pageSizeMm: {w: 96.012, h: 96.012}}});
+  const forA = {step: "size", file: "K_labels_A_v1.pdf", sha256: "s1", to: "K_labels_A_v2.pdf", at: "t", result: "proposed", detail: "x"};
+  assert.equal(slotFlow([forA], "K_labels_B_v1.pdf", kmpn, params, printCheck, ["K_labels_A_v2.pdf"]).proposal, null);
+  assert.equal(slotFlow([{...forA, result: "dismissed"}], "K_labels_B_v1.pdf", kmpn, params, printCheck, []).current.step, "size");
+});
+
+test("slotFlow: a dismissed step stays closed after a later fix was accepted", () => {
+  const trimmed = f({sha256: "s2", parsed: {outputIntent: null}, bleed: {outerInkPct: 1, innerInkPct: 90}});
+  const log = [
+    {step: "size", file: "K_labels_A_v1.pdf", sha256: "s1", to: "K_labels_A_v2.pdf", at: "t", result: "proposed", detail: "x"},
+    {step: "size", file: "K_labels_A_v1.pdf", sha256: "s1", to: "K_labels_A_v2.pdf", at: "t", result: "dismissed"},
+    {step: "colour", file: "K_labels_A_v1.pdf", sha256: "s1", to: "K_labels_A_v3.pdf", at: "t", result: "proposed", detail: "y"},
+    {step: "colour", file: "K_labels_A_v1.pdf", sha256: "s1", to: "K_labels_A_v3.pdf", at: "t", result: "accepted"}];
+  // v3 (sha s2) still has the empty bleed: size stays dismissed, colour (profile) comes next
+  assert.equal(slotFlow(log, "K_labels_A_v3.pdf", trimmed, params, printCheck, []).current.step, "colour");
 });
