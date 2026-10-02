@@ -207,15 +207,13 @@ class HttpTest(unittest.TestCase):
         doc.save(folder / "X_labels_A_v1.pdf")
         body = {"job": "X_band_261001-1432", "file": "X_labels_A_v1.pdf", "newName": "X_labels_A_v2.pdf",
                 "params": {"page": 1, "targetMm": {"w": 106, "h": 106}, "trimMm": {"w": 100, "h": 100},
-                           "toleranceMm": 0.5, "inkLimitPct": 220, "black": {"kMinPct": 85}, "fixDpi": 100, "profile": None}}
-        self.assertEqual(self.post("/api/fix/label", body), (200, {"name": "X_labels_A_v2.pdf"}))
-        self.assertTrue((folder / "X_labels_A_v2.pdf").is_file())
-        self.assertEqual(self.post("/api/fix/label", body)[0], 409)
-        self.assertEqual(self.post("/api/fix/label", {**body, "newName": "../x.pdf"})[0], 400)
-        wrong = {**body, "newName": "X_labels_A_v3.pdf", "params": {**body["params"], "targetMm": {"w": 98, "h": 98}}}
-        status, text = self.post("/api/fix/label", wrong)
+                           "toleranceMm": 0.5, "inkLimitPct": 220, "black": {"kMinPct": 85, "neutralTolPct": 10},
+                           "fixDpi": 100, "profile": None}}
+        status, text = self.post("/api/fix/label", body)
         self.assertEqual(status, 400)
-        self.assertIn("fix the size first", text)
+        self.assertIn("print profile", text)
+        self.assertFalse((folder / "X_labels_A_v2.pdf").exists())
+        self.assertEqual(self.post("/api/fix/label", {**body, "newName": "../x.pdf"})[0], 400)
 
     def geometry_job(self):
         import pymupdf

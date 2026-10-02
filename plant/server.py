@@ -385,9 +385,9 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 profile = icc.ensure(params["profile"])
             except icc.ProfileError:
-                profile = None  # only RGB needs it; colourfix says so
+                profile = None  # colourfix refuses without it
         try:
-            colourfix.fix_label(source, params, target, profile)
+            colourfix.fix(source, params, target, profile)
         except colourfix.FixError as error:
             raise JobError(str(error)) from None
         self.json({"name": r["newName"]})
