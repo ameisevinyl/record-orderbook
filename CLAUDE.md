@@ -164,6 +164,9 @@ configured on purpose — keep it that way unless asked.
   fix at a time per printed part — size → pdf → colour, the last making
   it PDF/X-1a — accept uses it, dismiss trashes it; log `plant.fixes`.
   Spec: `docs/superpowers/specs/2026-10-02-artwork-fix-flow-design.md`.
+  Through the flow, a part gets a customer proof (`plant/proof.py`):
+  the file with trim and hole drawn on, still CMYK PDF/X. Spec:
+  `docs/superpowers/specs/2026-10-02-customer-proof-design.md`.
   Production lines (`src/lib/lines.js`,
   `CONFIG.lines`): per product its steps — checks (live from the check
   results), approve, send to a partner,

@@ -215,7 +215,7 @@ async function showJob(job, section, id){
       {job, rescan: full, artwork: Object.fromEntries([...checkable.map(c => [c.name, c.params]), ...proposed])}), onStep);
     if(id !== latest) return;
     const flows = Object.fromEntries(checkable.map(c => [c.name, slotFlow(log, c.name, artworkFacts[c.name], c.params, printCheck, view.names)]));
-    replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps, flows));
+    replace("artwork", renderArtwork(files, checkable, artworkFacts, printCheck, base, gaps, flows, project.catalogue));
     const states = lines.map(n => lineState(project, CONFIG, n, artworkFacts));
     Object.assign(view, {project, artworkFacts, flows});
     replace("production", renderProduction(states, CONFIG.partners));
@@ -275,7 +275,7 @@ function jobName(project){
 // A 409 (someone changed the job meanwhile) shows its message; the next
 // reload shows their change.
 out.addEventListener("click", async e => {
-  const button = e.target.closest(".use, #move, #rescan, .merge, #accept, .accept, .dismiss, .trash, .trash-old, .line-act");
+  const button = e.target.closest(".use, #move, #rescan, .merge, #accept, .accept, .dismiss, .trash, .trash-old, .proof, .line-act");
   if(!button || !view || task) return;
   error.textContent = "";
   if(button.id === "rescan"){
@@ -342,6 +342,18 @@ out.addEventListener("click", async e => {
       const project = structuredClone(view.raw);
       project.history = [...(project.history || []), historyEntry(`${slot.title}: trashed ${trashed.join(", ")}`, new Date())];
       await postJson("/api/trash", {job: view.job, files: trashed, project, basedOn: view.hash});
+    } else if(button.matches(".proof")){
+      // The tab opens on the click: one opened after the request would be a blocked popup.
+      const slot = view.slots[Number(button.dataset.slot)];
+      const tab = window.open("", "_blank");
+      try{
+        await postJson("/api/proof", {job: view.job, file: slot.name, newName: button.dataset.file,
+          params: view.checkable.find(c => c.name === slot.name).params});
+      }catch(err){
+        tab?.close();
+        throw err;
+      }
+      if(tab) tab.location = `/jobs/${encodeURIComponent(view.job)}/files/${encodeURIComponent(button.dataset.file)}`;
     } else if(button.matches(".merge")){
       const plan = view.plans.find(p => p.job === button.dataset.job);
       const {job} = await postJson("/api/merge", {item: view.item, job: plan.job, copies: plan.copies,

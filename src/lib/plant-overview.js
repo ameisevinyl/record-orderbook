@@ -12,6 +12,7 @@ import { sideTiming, ADDRESS_FIELD_LABELS } from "./completeness.js";
 import { sideAudio } from "./audio-checks.js";
 import { artworkRows, artworkVerdict } from "./artwork-checks.js";
 import { CHECKLIST_ICON } from "./print-artwork.js";
+import { proofFileName } from "./package-naming.js";
 
 export const SECTIONS = [["basic", "Basic"], ["production", "Production"], ["artwork", "Artwork"], ["audio", "Audio"],
   ["shipping", "Shipping & billing"], ["unmanaged", "Unmanaged files"], ["history", "History"]];
@@ -210,14 +211,21 @@ function proposalHtml(proposal, facts, params, printCheck, base, slotIndex){
 // check params); facts: the artwork check's result, or null while it
 // runs. base: URL folder of the job's check output. flows: {name:
 // slotFlow()} — the fix flow per slot.
-export function renderArtwork(files, checkable, facts, printCheck, base, gaps, flows = {}){
+export function renderArtwork(files, checkable, facts, printCheck, base, gaps, flows = {}, catalogue = ""){
   const slots = files.slots.filter(s => s.section === "artwork");
   const params = new Map(checkable.map(c => [c.name, c.params]));
   const verdict = slot => !params.has(slot.name) ? "" : !facts ? "checking"
     : VERDICT[artworkVerdict(artworkRows(facts[slot.name] || {error: "not checked"}, params.get(slot.name), printCheck))];
-  // Through every step: the other versions can all go.
-  const through = slot => flows[slot.name] && flows[slot.name].current === null && slot.others.length
-    ? ` <button type="button" class="trash-old" data-slot="${slot.index}">trash old versions (${slot.others.length})</button>` : "";
+  // Through every step: the customer's proof, made or opened; the other
+  // versions can all go.
+  const proof = slot => {
+    const name = proofFileName(catalogue, slot.name);
+    return files.unmanaged.some(f => f.name === name)
+      ? ` <a href="${escapeHtml(base + "files/" + encodeURIComponent(name))}" target="_blank">proof</a>`
+      : ` <button type="button" class="proof" data-slot="${slot.index}" data-file="${escapeHtml(name)}">proof</button>`;
+  };
+  const through = slot => !flows[slot.name] || flows[slot.name].current !== null ? "" : proof(slot) + (slot.others.length
+    ? ` <button type="button" class="trash-old" data-slot="${slot.index}">trash old versions (${slot.others.length})</button>` : "");
   const page = slot => params.has(slot.name) && params.get(slot.name).page > 1 ? `, page ${params.get(slot.name).page}` : "";
   let body = gapsHtml(gaps, "artwork");
   if(slots.length) body += listTable(["Slot", "File", "Other versions", "Verdict"],

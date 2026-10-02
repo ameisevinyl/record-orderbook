@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
 import { prepareProject } from "../src/lib/project.js";
 import { jobFiles } from "../src/lib/versions.js";
+import { proofFileName } from "../src/lib/package-naming.js";
 import { artworkSlots } from "../src/lib/artwork-checks.js";
 import { getFormat } from "../src/lib/format-catalogue.js";
 import { escapeHtml, renderProduction, stageLabel, gapSection, renderBasic, renderArtwork, renderAudio, renderShipping, renderUnmanaged,
@@ -240,4 +241,21 @@ test("artwork: trash per other version; trash old versions only when the flow is
   assert.ok(through.includes(`<button type="button" class="trash-old" data-slot="${slot.index}">trash old versions (1)</button>`));
   const open = renderArtwork(withOthers, checkable, null, printCheck, "/jobs/j1/", [], {[name]: {current: {step: "pdf", fix: {}}, proposal: null}});
   assert.ok(!open.includes("trash-old"));
+});
+
+test("artwork: a proof of the file in use only when the flow is through; an existing one opens", () => {
+  const checkable = artworkSlots(project, CONFIG);
+  const name = checkable[0].name;
+  const slot = files.slots.find(s => s.name === name);
+  const proof = proofFileName(project.catalogue, name);
+  const through = {[name]: {current: null, proposal: null}};
+  const make = renderArtwork(files, checkable, null, printCheck, "/jobs/j1/", [], through, project.catalogue);
+  assert.ok(make.includes(`<button type="button" class="proof" data-slot="${slot.index}" data-file="${proof}">proof</button>`));
+  const made = renderArtwork({...files, unmanaged: [{name: proof}]}, checkable, null, printCheck, "/jobs/j1/", [], through,
+    project.catalogue);
+  assert.ok(made.includes(`<a href="/jobs/j1/files/${encodeURIComponent(proof)}" target="_blank">proof</a>`));
+  assert.ok(!made.includes('class="proof"'));
+  const open = renderArtwork(files, checkable, null, printCheck, "/jobs/j1/", [], {[name]: {current: {step: "colour", fix: {}}, proposal: null}},
+    project.catalogue);
+  assert.ok(!open.includes("proof"));
 });

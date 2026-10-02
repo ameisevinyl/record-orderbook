@@ -41,3 +41,8 @@
   slot size → pdf → colour, one proposal per load (`/api/fix`, the
   slot's next `_v<N>.pdf`), accept = use, dismiss = `/api/trash` into
   the job's `.trash/`; log `plant.fixes`.
+- `proof.py` — the customer proof, once a slot's flow is through: the
+  finished file (CMYK PDF/X, OutputIntent kept) with trim and centre
+  hole drawn on in CMYK, as `<cat>_proof_…` (`proofFileName`) in the
+  job folder via `/api/proof`; the customer's viewer converts for the
+  screen. Spec: `docs/superpowers/specs/2026-10-02-customer-proof-design.md`.
