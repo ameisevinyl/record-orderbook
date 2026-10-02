@@ -382,3 +382,17 @@ class StampTest(Tree):
             self.job("20_DONE", name)
         self.assertEqual(jobs.jobs_in(self.root, "20_DONE"),
                          ["PNKRCK7_a_261001-1432", "PNKRCK007_b_261001-1432", "PNKRCK10_a_261001-1432"])
+
+
+class TrashTest(unittest.TestCase):
+    def test_moves_into_the_job_trash_and_never_overwrites(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / "X_labels_A_v2.pdf").write_bytes(b"one")
+            self.assertEqual(jobs.trash(folder, "X_labels_A_v2.pdf"), "X_labels_A_v2.pdf")
+            (folder / "X_labels_A_v2.pdf").write_bytes(b"two")
+            self.assertEqual(jobs.trash(folder, "X_labels_A_v2.pdf"), "X_labels_A_v2_1.pdf")
+            self.assertEqual((folder / ".trash" / "X_labels_A_v2.pdf").read_bytes(), b"one")
+            for bad in ("project.json", ".checks", "../x", "missing.pdf"):
+                with self.assertRaises(jobs.JobError):
+                    jobs.trash(folder, bad)

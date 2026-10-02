@@ -161,6 +161,24 @@ def write_project(folder, project, based_on):
     return read_project(folder)[1]
 
 
+def trash(folder, name):
+    """Moves a job file into <job>/.trash/: out of listings, checks and
+    zips, recoverable by hand on any filesystem. A name already there
+    gets _<n> — nothing is overwritten."""
+    if plain(name) == "project.json":
+        raise JobError("project.json can't be trashed")
+    source = folder / name
+    if not source.is_file():
+        raise JobError(f"no file {name}")
+    bin_ = folder / ".trash"
+    bin_.mkdir(exist_ok=True)
+    target, n = bin_ / name, 1
+    while target.exists():
+        target, n = bin_ / f"{source.stem}_{n}{source.suffix}", n + 1
+    source.rename(target)
+    return target.name
+
+
 def history_entry(note, by):
     """Same shape as historyEntry() in src/lib/project.js."""
     now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")

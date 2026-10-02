@@ -196,26 +196,7 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(self.post("/api/profiles", {"profiles": {}}), (200, {}))
         self.assertEqual(self.post("/api/profiles", {"profiles": []})[0], 400)
 
-    def test_fix_label_writes_the_next_version_once(self):
-        import pymupdf
-        folder = self.root / "20_DONE" / "X_band_261001-1432"
-        folder.mkdir()
-        (folder / "project.json").write_text('{"catalogue": "X"}')
-        doc = pymupdf.open()
-        page = doc.new_page(width=106 * 72 / 25.4, height=106 * 72 / 25.4)
-        page.draw_rect(page.rect, color=None, fill=(0.6, 0.4, 0.4, 1))
-        doc.save(folder / "X_labels_A_v1.pdf")
-        body = {"job": "X_band_261001-1432", "file": "X_labels_A_v1.pdf", "newName": "X_labels_A_v2.pdf",
-                "params": {"page": 1, "targetMm": {"w": 106, "h": 106}, "trimMm": {"w": 100, "h": 100},
-                           "toleranceMm": 0.5, "inkLimitPct": 220, "black": {"kMinPct": 85, "neutralTolPct": 10},
-                           "fixDpi": 100, "profile": None}}
-        status, text = self.post("/api/fix/label", body)
-        self.assertEqual(status, 400)
-        self.assertIn("print profile", text)
-        self.assertFalse((folder / "X_labels_A_v2.pdf").exists())
-        self.assertEqual(self.post("/api/fix/label", {**body, "newName": "../x.pdf"})[0], 400)
-
-    def geometry_job(self):
+    def fix_job(self):
         import pymupdf
         folder = self.root / "20_DONE" / "X_band_261001-1432"
         folder.mkdir()
@@ -224,37 +205,43 @@ class HttpTest(unittest.TestCase):
         page = doc.new_page(width=96 * 72 / 25.4, height=96 * 72 / 25.4)
         page.draw_rect(page.rect, color=None, fill=(0.6, 0.4, 0.4, 0))
         doc.save(folder / "X_labels_A_v1.pdf")
-        params = {"page": 1, "targetMm": {"w": 98, "h": 98}, "trimMm": {"w": 92, "h": 92}, "round": True}
-        return folder, params, {"id": "keep", "scale": 1, "keep": "file", "fill": "mirror"}
+        params = {"page": 1, "targetMm": {"w": 98, "h": 98}, "trimMm": {"w": 92, "h": 92}, "round": True, "fixDpi": 100,
+                  "toleranceMm": 0.5, "inkLimitPct": 220, "black": {"kMinPct": 85, "neutralTolPct": 10},
+                  "profile": {"name": "ISO", "conditionId": "FOGRA39", "url": "https://127.0.0.1:9/x.icc", "file": "nope_test.icc"}}
+        return folder, {"job": "X_band_261001-1432", "file": "X_labels_A_v1.pdf", "newName": "X_labels_A_v2.pdf",
+                        "step": "size", "params": params}
 
-    def test_geometry_previews_are_made_once(self):
-        folder, params, keep = self.geometry_job()
-        body = {"job": "X_band_261001-1432", "file": "X_labels_A_v1.pdf", "params": params, "candidates": [keep]}
-        status, reply = self.post("/api/fix/geometry/preview", body)
+    def test_fix_writes_the_next_version_once(self):
+        folder, body = self.fix_job()
+        body["fix"] = {"kind": "geometry", "candidate": {"scale": 1, "keep": "file", "fill": "mirror"}, "detail": "1:1"}
+        self.assertEqual(self.post("/api/fix", body), (200, {"name": "X_labels_A_v2.pdf", "detail": "1:1"}))
+        self.assertEqual((folder / "X_labels_A_v2.pdf").read_bytes()[:8], b"%PDF-1.3")
+        self.assertEqual(self.post("/api/fix", body)[0], 409)
+        self.assertEqual(self.post("/api/fix", {**body, "newName": "../x.pdf"})[0], 400)
+        self.assertEqual(self.post("/api/fix", {**body, "newName": "X_labels_A_v3.pdf", "fix": {"kind": "magic"}})[0], 400)
+
+    def test_fix_without_its_profile_is_refused(self):
+        folder, body = self.fix_job()
+        status, text = self.post("/api/fix", {**body, "step": "colour", "fix": {"kind": "assign", "detail": "x"}})
+        self.assertEqual(status, 400)
+        self.assertIn("print profile", text)
+        self.assertFalse((folder / "X_labels_A_v2.pdf").exists())
+
+    def test_trash_saves_the_log_then_moves(self):
+        folder, body = self.fix_job()
+        (folder / "X_labels_A_v2.pdf").write_bytes(b"x")
+        digest = self.get("/api/job?job=X_band_261001-1432")[1]["projectHash"]
+        req = {"job": body["job"], "files": ["X_labels_A_v2.pdf"], "project": {"catalogue": "X", "plant": {"fixes": []}}, "basedOn": digest}
+        status, reply = self.post("/api/trash", req)
         self.assertEqual(status, 200)
-        name = reply["previews"]["keep"]
-        self.assertRegex(name, r"^X_labels_A_v1\.pdf\.[0-9a-f]{12}\.keep\.[0-9a-f]{8}\.png$")
-        made = (folder / ".checks" / name).stat().st_mtime_ns
-        self.assertEqual(self.post("/api/fix/geometry/preview", body), (200, reply))
-        self.assertEqual((folder / ".checks" / name).stat().st_mtime_ns, made)
-        other = {**body, "params": {**params, "targetMm": {"w": 99, "h": 99}}}
-        self.assertNotEqual(self.post("/api/fix/geometry/preview", other)[1]["previews"]["keep"], name)
-        self.assertEqual(self.post("/api/fix/geometry/preview", {**body, "candidates": [{**keep, "id": "../x"}]})[0], 400)
-
-    def test_geometry_fix_writes_the_next_version_once(self):
-        folder, params, keep = self.geometry_job()
-        body = {"job": "X_band_261001-1432", "file": "X_labels_A_v1.pdf", "newName": "X_labels_A_v2.pdf",
-                "params": {**params, "fixDpi": 100}, "candidate": keep}
-        self.assertEqual(self.post("/api/fix/geometry", body), (200, {"name": "X_labels_A_v2.pdf"}))
-        self.assertTrue((folder / "X_labels_A_v2.pdf").is_file())
-        self.assertEqual(self.post("/api/fix/geometry", body)[0], 409)
-        self.assertEqual(self.post("/api/fix/geometry", {**body, "newName": "../x.pdf"})[0], 400)
-
-    def test_geometry_refuses_an_unreadable_file(self):
-        folder, params, keep = self.geometry_job()
-        (folder / "X_labels_B_v1.pdf").write_bytes(b"nope")
-        body = {"job": "X_band_261001-1432", "file": "X_labels_B_v1.pdf", "params": params, "candidates": [keep]}
-        self.assertEqual(self.post("/api/fix/geometry/preview", body)[0], 400)
+        self.assertTrue((folder / ".trash" / "X_labels_A_v2.pdf").is_file())
+        self.assertEqual(self.post("/api/trash", req)[0], 400, "file already gone: refused before the save")
+        (folder / "X_labels_A_v2.pdf").write_bytes(b"y")
+        self.assertEqual(self.post("/api/trash", req)[0], 409, "project.json changed meanwhile")
+        self.assertTrue((folder / "X_labels_A_v2.pdf").is_file(), "a refusal moves nothing")
+        self.assertEqual(self.post("/api/trash", {**req, "basedOn": reply["projectHash"]})[0], 200)
+        self.assertTrue((folder / ".trash" / "X_labels_A_v2_1.pdf").is_file())
+        self.assertEqual(json.loads((folder / "project.json").read_text())["plant"], {"fixes": []})
 
     def test_project_save_is_safe(self):
         folder = self.root / "20_DONE" / "X_a_261001-1432"

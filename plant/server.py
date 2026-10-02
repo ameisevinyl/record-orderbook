@@ -10,7 +10,6 @@ Run: uv run --project plant plant/server.py [--jobs <folder>]
 """
 import argparse
 import errno
-import hashlib
 import importlib.metadata
 import json
 import re
@@ -168,8 +167,7 @@ class Handler(BaseHTTPRequestHandler):
                "/api/move": self.move, "/api/assign": self.assign,
                "/api/check/audio": self.check_audio, "/api/check/artwork": self.check_artwork,
                "/api/spectrum": self.spectrum, "/api/profiles": self.profiles,
-               "/api/fix/label": self.fix_label, "/api/fix/geometry": self.fix_geometry,
-               "/api/fix/geometry/preview": self.fix_geometry_preview, "/api/project": self.save_project}.get(self.path)
+               "/api/fix": self.fix, "/api/trash": self.trash, "/api/project": self.save_project}.get(self.path)
         if api is None:
             return self.reply(404, "not found")
         # A JSON content type makes browsers ask first (CORS preflight,
@@ -373,65 +371,46 @@ class Handler(BaseHTTPRequestHandler):
             raise Conflict(f"{r['newName']} exists already")
         return source, target
 
-    def fix_label(self):
-        """A label's colour fix as the slot's next version (the page names
-        it); the in-use file is never touched (colourfix.py)."""
+    def fix(self):
+        """One step's fix as the slot's next version (the page names it and
+        says which): geometry (size, pdf), assign or colour. The file in use
+        is never touched; a refusal goes to the page as 400."""
         import colourfix
+        import geomfix
         import icc
         r = self.body()
         source, target = self.fix_paths(r)
-        params, profile = r["params"], None
-        if params.get("profile"):
-            try:
-                profile = icc.ensure(params["profile"])
-            except icc.ProfileError:
-                profile = None  # colourfix refuses without it
+        params, fix = r["params"], r["fix"]
         try:
-            colourfix.fix(source, params, target, profile)
-        except colourfix.FixError as error:
+            if fix["kind"] == "geometry":
+                geomfix.render(source, params, fix["candidate"], target, params["fixDpi"])
+                detail = fix["detail"]
+            else:
+                run = {"assign": colourfix.assign, "colour": colourfix.fix}[fix["kind"]]
+                try:
+                    profile = icc.ensure(params["profile"])
+                except icc.ProfileError as error:
+                    raise JobError(f"print profile: {error}") from None
+                detail = run(source, params, target, profile)
+        except (geomfix.FixError, colourfix.FixError) as error:
             raise JobError(str(error)) from None
-        self.json({"name": r["newName"]})
+        self.json({"name": r["newName"], "detail": detail})
 
-    def fix_geometry(self):
-        """A size/bleed fix as the slot's next version (the page names it
-        and picks the candidate); the in-use file is never touched (geomfix.py)."""
-        import geomfix
-        r = self.body()
-        source, target = self.fix_paths(r)
-        try:
-            geomfix.render(source, r["params"], r["candidate"], target, r["params"]["fixDpi"])
-        except geomfix.FixError as error:
-            raise JobError(str(error)) from None
-        self.json({"name": r["newName"]})
-
-    def fix_geometry_preview(self):
-        """Previews of the size/bleed fixes the page computed, in .checks/
-        named by the file's content and the fix — made once."""
-        import checks
-        import geomfix
+    def trash(self):
+        """Saves project.json (the page's log of it, 409 when it changed),
+        then moves the files into the job's .trash/. Every file must exist
+        first, so a refusal changes nothing."""
         r = self.body()
         folder = jobs.find(JOBS, r["job"])[1]
-        source = folder / jobs.plain(r["file"])
-        if not source.is_file():
-            raise JobError(f"no file {r['file']}")
-        out = folder / ".checks"
-        out.mkdir(exist_ok=True)
-        base = checks.preview_base(r["file"], jobs.sha256(source))
-        params, previews = r["params"], {}
-        for candidate in r["candidates"]:
-            # The geometry is in the name too: another product or format
-            # for the same file must not reuse a stale preview.
-            what = json.dumps([params["page"], params["targetMm"], params["trimMm"], params["round"],
-                               candidate["scale"], candidate["keep"], candidate["fill"]], sort_keys=True)
-            key = hashlib.sha256(what.encode()).hexdigest()[:8]
-            name = jobs.plain(f"{base}.{jobs.plain(candidate['id'])}.{key}.png")
-            if not (out / name).exists():
-                try:
-                    geomfix.render(source, params, candidate, out / name, geomfix.preview_dpi(params["targetMm"]))
-                except geomfix.FixError as error:
-                    raise JobError(str(error)) from None
-            previews[candidate["id"]] = name
-        self.json({"previews": previews})
+        if not isinstance(r.get("project"), dict):
+            raise JobError("project must be an object")
+        for name in r["files"]:
+            if not (folder / jobs.plain(name)).is_file():
+                raise JobError(f"no file {name}")
+        digest = jobs.write_project(folder, r["project"], r["basedOn"])
+        for name in r["files"]:
+            jobs.trash(folder, name)
+        self.json({"projectHash": digest})
 
     def check_artwork(self):
         """Streams {"file", "index", "count", "step"} as each file starts,
