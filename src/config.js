@@ -22,6 +22,10 @@
 // CONFIG.plant below.
 import { PLANT_CONFIG } from "./plant.config.local.example.js";
 
+// Offset print condition of every printed part to start with (FOGRA39).
+const ISO_COATED_V2 = { name: "ISO Coated v2 (ECI)", conditionId: "FOGRA39",
+  url: "https://eci.org/lib/exe/eci_offset_2009.zip", file: "ISOcoated_v2_eci.icc" };
+
 export const CONFIG = {
   // Plant identity (imprint + transfer) — the sample comes from
   // plant.config.local.example.js; build/build.js swaps in
@@ -106,7 +110,7 @@ export const CONFIG = {
         inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
         // Black should be 100 % K: a black-looking pixel (K ≥ kMinPct)
         // with more than cmyMaxPct C+M+Y counts as rich black.
-        black: { kMinPct: 85, cmyMaxPct: 30 },
+        black: { kMinPct: 85, cmyMaxPct: 30, neutralTolPct: 10 },
         checks: {
           size:         { severity: "warn" },
           resolution:   { severity: "warn" },
@@ -229,7 +233,7 @@ export const CONFIG = {
         // Resolution of a plant-side fix per part (colour fix: labels; size/bleed fix: all).
         fixDpi: { labels: 1200, innerSleeve: 400, outerCover: 400, inlay: 400 },
         inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
-        black: { kMinPct: 85, cmyMaxPct: 30 },
+        black: { kMinPct: 85, cmyMaxPct: 30, neutralTolPct: 10 },
         checks: {
           size:         { severity: "warn" },
           resolution:   { severity: "warn" },
@@ -312,7 +316,7 @@ export const CONFIG = {
         // Resolution of a plant-side fix per part (colour fix: labels; size/bleed fix: all).
         fixDpi: { labels: 1200, innerSleeve: 400, outerCover: 400, inlay: 400 },
         inkLimitPct: { labels: 220, innerSleeve: 300, outerCover: 300, inlay: 300 },
-        black: { kMinPct: 85, cmyMaxPct: 30 },
+        black: { kMinPct: 85, cmyMaxPct: 30, neutralTolPct: 10 },
         checks: {
           size:         { severity: "warn" },
           resolution:   { severity: "warn" },
@@ -437,11 +441,11 @@ export const CONFIG = {
     testpressRecommendedFromQty: 1000
   },
 
-  // Output profile per printed part, for turning RGB artwork into CMYK
-  // in a plant-side fix. The plant server downloads it into plant/icc/
+  // Output profile per printed part: the colour step assigns it as the
+  // PDF/X OutputIntent and converts RGB with it. The plant server downloads it into plant/icc/
   // when missing (a .zip: the member with this file name); never committed.
   printProfiles: {
-    labels: { name: "ISO Coated v2 (ECI)", url: "https://eci.org/lib/exe/eci_offset_2009.zip", file: "ISOcoated_v2_eci.icc" }
+    labels: ISO_COATED_V2, innerSleeve: ISO_COATED_V2, outerCover: ISO_COATED_V2, inlay: ISO_COATED_V2
   },
 
   // Production lines (src/lib/lines.js): per product, its steps in order.

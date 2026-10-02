@@ -77,6 +77,7 @@ function validatePrintCheck(value, path){
   const black = object(printCheck.black, `${path}.black`);
   number(black.kMinPct, `${path}.black.kMinPct`);
   number(black.cmyMaxPct, `${path}.black.cmyMaxPct`);
+  number(black.neutralTolPct, `${path}.black.neutralTolPct`);
 }
 
 function validateTimeLimits(value, path){
@@ -156,10 +157,11 @@ function validateProofs(value){
 
 function validatePrintProfiles(value){
   const profiles = object(value, "CONFIG.printProfiles");
-  for(const [part, entry] of Object.entries(profiles)){
+  for(const part of CHECKED_PARTS){
     const path = `CONFIG.printProfiles.${part}`;
-    object(entry, path);
+    const entry = object(profiles[part], path);
     string(entry.name, `${path}.name`);
+    string(entry.conditionId, `${path}.conditionId`);
     if(typeof entry.url !== "string" || !entry.url.startsWith("https://")) fail(`${path}.url`, "must start with https://");
     if(typeof entry.file !== "string" || !/^[^/\\]+\.icc$/i.test(entry.file) || entry.file.startsWith(".")) fail(`${path}.file`, "must be a plain .icc file name");
   }

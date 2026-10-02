@@ -240,3 +240,15 @@ test("validates production lines and partners", () => {
 
   assert.deepEqual(CONFIG.lines.labels.steps.at(-1), "back:printed");
 });
+
+test("print profiles per printed part with a condition id; neutral tolerance", () => {
+  const missing = copy();
+  delete missing.printProfiles.inlay;
+  assert.throws(() => validateConfig(missing), /CONFIG\.printProfiles\.inlay must be an object/);
+  const noId = copy();
+  noId.printProfiles.labels = {...noId.printProfiles.labels, conditionId: ""};
+  assert.throws(() => validateConfig(noId), /CONFIG\.printProfiles\.labels\.conditionId must be a non-empty string/);
+  const tol = copy();
+  delete tol.formats[0].printCheck.black.neutralTolPct;
+  assert.throws(() => validateConfig(tol), /CONFIG\.formats\[0\]\.printCheck\.black\.neutralTolPct must be a positive number/);
+});
