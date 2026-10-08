@@ -110,21 +110,39 @@ no god mode yet, and it writes nothing.
 
 ## 4 Quote and PRICING
 
-- `price_quote.json`: `{created, validUntil, currency, vat, items, order,
-  result}`. `items` is a frozen copy of the pricelist, `order` the input given
-  to `quote()` (`src/lib/quote.js`), `result` its `{lines, net, missing}`.
-  Attachable to any job with enough info. A PDF is made from it later.
-- **No discounts** in the format (the pricelist spec lists them as "Not yet");
-  both sides are the plant's own code, so a field costs nothing to add later.
-- **Writer:** a button in the staff order view; the page runs `quote()` and
-  PUTs the file with the same 409 rule as `project.json`. The job zip carries
-  the file along (it holds every top-level file).
-- Customer page: if the zip holds the file, a PRICING panel appears: net total,
-  valid until, VAT note, no per-product prices. The quote is one-directional:
-  the customer's own re-save (`saveProject` builds the zip from scratch) drops
-  `price_quote.json`; that is intended.
-- Staff: the same panel plus a breakdown panel (lines, `missing`).
-- VAT is stored, not applied (unchanged).
+- **The file** `price_quote.json` in the job folder: `{version, created,
+  validUntil (the pricelist's), currency, order (the input given to
+  `quote()`), lines (the priced lines: the prices used), net, copies, perCopy,
+  vat: {case, rate, amount, gross, note, vatId: {id, status, name, checked}}}`.
+  No frozen copy of the whole pricelist, no discounts. Its presence moves the
+  card from INBOX to QUOTES; the customer's acceptance stays the Move to
+  PREPRESS. A re-quote overwrites (409 on change).
+- **Who writes it:** the Quote panel of the staff order view. The page prices
+  the order (`src/lib/price-quote.js`: `orderFromProject`, `buildPriceQuote`)
+  from the live pricelist (`/api/staff-file?name=pricelist`) and saves it
+  with `POST /api/quote` (`{job, quote, basedOn}`); `/api/job` returns
+  `quote` and `quoteHash`. Nothing is saved while prices are missing or the
+  quantity is empty. Plating is `quote()`'s default (1-step): the plant
+  decides it, the order doesn't carry it.
+- **What the customer sees:** a Pricing panel (`src/modules/pricing.js`) when
+  the project zip the plant sent back holds `price_quote.json`: the net price,
+  the net price per copy, the VAT line (with amount and total where VAT is
+  charged), valid until — never a product line. A customer's own re-save
+  drops the file. Staff see every line in the Quote panel.
+- **VAT** (`src/lib/vat-case.js`, plant in the EU; by the billing address,
+  staff can override the proposal): same country = plus VAT (domestic); another
+  EU country with a VAT ID that VIES found valid, from a member state other
+  than the plant's = reverse charge; another EU country otherwise (private, ID
+  missing, invalid or not checked) = plus VAT at the plant's rate (no OSS
+  destination rates); outside the EU = no VAT (export). A plant outside the EU
+  or without a country = net only, "VAT not applied". Reverse charge is never
+  proposed on an unchecked number. The rate is the pricelist's `vat.rate`.
+- **VAT ID check:** `plant/vies.py` asks the EU's VIES service from the plant
+  server when staff press "check on VIES" (`POST /api/vat-check`); the answer
+  and its date are saved in the quote. A service that doesn't answer is
+  "unchecked", never "invalid". The service's address and reply shape are in
+  one place (`URL`, `parse`) and must be confirmed against the live service.
+- Not built: a PDF quote, quote history, VAT splits per shipment.
 
 ## Testing
 

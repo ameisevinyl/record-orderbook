@@ -192,7 +192,11 @@ configured on purpose — keep it that way unless asked.
   A card opens the order view: the customer page at `/order/<job>`
   (`src/staff.js`, `staff.css`, served by `plant/server.py`), filled by
   `applyProject`, locked, with the plant's artwork and audio checks in place
-  of the browser's and the plant's status list; it shows and changes nothing.
+  of the browser's and the plant's status list; its Quote panel prices the
+  order from the pricelist (`src/lib/price-quote.js`), proposes the VAT case
+  (`src/lib/vat-case.js`, the VAT ID checked on VIES by `plant/vies.py`) and
+  saves `price_quote.json` into the job (`/api/quote`); the customer page
+  shows its totals in a Pricing panel when the zip holds one.
   Spec: `docs/superpowers/specs/2026-10-02-production-lines-design.md`.
   Grouping stages (10_ORDERS) hold no jobs. `project.json` is the reference and
   the naming convention strict: a slot's file and its `_v<N>` versions
