@@ -62,9 +62,12 @@ order page.
   - v2: audio (master, reference cut, plating) once its step semantics are
     defined; then `board()` also reads the audio cache and `lines.js` gets
     audio step kinds.
-- **Role presets** (mastering, pressing, printed) are a menu on the dashboard
-  choosing which line columns show. One renderer, no extra routes. Per-role
-  pages with their own content can follow when they have content of their own.
+- **Role presets** are `CONFIG.dashboardViews` (printed, pressing; mastering
+  joins with the audio lines), a link row on the dashboard (`#/view/<preset>`)
+  choosing which line columns show. One renderer. Per-role pages with their
+  own content can follow when they have content of their own.
+- The archive stage holds zips, not jobs: `#/archive` lists them from
+  `/api/board` (`archive`).
 
 ## 3 Staff order view
 

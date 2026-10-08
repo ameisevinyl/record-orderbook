@@ -176,7 +176,14 @@ configured on purpose — keep it that way unless asked.
   results), approve, send to a partner,
   back — where a line stands is derived on every scan; `plant.lines` in
   `project.json` keeps an append-only log whose entries count while their
-  files keep their sha256. Spec:
+  files keep their sha256. Lines run per printed product (labels,
+  innerSleeve, outerCover, inlay) and press, pack, ship (hand-confirmed
+  steps only); a line the order has no printed part for is not on the order
+  (`needed: false`) and counts as done, so it never holds up the lines after
+  it. The dashboard (`src/lib/dashboard.js`, the plant view's home) shows a
+  row per order and a column per line; `CONFIG.dashboardViews` are the
+  column presets (`#/view/<preset>`); `#/archive` lists the zips
+  `plant/archive.py` wrote. Spec:
   `docs/superpowers/specs/2026-10-02-production-lines-design.md`.
   Grouping stages (10_ORDERS) hold no jobs. `project.json` is the reference and
   the naming convention strict: a slot's file and its `_v<N>` versions
