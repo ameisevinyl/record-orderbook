@@ -18,9 +18,12 @@ export function openItems({gaps, findings, artwork}){
 }
 
 // In the markup of the customer page's checklist (.checklist li.ok / li.bad).
-export function renderStaffStatus(items){
-  if(!items.length) return `<li class="ok"><span class="mark">✓</span>nothing open</li>`;
-  return items.map(text => `<li class="bad"><span class="mark">!</span>${escapeHtml(text)}</li>`).join("");
+// checked false: the plant's checks are still out or failed — never the all-clear.
+export function renderStaffStatus(items, checked = true){
+  const list = items.map(text => `<li class="bad"><span class="mark">!</span>${escapeHtml(text)}</li>`);
+  if(!checked) list.push(`<li class="pending"><span class="mark">…</span>plant checks not done</li>`);
+  else if(!items.length) list.push(`<li class="ok"><span class="mark">✓</span>nothing open</li>`);
+  return list.join("");
 }
 
 // The order's production lines, read-only (states: lineState results).

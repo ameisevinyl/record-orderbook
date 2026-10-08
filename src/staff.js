@@ -70,21 +70,29 @@ async function start(){
   const printCheck = getFormat(CONFIG, project.format).printCheck;
   const checkable = artworkSlots(project, CONFIG);
   const audioNames = ["A", "B"].flatMap(side => sideAudio(project.sides[side], side).map(f => f.name));
-  const draw = (artworkFacts, findings, artwork) => {
+  // checked: both checks came in; until then the list never says "nothing open".
+  const draw = (artworkFacts, findings, artwork, checked) => {
     const states = Object.keys(CONFIG.lines).map(name => lineState(project, CONFIG, name, artworkFacts));
     document.getElementById("staffPanel").innerHTML = renderLineStatus(states) + renderHistory(project) + renderUnmanaged(files);
-    document.getElementById("staffChecklist").innerHTML = renderStaffStatus(openItems({gaps, findings, artwork}));
+    document.getElementById("staffChecklist").innerHTML = renderStaffStatus(openItems({gaps, findings, artwork}), checked);
   };
-  draw(null, [], []);
+  draw(null, [], [], false);
 
+  // The two checks are tried one after the other and independently: a failed
+  // audio check doesn't keep the artwork from being checked.
+  const step = what => msg => task(`checking ${what}  ${msg.file || ""} ${msg.index || ""}/${msg.count || ""}`);
+  let problem = "", findings = [], audioOk = false;
   try{
-    const step = what => msg => task(`checking ${what}  ${msg.file || ""} ${msg.index || ""}/${msg.count || ""}`);
     task("checking audio");
     const audio = await readStream(await post("/api/check/audio", {job, rescan: false, files: audioNames}), step("audio"));
     showAudioChecks(audio);
-    const findings = audioFindings(project, audio, CONFIG);
-    draw(null, findings, []);
-
+    findings = audioFindings(project, audio, CONFIG);
+    audioOk = true;
+    draw(null, findings, [], false);
+  }catch(error){
+    problem = `couldn't check audio: ${error.message}`;
+  }
+  try{
     task("checking artwork");
     const facts = await readStream(await post("/api/check/artwork",
       {job, rescan: false, artwork: Object.fromEntries(checkable.map(c => [c.name, c.params]))}), step("artwork"));
@@ -98,17 +106,18 @@ async function start(){
     }
     showLabelChecks(hits);
     showPartChecks(hits);
-    draw(facts, findings, artwork);
-    task("");
+    draw(facts, findings, artwork, audioOk);
   }catch(error){
-    task(`couldn't check: ${error.message}`, true);
+    problem += (problem ? "; " : "") + `couldn't check artwork: ${error.message}`;
   }
+  task(problem, !!problem);
 }
 
 const esc = text => String(text).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 
 // The customer page's own init runs first (its listener is registered first).
-document.addEventListener("DOMContentLoaded", () => {
+// Only on an /order/<job> address; anywhere else this script has no job to show.
+if(job) document.addEventListener("DOMContentLoaded", () => {
   start().catch(error => {
     document.querySelector(".sheet").insertAdjacentHTML("afterbegin",
       `<nav class="staffbar"><a href="/">← orderbook</a> · <span class="err">${esc(job)} can't be shown: ${esc(error.message)}</span></nav>`);

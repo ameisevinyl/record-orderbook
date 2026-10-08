@@ -36,3 +36,10 @@ test("line status: only the lines of the order, what each stands at", () => {
   assert.ok(html.includes("<td>press</td><td>waiting</td>") && html.includes("<td>mastering</td><td>✓</td>"));
   assert.ok(html.includes("<td>pack</td><td>not checked</td>"));
 });
+
+test("status list: while the checks are out or failed there is never an all-clear", () => {
+  const pending = '<li class="pending"><span class="mark">…</span>plant checks not done</li>';
+  assert.equal(renderStaffStatus([], false), pending);
+  assert.equal(renderStaffStatus(["x"], false), '<li class="bad"><span class="mark">!</span>x</li>' + pending);
+  assert.equal(renderStaffStatus([], true), '<li class="ok"><span class="mark">✓</span>nothing open</li>');
+});
