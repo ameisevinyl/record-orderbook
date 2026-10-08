@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
 import { prepareProject } from "../src/lib/project.js";
-import { lineState, logEntry } from "../src/lib/lines.js";
+import { lineState, logEntry, lineNeeded, linesOfStage, stageReady } from "../src/lib/lines.js";
 
 function job(log = [], labels = {A: {fileName: "K_labels_A_v1.pdf"}, B: {fileName: "K_labels_B_v1.pdf"}}){
   return prepareProject({projectVersion: 1, format: "7", catalogue: "K", labels: {sides: labels},
@@ -69,4 +69,60 @@ test("review: an accept on a file without hash counts", () => {
   const e = logEntry(job(), CONFIG, "labels", missing, {step: "pdf", by: "staff"});
   assert.equal(e.files["K_labels_A_v1.pdf"], null);
   assert.notEqual(lineState(job([e]), CONFIG, "labels", missing).step, "pdf");
+});
+
+// An order: labels A/B printed by default; sleeve: the coverSleeve parts; log: project.plant.lines.
+function order({labels, sleeve = {}, log = {}} = {}){
+  return prepareProject({projectVersion: 1, format: "7", catalogue: "K",
+    labels: {sides: labels || {A: {fileName: "K_labels_A_v1.pdf"}, B: {fileName: "K_labels_B_v1.pdf"}}},
+    coverSleeve: sleeve, plant: {lines: log}}, CONFIG);
+}
+const white = {A: {whitelabel: true}, B: {whitelabel: true}};
+const hand = (step, extra = {}) => ({step, by: "staff", at: "t", files: {}, ...extra});
+
+test("a line is needed only for what the order has printed", () => {
+  const plain = order({labels: white, sleeve: {innerSleeve: {productId: "sleeve-white-cutout"}}});
+  assert.deepEqual(["labels", "innerSleeve", "outerCover", "inlay", "press", "pack", "ship"]
+    .map(n => lineNeeded(plain, CONFIG, n)), [false, false, false, false, true, true, true]);
+  const printed = order({sleeve: {innerSleeve: {productId: "sleeve-printed"}, cover: {productId: "cover-printed"},
+    inlay: {productId: "inlay-printed"}}});
+  assert.deepEqual(["labels", "innerSleeve", "outerCover", "inlay"].map(n => lineNeeded(printed, CONFIG, n)),
+    [true, true, true, true]);
+  const one = order({labels: {A: {whitelabel: true}, B: {fileName: "K_labels_B_v1.pdf"}}});
+  assert.equal(lineNeeded(one, CONFIG, "labels"), true, "one printed side is enough");
+  const s = lineState(plain, CONFIG, "labels", {});
+  assert.deepEqual([s.needed, s.done, s.ready, s.waiting, s.checking, s.step], [false, true, true, false, false, null]);
+});
+
+test("a printed part that is ordered but not uploaded stands at size, not at approve", () => {
+  const p = order({sleeve: {cover: {productId: "cover-printed"}}});
+  const s = lineState(p, CONFIG, "outerCover", {});
+  assert.deepEqual([s.needed, s.step], [true, "size"]);
+  assert.match(s.why, /no file uploaded yet/);
+});
+
+test("log-only lines need no check results and wait for the lines they come after", () => {
+  // Whitelabel, no printed sleeves: nothing to wait for but the log.
+  const plain = order({labels: white});
+  const press = lineState(plain, CONFIG, "press", null);
+  assert.deepEqual([press.checking, press.waiting, press.step], [false, false, "approve"]);
+  assert.equal(lineState(plain, CONFIG, "pack", null).waiting, true, "pack waits for press");
+  const pressed = order({labels: white, log: {press: [hand("approve"), hand("back:pressed")]}});
+  assert.equal(lineState(pressed, CONFIG, "press", null).done, true);
+  const pack = lineState(pressed, CONFIG, "pack", null);
+  assert.deepEqual([pack.waiting, pack.step], [false, "back:packed"]);
+  // Printed labels not checked yet: press waits for them.
+  const waiting = lineState(order(), CONFIG, "press", null);
+  assert.deepEqual([waiting.checking, waiting.waiting], [false, true]);
+});
+
+test("lines of a stage, and when they are all ready to move on", () => {
+  assert.deepEqual(linesOfStage(CONFIG, "10_ORDERS/10_PREPRESS"), ["labels", "innerSleeve", "outerCover", "inlay"]);
+  assert.deepEqual(linesOfStage(CONFIG, "10_ORDERS/20_PRESS"), ["press", "pack", "ship"]);
+  assert.deepEqual(linesOfStage(CONFIG, "20_DONE"), []);
+  const ready = {ready: true}, notReady = {ready: false};
+  assert.equal(stageReady(CONFIG, "10_ORDERS/10_PREPRESS", [{line: "labels", ...ready}, {line: "press", ...notReady}]), true,
+    "a line of another stage doesn't count");
+  assert.equal(stageReady(CONFIG, "10_ORDERS/10_PREPRESS", [{line: "labels", ...notReady}]), false);
+  assert.equal(stageReady(CONFIG, "20_DONE", [{line: "labels", ...ready}]), false, "no lines in the stage, no hint");
 });

@@ -4,7 +4,7 @@
 // whose entries count while their files keep their sha256. Spec:
 // docs/superpowers/specs/2026-10-02-production-lines-design.md.
 
-import { getFormat } from "./format-catalogue.js";
+import { getFormat, productById } from "./format-catalogue.js";
 import { artworkSlots, artworkRows } from "./artwork-checks.js";
 import { fileSlots } from "./project.js";
 
@@ -25,6 +25,31 @@ export function lineFiles(project, config, lineName){
     .map(slot => ({name: slot.name, slot: {...slot, path: paths.get(slot.name)}}));
 }
 
+// Whether the order has the part printed: a label side that isn't whitelabel,
+// a sleeve, cover or inlay product of kind "printed".
+function ordered(project, config, part){
+  if(part === "labels") return ["A", "B"].some(side => !project.labels.sides[side].whitelabel);
+  const sleeve = project.coverSleeve;
+  const chosen = {innerSleeve: sleeve.innerSleeve, outerCover: sleeve.cover, inlay: sleeve.inlay}[part];
+  const parts = getFormat(config, project.format).printableParts || {};
+  const product = productById((parts[part] && parts[part].products) || [], chosen.productId);
+  return !!product && product.kind === "printed";
+}
+
+// A line with no parts is every order's; one with parts only when an order has one of them printed.
+export function lineNeeded(project, config, lineName){
+  const {parts} = config.lines[lineName];
+  return !parts.length || parts.some(part => ordered(project, config, part));
+}
+
+export const linesOfStage = (config, stage) => Object.keys(config.lines).filter(name => config.lines[name].stage === stage);
+
+// All lines of the job's stage are ready (states: lineState results): move on? None in the stage, no hint.
+export function stageReady(config, stage, states){
+  const names = linesOfStage(config, stage);
+  return names.length > 0 && states.filter(s => names.includes(s.line)).every(s => s.ready);
+}
+
 // A failing row of a check step for one file, as "why" text; null when it passes.
 function failing(step, facts, slot, printCheck){
   const row = artworkRows(facts, slot.params, printCheck).find(r => ROWS[step].includes(r.feature) && BAD.has(r.severity));
@@ -38,20 +63,29 @@ function counts(entry, current){
 
 export function lineState(project, config, lineName, checkResults){
   const line = config.lines[lineName];
-  const files = lineFiles(project, config, lineName);
   const steps = line.steps.map(step => ({step, kind: kindOf(step), state: "ahead"}));
+  // Not on this order: nothing to do, and nothing for later lines to wait for.
+  if(!lineNeeded(project, config, lineName)){
+    return {line: lineName, steps, step: null, why: "", ready: true, done: true, waiting: false, checking: false, needed: false};
+  }
+  const files = lineFiles(project, config, lineName);
   const waiting = (line.after || []).some(other => !lineState(project, config, other, checkResults).done);
-  if(!checkResults) return {line: lineName, steps, step: null, why: "checking", ready: false, done: false, waiting, checking: true};
+  // Only check steps need the artwork check results; a line of hand-confirmed steps doesn't.
+  if(!checkResults && steps.some(s => s.kind === "check")){
+    return {line: lineName, steps, step: null, why: "checking", ready: false, done: false, waiting, checking: true, needed: true};
+  }
+  const results = checkResults || {};
   const printCheck = getFormat(config, project.format).printCheck;
-  const current = Object.fromEntries(files.map(f => [f.name, (checkResults[f.name] || {}).sha256]));
+  const current = Object.fromEntries(files.map(f => [f.name, (results[f.name] || {}).sha256]));
   const log = (project.plant.lines[lineName] || []).filter(e => e.by !== "fixer" && counts(e, current));
   const logged = step => log.some(e => e.step === step && (!step.startsWith("send:") || e.to));
   let at = null, why = "";
   for(const s of steps){
     let done;
     if(s.kind === "check"){
-      const reasons = files.map(f => checkResults[f.name] ? failing(s.step, checkResults[f.name], f.slot, printCheck)
-        : `${f.slot.title}: not checked yet`).filter(Boolean);
+      const reasons = !files.length ? ["no file uploaded yet"]
+        : files.map(f => results[f.name] ? failing(s.step, results[f.name], f.slot, printCheck)
+          : `${f.slot.title}: not checked yet`).filter(Boolean);
       done = !reasons.length || logged(s.step);
       if(!done && at === null) why = reasons[0];
     } else {
@@ -62,7 +96,7 @@ export function lineState(project, config, lineName, checkResults){
   }
   const firstSend = line.steps.findIndex(step => step.startsWith("send:"));
   const ready = at === null || (firstSend !== -1 && line.steps.indexOf(at) >= firstSend);
-  return {line: lineName, steps, step: at, why: at ? why : "", ready, done: at === null, waiting, checking: false};
+  return {line: lineName, steps, step: at, why: at ? why : "", ready, done: at === null, waiting, checking: false, needed: true};
 }
 
 export function logEntry(project, config, lineName, checkResults, fields){
