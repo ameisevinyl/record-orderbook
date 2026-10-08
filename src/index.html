@@ -74,6 +74,8 @@
   details.panel > summary::-webkit-details-marker{ display:none; }
   details.panel > summary::after{ content:"+"; float:right; color:var(--ink-dim); }
   details.panel[open] > summary::after{ content:"\2212"; }
+  /* data-warn is set by app.js while the panel holds a warning; only a closed one shows it. */
+  details.panel:not([open])[data-warn] > summary::before{ content:"!"; color:var(--danger); margin-right:8px; }
   details.panel > summary:hover{ background:var(--field); }
   details.panel > summary:focus-visible{ outline:2px solid var(--ink); outline-offset:-2px; }
   details.panel[open] > summary{ border-bottom:1px solid var(--edge); margin-bottom:12px; }

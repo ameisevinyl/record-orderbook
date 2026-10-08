@@ -44,3 +44,16 @@ window.addEventListener("beforeprint", () => {
   foldedPanels.forEach(d => d.open = true);
 });
 window.addEventListener("afterprint", () => foldedPanels.forEach(d => d.open = false));
+
+// A closed panel must not hide a warning: flag it from the warnings its
+// modules already render. Observer-driven, so modules stay unaware.
+const WARNING = "li.bad, tr.warn, tr.error, .filemeta.warn, .filemeta.compressed, .filemeta.underspec, .badge.danger, .badge.warn:not(:empty), .warn-qty";
+let flagQueued = false;
+function flagPanels(){
+  flagQueued = false;
+  document.querySelectorAll("details.panel").forEach(d => d.toggleAttribute("data-warn", !!d.querySelector(WARNING)));
+}
+new MutationObserver(() => {
+  if(!flagQueued){ flagQueued = true; requestAnimationFrame(flagPanels); }
+}).observe(document.querySelector(".sheet"), {childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:["class"]});
+flagPanels();
