@@ -6,7 +6,7 @@ const quote = {currency: "EUR", created: "2026-10-09", validUntil: "2026-12-31",
   {key: "7/mastering/lacquerCut", name: "Lacquer cut <A>", qty: 2, unit: "order", price: 60, amount: 120},
   {key: "7/record/black", name: "Record, black", qty: 300, unit: 1000, price: 1500, amount: 450}],
   vat: {case: "plus-vat", rate: 19, amount: 153.9, gross: 963.9, note: "plus 19 % VAT", vatId: {id: "", status: "none", checked: ""}}};
-const base = {saved: null, built: {ok: true, quote}, chosen: "", billingCountry: "FR", plantCountry: "DE",
+const base = {saved: null, built: {ok: true, quote}, chosen: "", billingCountry: "FR", plantCountry: "DE", checkNeeded: true,
   proposal: {case: "plus-vat", rate: 19, needsCheck: false}, vatId: {id: "", status: "none", name: "", checked: ""}};
 
 test("a quote that can be made: lines for staff, the net, copies, price per copy, save", () => {
@@ -42,10 +42,15 @@ test("VAT: the billing country, the ID and what VIES said, the proposal, the ove
   assert.ok(open.includes("not checked") && open.includes("check this"));
   const why = renderQuotePanel({...base, vatId: {id: "DE1", status: "unchecked", name: "", checked: "", reason: "MS_UNAVAILABLE <x>"}});
   assert.ok(why.includes("not checked — MS_UNAVAILABLE &lt;x&gt;"));
+  const down = renderQuotePanel({...base, vatId: {id: "DE1", status: "unchecked", name: "", checked: "", reason: "MS_UNAVAILABLE"}});
+  assert.ok(down.includes("not checked — MS_UNAVAILABLE (the member state's service is down, try again later)"));
   const refused = renderQuotePanel({...base, vatId: {id: "US1", status: "invalid", name: "", checked: "2026-10-09", reason: "not an EU VAT ID"}});
   assert.ok(refused.includes("not valid on VIES (2026-10-09) — not an EU VAT ID"));
   assert.ok(open.includes('<button type="button" data-staff data-act="vatCheck">check on VIES</button>'));
   assert.ok(!renderQuotePanel(base).includes("data-act=\"vatCheck\""), "no ID, nothing to check");
+  // Domestic or outside the EU the number changes nothing: no button, and it says so.
+  const domestic = renderQuotePanel({...base, checkNeeded: false, billingCountry: "DE", vatId: {id: "DE206001708", status: "unchecked", name: "", checked: ""}});
+  assert.ok(!domestic.includes("vatCheck") && domestic.includes("no check needed for this sale"));
   assert.ok(renderQuotePanel({...base, chosen: "export"}).includes('<option value="export" selected>'));
 });
 

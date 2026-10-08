@@ -19,7 +19,7 @@ import { showLabelChecks } from "./modules/labels.js";
 import { showPricing } from "./modules/pricing.js";
 import { validatePricelist, upgradePricelist } from "./lib/pricelist.js";
 import { vatCase } from "./lib/vat-case.js";
-import { normalizeVatId } from "./lib/vat-rates.js";
+import { normalizeVatId, EU_COUNTRIES } from "./lib/vat-rates.js";
 import { buildPriceQuote } from "./lib/price-quote.js";
 import { renderQuotePanel, staleReason } from "./lib/staff-quote.js";
 import { showPartChecks } from "./modules/printed-parts.js";
@@ -80,7 +80,8 @@ async function startQuote(project, data){
       vatId: state.vatId.id, vatIdStatus: state.vatId.status});
     const kind = state.chosen || proposal.case;
     const built = buildPriceQuote({project, pricelist, config: CONFIG, today: today(), vat: {case: kind, rate: rateFor(kind), vatId: state.vatId}});
-    box.innerHTML = renderQuotePanel({saved: state.saved, built, proposal, chosen: state.chosen, vatId: state.vatId, billingCountry: billing.countryCode});
+    box.innerHTML = renderQuotePanel({saved: state.saved, built, proposal, chosen: state.chosen, vatId: state.vatId, billingCountry: billing.countryCode,
+      checkNeeded: EU_COUNTRIES.includes(billing.countryCode) && billing.countryCode !== pricelist.vat.country});
     return built;
   };
   let built = render();

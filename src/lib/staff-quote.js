@@ -16,10 +16,19 @@ const CASE_LABEL = {
 };
 const ID_STATUS = {valid: "valid on VIES", invalid: "not valid on VIES", unchecked: "not checked", none: "none given"};
 const PER = {1000: " /1000", order: " flat"};
+// VIES's own codes, in plain words.
+const REASON_HINT = {
+  MS_UNAVAILABLE: "the member state's service is down, try again later",
+  MS_MAX_CONCURRENT_REQ: "VIES is busy, try again in a moment",
+  GLOBAL_MAX_CONCURRENT_REQ: "VIES is busy, try again in a moment",
+  TIMEOUT: "the member state's service didn't answer in time, try again later",
+  SERVICE_UNAVAILABLE: "VIES is down, try again later"
+};
 
 // s: {error} | {saved (the saved quote or null), built (buildPriceQuote's
 // result), proposal (vatCase's), chosen ("" = as proposed), vatId ({id,
-// status, name, checked}), billingCountry}.
+// status, name, checked, reason}), billingCountry, checkNeeded (the number
+// can change the VAT: another EU country than the plant's)}.
 export function renderQuotePanel(s){
   if(s.error) return `<p class="manual">${escapeHtml(s.error)}</p>`;
   const {saved, built, proposal, vatId} = s;
@@ -37,12 +46,12 @@ export function renderQuotePanel(s){
   // What VIES said (the name and the day), and its own words when there was no answer.
   const status = ID_STATUS[vatId.status] + (vatId.status === "valid" || vatId.status === "invalid"
     ? ` (${[vatId.name, vatId.checked].filter(Boolean).map(escapeHtml).join(", ")})` : "")
-    + (vatId.reason ? ` — ${escapeHtml(vatId.reason)}` : "");
+    + (vatId.reason ? ` — ${escapeHtml(vatId.reason)}${REASON_HINT[vatId.reason] ? ` (${REASON_HINT[vatId.reason]})` : ""}` : "");
   const options = ['<option value="">as proposed</option>', ...VAT_CASES.map(kind =>
     `<option value="${kind}"${kind === s.chosen ? " selected" : ""}>${CASE_LABEL[kind]}</option>`)].join("");
   html += `<h3>VAT</h3><p>Billing country <b>${escapeHtml(s.billingCountry || "?")}</b> · VAT ID `
     + `${vatId.id ? `<b>${escapeHtml(vatId.id)}</b>: ${status}` : ID_STATUS.none}`
-    + (vatId.id ? ` <button type="button" data-staff data-act="vatCheck">check on VIES</button>` : "") + `</p>`
+    + (vatId.id ? (s.checkNeeded ? ` <button type="button" data-staff data-act="vatCheck">check on VIES</button>` : " — no check needed for this sale") : "") + `</p>`
     + `<p>proposed: ${CASE_LABEL[proposal.case]}${proposal.needsCheck ? " — check this" : ""}</p>`
     + `<p><label>Treatment <select data-staff data-act="vatCase">${options}</select></label></p>`;
   html += `<p><button type="button" data-staff data-act="saveQuote"${built.ok ? "" : " disabled"}>${saved ? "Update quote" : "Save quote"}</button></p>`;
