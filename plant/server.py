@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import jobs
 import staff_files
+import vies
 from jobs import JobError, Conflict
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -137,6 +138,20 @@ def files(request):
     return [jobs.plain(name) for name in names]
 
 
+def read_quote(folder):
+    """(the job's price_quote.json as an object or None, the hash of its bytes
+    or "" when there is no file). A file that isn't a quote reads as none."""
+    try:
+        data = (folder / "price_quote.json").read_bytes()
+    except FileNotFoundError:
+        return None, ""
+    try:
+        quote = json.loads(data)
+    except ValueError:
+        quote = None
+    return (quote if isinstance(quote, dict) else None), staff_files.digest(data)
+
+
 class Unavailable(Exception):
     """Can't be done right now (a profile download): the page doesn't log it
     as a refusal of the file, the next load tries again."""
@@ -197,7 +212,8 @@ class Handler(BaseHTTPRequestHandler):
                "/api/spectrum": self.spectrum, "/api/profiles": self.profiles,
                "/api/fix": self.fix, "/api/proof": self.proof,
                "/api/trash": self.trash, "/api/project": self.save_project,
-               "/api/staff-file": self.save_staff_file}.get(self.path)
+               "/api/staff-file": self.save_staff_file, "/api/quote": self.save_quote,
+               "/api/vat-check": self.vat_check}.get(self.path)
         if api is None:
             return self.reply(404, "not found")
         # A JSON content type makes browsers ask first (CORS preflight,
@@ -227,9 +243,10 @@ class Handler(BaseHTTPRequestHandler):
     def get_job(self):
         stage, folder = jobs.find(JOBS, self.query("job"))
         project, digest = jobs.read_project(folder)
+        quote, quote_hash = read_quote(folder)
         self.json({"job": folder.name, "stage": stage, "stages": jobs.places(JOBS),
                    "project": project, "projectHash": digest, "files": jobs.files(folder),
-                   "stamp": jobs.stamp(folder)})
+                   "stamp": jobs.stamp(folder), "quote": quote, "quoteHash": quote_hash})
 
     def get_stamp(self):
         """Changes when any file of the job does; also what the background
@@ -424,6 +441,21 @@ class Handler(BaseHTTPRequestHandler):
         path = self.staff_file(r["name"])[0]
         staff_files.check(r["name"], r["text"])
         self.json({"hash": staff_files.write(path, r["text"], r["basedOn"])})
+
+    def save_quote(self):
+        """The quote the page made (src/lib/price-quote.js) as price_quote.json
+        in the job folder; refused with 409 when it changed since the page read it."""
+        r = self.body()
+        folder = jobs.find(JOBS, r["job"])[1]
+        quote = r.get("quote")
+        if not isinstance(quote, dict) or "net" not in quote:
+            raise JobError("quote must be a quote object")
+        text = json.dumps(quote, indent=2, ensure_ascii=False) + "\n"
+        self.json({"hash": staff_files.write(folder / "price_quote.json", text, r["basedOn"])})
+
+    def vat_check(self):
+        """A customer's VAT ID asked of VIES; the page saves the answer in the quote."""
+        self.json(vies.check(self.body()["vatId"], fetch=vies.fetch))
 
     def fix_paths(self, r):
         """(source, target) of a fix in the job: the source must exist, the

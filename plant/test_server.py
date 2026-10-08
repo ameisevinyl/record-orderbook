@@ -12,6 +12,7 @@ from pathlib import Path
 
 import jobs
 import server
+import vies
 from jobs import JobError
 from server import Handler, ROOT, missing, static_target, upload_name
 
@@ -152,6 +153,54 @@ class HttpTest(unittest.TestCase):
         self.assertNotIn('src="app.js"', html)
         self.assertEqual(self.request("GET", "/order/nope")[0], 404)
         self.assertEqual(self.request("GET", "/order/..%2Fx")[0], 404)
+
+    def test_quote_is_written_beside_the_project_and_read_back(self):
+        folder = self.root / "10_ORDERS" / "10_PREPRESS" / "j"
+        folder.mkdir(parents=True)
+        (folder / "project.json").write_text('{"catalogue": "X"}')
+        job = self.get("/api/job?job=j")[1]
+        self.assertEqual((job["quote"], job["quoteHash"]), (None, ""))
+        quote = {"net": 810, "vat": {"case": "domestic"}}
+        status, saved = self.post("/api/quote", {"job": "j", "quote": quote, "basedOn": ""})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads((folder / "price_quote.json").read_text()), quote)
+        job = self.get("/api/job?job=j")[1]
+        self.assertEqual((job["quote"], job["quoteHash"]), (quote, saved["hash"]))
+        # The file is in the job's listing, so the board moves the card to the quotes.
+        card = next(c for s in self.get("/api/board")[1]["stages"] for c in s["jobs"] if c["job"] == "j")
+        self.assertIn("price_quote.json", [f["name"] for f in card["files"]])
+        # A second page still holding no quote is stale now.
+        self.assertEqual(self.post("/api/quote", {"job": "j", "quote": quote, "basedOn": ""})[0], 409)
+        newer = {**quote, "net": 900}
+        self.assertEqual(self.post("/api/quote", {"job": "j", "quote": newer, "basedOn": saved["hash"]})[0], 200)
+        self.assertEqual(self.get("/api/job?job=j")[1]["quote"], newer)
+
+    def test_quote_refuses_what_is_not_a_quote_or_a_job(self):
+        folder = self.root / "10_ORDERS" / "10_PREPRESS" / "j"
+        folder.mkdir(parents=True)
+        (folder / "project.json").write_text('{"catalogue": "X"}')
+        for quote in ([1], "text", None, {}):
+            self.assertEqual(self.post("/api/quote", {"job": "j", "quote": quote, "basedOn": ""})[0], 400, quote)
+        self.assertEqual(self.post("/api/quote", {"job": "nope", "quote": {"net": 1}, "basedOn": ""})[0], 400)
+        self.assertFalse((folder / "price_quote.json").exists())
+
+    def test_a_broken_quote_file_is_no_quote_but_can_be_replaced(self):
+        folder = self.root / "10_ORDERS" / "10_PREPRESS" / "j"
+        folder.mkdir(parents=True)
+        (folder / "project.json").write_text('{"catalogue": "X"}')
+        (folder / "price_quote.json").write_text("{")
+        job = self.get("/api/job?job=j")[1]
+        self.assertIsNone(job["quote"])
+        self.assertNotEqual(job["quoteHash"], "")
+        self.assertEqual(self.post("/api/quote", {"job": "j", "quote": {"net": 1}, "basedOn": job["quoteHash"]})[0], 200)
+
+    def test_vat_check_asks_vies_through_the_server(self):
+        with mock.patch.object(vies, "fetch", lambda country, number: {"isValid": True, "name": "Acme"}):
+            status, result = self.post("/api/vat-check", {"vatId": "de 123456789"})
+        self.assertEqual((status, result["status"], result["id"], result["name"]), (200, "valid", "DE123456789", "Acme"))
+        self.assertEqual(self.post("/api/vat-check", {"vatId": "US123"})[1]["status"], "invalid")
+        self.assertEqual(self.post("/api/vat-check", {"vatId": ""})[1]["status"], "none")
+        self.assertEqual(self.post("/api/vat-check", {})[0], 400)
 
     def test_inbox_lists_jobs_with_the_same_catalogue(self):
         folder = self.root / "20_DONE" / "old"
