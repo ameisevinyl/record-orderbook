@@ -21,7 +21,6 @@ export function parsePlantConfig(text){
 export function formatPlantConfig(config){
   const body = JSON.stringify(config, null, 2)
     .replace(/^(\s*)"(\w+)":/gm, "$1$2:")
-    .replace(/\{\s+name: ("[^"\n]*"),\s+url: ("[^"\n]*")(?:,\s+direct: (true|false))?\s+\}/g,
-      (_, name, url, direct) => `{ name: ${name}, url: ${url}${direct ? `, direct: ${direct}` : ""} }`);
+    .replace(/\{\s+name: ("[^"\n]*"),\s+url: ("[^"\n]*")\s+\}/g, "{ name: $1, url: $2 }");
   return `${HEADER}export const PLANT_CONFIG = ${body};\n`;
 }

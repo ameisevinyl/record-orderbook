@@ -106,8 +106,6 @@ test("validates plant imprint and transfer shape", () => {
   const service = copy();
   service.plant.transfer.services = [{ name: "FilePizza", url: "" }];
   assert.throws(() => validateConfig(service), /CONFIG\.plant\.transfer\.services\[0\]\.url must be a non-empty string/);
-  service.plant.transfer.services = [{ name: "FilePizza", url: "https://file.pizza/", direct: "yes" }];
-  assert.throws(() => validateConfig(service), /CONFIG\.plant\.transfer\.services\[0\]\.direct must be a boolean/);
 });
 
 test("validates the audio master-file spec", () => {

@@ -36,15 +36,12 @@ export const PLANT_CONFIG = {
   // Nextcloud File Request) — when set, this alone is the whole flow:
   // "open this link, drop your zip in". Leave blank to offer services
   // (generic transfer homepages, where the customer starts a transfer)
-  // and uploadEmail (who gets it). direct: the file goes browser to
-  // browser, nothing stored on a server — the customer sends the link
-  // and keeps the tab open until the plant has downloaded it. See
-  // src/lib/transfer.js.
+  // and uploadEmail (who gets it). See src/lib/transfer.js.
   transfer: {
     uploadUrl: "",
     services: [
       { name: "SwissTransfer", url: "https://www.swisstransfer.com/" },
-      { name: "FilePizza", url: "https://file.pizza/", direct: true }
+      { name: "FilePizza", url: "https://file.pizza/" }
     ],
     uploadEmail: "pressing.plant@example.com"
   }

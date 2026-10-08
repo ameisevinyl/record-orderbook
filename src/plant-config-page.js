@@ -34,14 +34,18 @@ function renderPlant(){
   const services = plant.transfer.services.map((sv, i) => `<tr>
       <td><input type="text" class="n" data-s="${i}" data-f="name" value="${esc(sv.name)}"></td>
       <td><input type="text" class="u" data-s="${i}" data-f="url" value="${esc(sv.url)}"></td>
-      <td class="chk"><input type="checkbox" data-s="${i}" data-f="direct"${sv.direct ? " checked" : ""}></td>
       <td><button class="x" data-act="rmService" data-s="${i}" title="Remove service">x</button></td></tr>`).join("");
   $("editor").innerHTML = `
     <table class="kv"><thead><tr><th colspan="2">Imprint</th></tr></thead><tbody>${kv}</tbody></table>
-    <table class="kv"><thead><tr><th colspan="2">Transfer</th></tr></thead><tbody>
-      <tr><th>Upload link</th><td><input type="text" data-p="transfer.uploadUrl" value="${esc(plant.transfer.uploadUrl)}"></td></tr>
-      <tr><th>Recipient email</th><td><input type="text" data-p="transfer.uploadEmail" value="${esc(plant.transfer.uploadEmail)}"></td></tr></tbody></table>
-    <table class="sv"><thead><tr><th>Transfer service</th><th>URL</th><th>Direct</th><th class="add"><button class="x" data-act="addService" title="Add service">+</button></th></tr></thead><tbody>${services}</tbody></table>
+    <table class="kv"><thead><tr><th colspan="2">Transfer: upload link</th></tr></thead><tbody>
+      <tr><th>Upload link</th><td><input type="text" data-p="transfer.uploadUrl" value="${esc(plant.transfer.uploadUrl)}"></td></tr></tbody></table>
+    <p class="note">If set, customers see only this link and the services below are ignored.</p>
+    <div id="byService"${plant.transfer.uploadUrl ? ' class="off"' : ""}>
+      <table class="kv"><thead><tr><th colspan="2">Transfer: by service</th></tr></thead><tbody>
+        <tr><th>Recipient email</th><td><input type="text" data-p="transfer.uploadEmail" value="${esc(plant.transfer.uploadEmail)}"></td></tr></tbody></table>
+      <table class="sv"><thead><tr><th>Service</th><th>URL</th><th class="add"><button class="x" data-act="addService" title="Add service">+</button></th></tr></thead><tbody>${services}</tbody></table>
+      <p class="note">Used when there is no upload link: the customer picks a service and sends the zip to the recipient email.</p>
+    </div>
     <p class="note">Save, put the file at src/plant.config.local.js and run node build/build.js for the order form.</p>`;
 }
 
@@ -61,6 +65,7 @@ function plantStatus(){
 
 function plantEdited(){
   dirty = true;
+  $("byService").classList.toggle("off", !!plant.transfer.uploadUrl);
   plantStatus();
 }
 
@@ -69,15 +74,8 @@ $("editor").addEventListener("input", e => {
   if(p){
     const [section, key] = p.split(".");
     plant[section][key] = key === "countryCode" ? e.target.value.trim().toUpperCase() : e.target.value.trim();
-  }else if(s !== undefined && f !== "direct") plant.transfer.services[s][f] = e.target.value.trim();
+  }else if(s !== undefined) plant.transfer.services[s][f] = e.target.value.trim();
   else return;
-  plantEdited();
-});
-$("editor").addEventListener("change", e => {
-  const { s, f } = e.target.dataset;
-  if(f !== "direct") return;
-  if(e.target.checked) plant.transfer.services[s].direct = true;
-  else delete plant.transfer.services[s].direct;
   plantEdited();
 });
 $("editor").addEventListener("click", e => {

@@ -14,7 +14,7 @@ test("parses the real sample file, comments included", () => {
 test("format and parse round-trip, services on one line each", () => {
   const text = formatPlantConfig(PLANT_CONFIG);
   assert.deepEqual(parsePlantConfig(text), PLANT_CONFIG);
-  assert.match(text, /\{ name: "FilePizza", url: "https:\/\/file\.pizza\/", direct: true \}/);
+  assert.match(text, /\{ name: "FilePizza", url: "https:\/\/file\.pizza\/" \}/);
   assert.match(text, /^\s+city: "Kingston 11",$/m);
 });
 

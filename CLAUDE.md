@@ -240,9 +240,8 @@ configured on purpose — keep it that way unless asked.
   data: `imprint` (EU/German legal imprint fields, shown small in the
   footer) and `transfer` (where finished packages get sent — a direct
   upload link if the plant has one, else the transfer services the
-  customer picks from + recipient email — e.g. SwissTransfer, or
-  FilePizza (`direct`: browser to browser, no server storage, the
-  customer keeps the tab open); see `src/lib/transfer.js`). The committed
+  customer picks from + recipient email — e.g. SwissTransfer or
+  FilePizza; see `src/lib/transfer.js`). The committed
   `src/plant.config.local.example.js` holds safe sample data; a real
   plant's actual data lives in `src/plant.config.local.js` (gitignored,
   copied from the example) and is bundled at build time — see

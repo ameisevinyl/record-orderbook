@@ -4,7 +4,7 @@ import { transferOptions, transferPrompt } from "../src/lib/transfer.js";
 
 const services = [
   { name: "SwissTransfer", url: "https://www.swisstransfer.com/" },
-  { name: "FilePizza", url: "https://file.pizza/", direct: true }
+  { name: "FilePizza", url: "https://file.pizza/" }
 ];
 const withUploadUrl = { uploadUrl: "https://cloud.plant.example/s/AbCd1234", services, uploadEmail: "cutting@example.com" };
 const withoutUploadUrl = { uploadUrl: "", services, uploadEmail: "cutting@example.com" };

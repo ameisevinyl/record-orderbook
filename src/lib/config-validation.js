@@ -207,7 +207,6 @@ export function validatePlant(value){
     object(service, path);
     string(service.name, `${path}.name`);
     string(service.url, `${path}.url`);
-    if(service.direct !== undefined && typeof service.direct !== "boolean") fail(`${path}.direct`, "must be a boolean");
   });
   if(!transfer.uploadUrl.trim() && (!transfer.services.length || !transfer.uploadEmail.trim())){
     fail("CONFIG.plant.transfer", "must provide uploadUrl or at least one service and uploadEmail");
