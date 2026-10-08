@@ -138,6 +138,21 @@ class HttpTest(unittest.TestCase):
         (self.root / "99_ARCHIVE" / "j.zip").write_bytes(b"zip")
         self.assertEqual([e["name"] for e in self.get("/api/board")[1]["archive"]], ["j.zip"])
 
+    def test_order_page_is_the_customer_page_with_the_staff_script(self):
+        folder = self.root / "10_ORDERS" / "10_PREPRESS" / "j"
+        folder.mkdir(parents=True)
+        (folder / "project.json").write_text('{"catalogue": "X"}')
+        status, data = self.request("GET", "/order/j")
+        self.assertEqual(status, 200)
+        html = data.decode()
+        self.assertIn("Record Orderbook", html)
+        self.assertIn('<script type="module" src="/src/app.js"></script>', html)
+        self.assertIn('<script type="module" src="/src/staff.js"></script>', html)
+        self.assertIn('<link rel="stylesheet" href="/src/staff.css">', html)
+        self.assertNotIn('src="app.js"', html)
+        self.assertEqual(self.request("GET", "/order/nope")[0], 404)
+        self.assertEqual(self.request("GET", "/order/..%2Fx")[0], 404)
+
     def test_inbox_lists_jobs_with_the_same_catalogue(self):
         folder = self.root / "20_DONE" / "old"
         folder.mkdir()

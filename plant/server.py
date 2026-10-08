@@ -31,6 +31,7 @@ SRC = ROOT / "src"
 # The jobs tree; --jobs changes it.
 JOBS = ROOT / "plant" / "jobs"
 INDEX = SRC / "plant" / "index.html"
+CUSTOMER_PAGE = SRC / "index.html"
 # The staff editors' files: name -> (the plant's own file, the committed example).
 STAFF_FILES = {
     "pricelist": (SRC / "pricelist.json", SRC / "pricelist.example.json"),
@@ -174,6 +175,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.host_ok():
             return self.reply(403, "forbidden host")
         route = urlsplit(self.path).path
+        if route.startswith("/order/"):
+            return self.answer(self.get_order)
         api = {"/api/board": self.get_board, "/api/job": self.get_job, "/api/job/stamp": self.get_stamp,
                "/api/inbox": self.get_inbox, "/api/zip": self.get_zip,
                "/api/staff-file": self.get_staff_file}.get(route)
@@ -252,6 +255,22 @@ class Handler(BaseHTTPRequestHandler):
                     matches.append({"job": job, "stage": stage, "project": project,
                                     "projectHash": digest, "files": listing})
         self.json({"item": item, **info, "matches": matches})
+
+    def get_order(self):
+        """The customer page as the staff's order view: its script by absolute
+        path (the page isn't under /src/ here), then the staff's script and style."""
+        name = unquote(urlsplit(self.path).path.removeprefix("/order/"))
+        try:
+            jobs.find(JOBS, name)
+        except JobError:
+            return self.reply(404, "no such job")
+        page = CUSTOMER_PAGE.read_text()
+        marker = '<script type="module" src="app.js"></script>'
+        if marker not in page:
+            raise OSError("src/index.html has changed: the order view can't be built from it")
+        self.reply(200, page.replace(marker, '<link rel="stylesheet" href="/src/staff.css">\n'
+                                     '<script type="module" src="/src/app.js"></script>\n'
+                                     '<script type="module" src="/src/staff.js"></script>'), TYPES[".html"])
 
     def get_zip(self):
         folder = jobs.find(JOBS, self.query("job"))[1]
