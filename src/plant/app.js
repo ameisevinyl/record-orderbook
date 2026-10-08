@@ -16,7 +16,7 @@ import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf, useVer
 import { projectFileName } from "../lib/package-naming.js";
 import { renderBasic, renderProduction, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
 import { renderNav, renderHome, renderInbox, renderBoard } from "../lib/plant-board.js";
-import { lineState, logEntry } from "../lib/lines.js";
+import { lineState, logEntry, stageReady } from "../lib/lines.js";
 import { menuHtml } from "../lib/menu.js";
 
 const zipInput = document.getElementById("zipInput");
@@ -222,7 +222,7 @@ async function showJob(job, section, id){
     Object.assign(view, {project, artworkFacts, flows});
     replace("production", renderProduction(states, CONFIG.partners));
     replace("basic", renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps,
-      states.length > 0 && states.every(s => s.ready)));
+      stageReady(CONFIG, data.stage, states)));
 
     // One fix per load where fixers run: the first slot whose step has a
     // fix and no pending proposal gets one, as its next version; the reload

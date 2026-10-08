@@ -259,3 +259,13 @@ test("artwork: a proof of the file in use only when the flow is through; an exis
     project.catalogue);
   assert.ok(!open.includes("proof"));
 });
+
+test("production: a line the order doesn't have isn't shown", () => {
+  const html = renderProduction([
+    {line: "inlay", steps: [], step: null, why: "", ready: true, done: true, waiting: false, checking: false, needed: false},
+    {line: "press", steps: [{step: "approve", kind: "approve", state: "current"}], step: "approve", why: "", ready: false,
+      done: false, waiting: false, checking: false, needed: true}
+  ], {});
+  assert.ok(html.includes("<h3>press</h3>"));
+  assert.ok(!html.includes("inlay"));
+});

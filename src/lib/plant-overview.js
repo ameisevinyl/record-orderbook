@@ -133,7 +133,7 @@ const LINE_ACTIONS = {
 
 // states: lineState() per line; partners: CONFIG.partners (a send step picks from them).
 export function renderProduction(states, partners){
-  return section("production", states.map(s => {
+  return section("production", states.filter(s => s.needed !== false).map(s => {
     if(s.checking) return `<h3>${escapeHtml(s.line)}</h3><p>checking…</p>`;
     let body = `<h3>${escapeHtml(s.line)}${s.done ? " ✓" : s.waiting ? " (waiting)" : ""}</h3>`;
     if(s.step){
