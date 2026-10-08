@@ -81,28 +81,32 @@ time), Lieferschein, Rechnung.
 
 ## 3 Staff order view
 
-- Served at `/order/<job>`, loading `index.html` with a `staff` flag.
-- **Data:** from `/api/job` (project, `projectHash`, file list, `plant`), not
-  from `/api/zip`: the zip strips `plant` (stage, lines, fixes) and would
-  re-zip and stream the whole job, WAVs included, on every open. Files are
-  fetched lazily from `/jobs/<job>/files/<file>`.
-- **Loader:** `loadProject` is coupled to zip bytes. It is split into parse
-  and apply: zip → `{project, fileMap}` for the customer, `/api/job` + lazy
-  `File`s for staff, one apply path.
-- **Lock:** the sheet gets `inert` permanently (what `runProjectAction` already
-  does while it works), which disables every field, button and upload. God
-  mode lifts it.
-- Staff panels (checks, previews, versions, production lines, notes, deadline,
-  history) are further `details.panel`s from `src/plant/`, built from the
-  existing `plant-overview.js` renderers.
-- **God mode:** header toggle with confirmation. A pure helper in
-  `src/lib/project.js` turns old vs. new `project.json` into the free-text
-  history entries (`catalogue: X → Y`), so history keeps one shape
-  (`historyEntry(note, date)`) and the diff is unit-tested. Saves go through
-  `/api/project` with `basedOn` (409); the server stays dumb.
-- **First step is a spike:** split `loadProject` into parse and apply and feed
-  it from `/api/job`. The risk is the coupling to zip bytes (every `apply*`
-  takes a `fileMap` of `File`s), not what the zip contains.
+Built as information only (revised with the user): no move logic, no fixing,
+no god mode yet, and it writes nothing.
+
+- Served at `/order/<job>` (`plant/server.py`): the customer page with its
+  script by absolute path and `src/staff.js` / `staff.css` added. A board
+  card links there; the old job page stays reachable ("files & fixes" in the
+  bar) until its parts have moved.
+- **Data:** from `/api/job` (project, file list, `plant`), not `/api/zip`.
+  `loadProject` is split: the zip half stays, `applyProject(p, fileMap)` fills
+  the form from a prepared project and the files; staff call it with no files.
+  A slot reads `file: <name>` (no `please re-select`); no file bytes are
+  fetched, so opening an order downloads no audio.
+- **Lock:** every control is `disabled` (not `inert`, which would stop the
+  panels folding), also the ones the page creates later.
+- **The plant's checks replace the browser's:** artwork slots show the
+  backend's check rows and preview (`showChecks`), audio file lines the
+  backend's duration and format (`showAudioChecks`); the page's own Status
+  list (it would call every file missing) is hidden for the plant's list
+  (completeness gaps, audio findings, artwork that needs a look).
+- **What the plant adds:** the bar (stage, link back), a Plant panel with the
+  order's production lines (read-only), history, files outside the order.
+- **Later:** god mode (a header toggle with confirmation; a pure
+  `projectDiff(old, new)` in `src/lib/project.js` that turns the change into
+  free-text `history` entries; saves through `/api/project` with `basedOn`),
+  the price section (part 4: the quote needs the plating choice, which the
+  order doesn't carry yet), fixes in the order view.
 
 ## 4 Quote and PRICING
 

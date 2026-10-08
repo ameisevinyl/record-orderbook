@@ -189,6 +189,10 @@ configured on purpose — keep it that way unless asked.
   customer's order confirmation. Under a small header (the plant's name, a
   file menu with load zip/folder, archive and the settings pages, the status
   line, statistics); `#/archive` lists the zips `plant/archive.py` wrote.
+  A card opens the order view: the customer page at `/order/<job>`
+  (`src/staff.js`, `staff.css`, served by `plant/server.py`), filled by
+  `applyProject`, locked, with the plant's artwork and audio checks in place
+  of the browser's and the plant's status list; it shows and changes nothing.
   Spec: `docs/superpowers/specs/2026-10-02-production-lines-design.md`.
   Grouping stages (10_ORDERS) hold no jobs. `project.json` is the reference and
   the naming convention strict: a slot's file and its `_v<N>` versions
