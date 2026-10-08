@@ -20,12 +20,14 @@
 <body>
 <div class="sheet">
   <header class="top">
-    <h1>Plant config <span id="file" style="font-weight:400;color:var(--ink-dim);font-size:13px;"></span></h1>
+    <h1>Plant config</h1>
     <div class="actions">
-      <span id="status"></span>
-      <button class="btn" id="btnOpen">Open</button>
-      <button class="btn" id="btnSave">Save</button>
-      <input type="file" id="input" accept=".js,text/javascript" class="hidden">
+      <div class="buttons">
+        <button class="btn" id="btnOpen">Open</button>
+        <button class="btn" id="btnSave">Save</button>
+        <input type="file" id="input" accept=".js,text/javascript" class="hidden">
+      </div>
+      <div class="info"><span id="file"></span> <span id="status"></span></div>
     </div>
   </header>
   <div id="editor"></div>
