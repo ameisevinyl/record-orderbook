@@ -65,6 +65,21 @@
   h3{ font-size:13.5px; color:var(--ink); margin-bottom:8px; }
   section{ margin-bottom:20px; }
 
+  /* Foldable framed section; the release summary stays a bare <section>. */
+  details.panel{ border:1px solid var(--edge); border-radius:3px; margin-bottom:12px; }
+  details.panel > summary{
+    cursor:pointer; list-style:none; padding:10px 12px;
+    font-size:15px; font-weight:700; color:var(--ink); user-select:none;
+  }
+  details.panel > summary::-webkit-details-marker{ display:none; }
+  details.panel > summary::after{ content:"+"; float:right; color:var(--ink-dim); }
+  details.panel[open] > summary::after{ content:"\2212"; }
+  details.panel > summary:hover{ background:var(--field); }
+  details.panel > summary:focus-visible{ outline:2px solid var(--ink); outline-offset:-2px; }
+  details.panel[open] > summary{ border-bottom:1px solid var(--edge); margin-bottom:12px; }
+  details.panel > :not(summary){ margin-left:12px; margin-right:12px; }
+  details.panel > :last-child{ margin-bottom:12px; }
+
   header.top{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
   header.top .idline{
     font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11px;
@@ -379,7 +394,8 @@
        reference document (with artwork previews and billing/shipping
        info) rather than a stack of loosely-padded panels. */
     h1{ font-size:15px; }
-    section{ break-inside:avoid; margin-bottom:8px; }
+    section, details.panel{ break-inside:avoid; margin-bottom:8px; }
+    details.panel > summary::after{ content:none; }
     h2{ font-size:11px; margin-bottom:4px; }
     .side-head{ margin-bottom:5px; }
     .field{ margin-bottom:4px; }
@@ -425,7 +441,7 @@
   </header>
 
 
-  <!-- ============ RELEASE INFO ============ -->
+  <!-- ============ RELEASE SUMMARY ============ -->
   <section>
     <div class="row">
       <div class="field">
@@ -455,195 +471,204 @@
   </section>
 
 
-  <!-- ============ SIDES ============ -->
+  <!-- ============ VINYL COLOUR & QUANTITY ============ -->
+  <details class="panel" open>
+    <summary>Vinyl Colour &amp; Quantity</summary>
+      <div id="colourRows"></div>
+      <button type="button" class="addbtn no-print" id="addColourBtn">+ add colour</button>
+      <ul class="checklist" id="colourChecklist"></ul>
+    
+  </details>
+
+
+  <!-- ============ AUDIO ============ -->
+  <details class="panel">
+    <summary>Audio</summary>
   <div class="cols2" id="sides"></div>
 
-
-  <!-- ============ NOTES ============ -->
-  <section>
-    <h2>Notes to the Mastering Engineer</h2>
-    <label class="chk">
-      <input type="checkbox" id="soundsystem"> Soundsystem cut
-    </label>
-    <textarea id="notes"></textarea>
-  </section>
-
-
-  <!-- ============ LABELS ============ -->
-  <section>
-    <div class="label-cols2" id="labelSides"></div>
-  </section>
-
-
-  <!-- ============ INNER SLEEVE ============ -->
-  <section>
-    <h2>Inner Sleeve</h2>
-    <details class="specs no-print" id="innersleevespecs">
-      <summary>Specifications</summary>
-      <div class="specs-body"></div>
-    </details>
-    <div class="row">
-      <div class="field" style="flex:0 0 auto;">
-        <select id="innersleeveProduct"></select>
-      </div>
-    </div>
-
-    <div id="innersleevePrintedBody">
-      <div class="row" style="align-items:end;">
-        <div class="field" style="flex:0 0 auto;">
-          <label>&nbsp;</label>
-          <button type="button" class="pickbtn no-print" id="innersleevepick" title="Choose inner sleeve artwork">↑</button>
-        </div>
-        <div class="field">
-          <div class="filemeta empty" id="innersleevemeta"></div>
-          <label class="pagepick hidden no-print" id="innersleevepagewrap">page <select id="innersleevepage"></select> <span id="innersleevepagecount"></span></label>
-        </div>
-      </div>
-      <input type="file" id="innersleeveinput" class="hidden">
-      <div class="label-preview-wrap" id="innersleevepreviewwrap">
-        <div class="label-preview" id="innersleevepreview"><div class="label-placeholder">no artwork selected</div></div>
-      </div>
-      <div class="spread-caption" id="innersleevecaption"><span>back</span><span>front</span></div>
-      <table class="labelwarnings" id="innersleevewarnings"></table>
-    </div>
-  </section>
-
-
-  <!-- ============ OUTER COVER ============ -->
-  <section>
-    <h2>Outer Cover</h2>
-    <details class="specs no-print" id="coverspecs">
-      <summary>Specifications</summary>
-      <div class="specs-body"></div>
-    </details>
-    <div class="row">
-      <div class="field" style="flex:0 0 auto;">
-        <select id="coverProduct"></select>
-      </div>
-    </div>
-
-    <div id="coverPrintedBody">
-      <div class="row" style="align-items:end;">
-        <div class="field" style="flex:0 0 auto;">
-          <label>&nbsp;</label>
-          <button type="button" class="pickbtn no-print" id="coverpick" title="Choose cover artwork">↑</button>
-        </div>
-        <div class="field">
-          <div class="filemeta empty" id="covermeta"></div>
-          <label class="pagepick hidden no-print" id="coverpagewrap">page <select id="coverpage"></select> <span id="coverpagecount"></span></label>
-        </div>
-      </div>
-      <input type="file" id="coverinput" class="hidden">
-      <div class="label-preview-wrap" id="coverpreviewwrap">
-        <div class="label-preview" id="coverpreview"><div class="label-placeholder">no artwork selected</div></div>
-      </div>
-      <div class="spread-caption" id="covercaption"><span>back</span><span>front</span></div>
-      <table class="labelwarnings" id="coverwarnings"></table>
-    </div>
-  </section>
-
-
-  <!-- ============ INLAY ============ -->
-  <section>
-    <h2>Inlay</h2>
-    <details class="specs no-print" id="inlayspecs">
-      <summary>Specifications</summary>
-      <div class="specs-body"></div>
-    </details>
-    <div class="row">
-      <div class="field" style="flex:0 0 auto;">
-        <select id="inlayProduct"></select>
-      </div>
-    </div>
-    <div id="inlayPrintedBody" class="hidden">
-      <div class="label-cols2">
-        <div>
-          <div class="side-head">
-            <h3>Inlay Front</h3>
-          </div>
-          <div class="row" style="align-items:end;">
-            <div class="field" style="flex:0 0 auto;">
-              <label>&nbsp;</label>
-              <button type="button" class="pickbtn no-print" id="inlayfrontpick" title="Choose inlay front artwork">↑</button>
-            </div>
-            <div class="field">
-              <div class="filemeta empty" id="inlayfrontmeta"></div>
-              <label class="pagepick hidden no-print" id="inlayfrontpagewrap">page <select id="inlayfrontpage"></select> <span id="inlayfrontpagecount"></span></label>
-              <button type="button" class="pairbtn hidden no-print" id="inlaypair">Use page 2 for back</button>
-            </div>
-          </div>
-          <input type="file" id="inlayfrontinput" class="hidden">
-          <div class="label-preview-wrap" id="inlayfrontpreviewwrap">
-            <div class="label-preview" id="inlayfrontpreview"><div class="label-placeholder">no artwork selected</div></div>
-          </div>
-          <table class="labelwarnings" id="inlayfrontwarnings"></table>
-        </div>
-        <div>
-          <div class="side-head">
-            <h3>Inlay Back</h3>
-          </div>
-          <div class="row" style="align-items:end;">
-            <div class="field" style="flex:0 0 auto;">
-              <label>&nbsp;</label>
-              <button type="button" class="pickbtn no-print" id="inlaybackpick" title="Choose inlay back artwork">↑</button>
-            </div>
-            <div class="field">
-              <div class="filemeta empty" id="inlaybackmeta"></div>
-              <label class="pagepick hidden no-print" id="inlaybackpagewrap">page <select id="inlaybackpage"></select> <span id="inlaybackpagecount"></span></label>
-            </div>
-          </div>
-          <input type="file" id="inlaybackinput" class="hidden">
-          <div class="label-preview-wrap" id="inlaybackpreviewwrap">
-            <div class="label-preview" id="inlaybackpreview"><div class="label-placeholder">no artwork selected</div></div>
-          </div>
-          <table class="labelwarnings" id="inlaybackwarnings"></table>
-        </div>
-      </div>
-    </div>
-  </section>
-
-
-  <!-- ============ VINYL COLOUR & QUANTITY ============ -->
-  <section>
-    <h2>Vinyl Colour & Quantity</h2>
-    <div id="colourRows"></div>
-    <button type="button" class="addbtn no-print" id="addColourBtn">+ add colour</button>
-    <ul class="checklist" id="colourChecklist"></ul>
-  </section>
+      <h3>Notes to the Mastering Engineer</h3>
+      <label class="chk">
+        <input type="checkbox" id="soundsystem"> Soundsystem cut
+      </label>
+      <textarea id="notes"></textarea>
+    
+  </details>
 
 
   <!-- ============ REFERENCE CUT & TESTPRESS ============ -->
-  <section id="proofsSection">
-    <h2>Reference cut &amp; Testpress</h2>
-    <div class="row" id="referenceCutRow" style="align-items:center;">
-      <label class="chk"><input type="checkbox" id="referenceCut"> Reference cut (one acetate)</label>
-      <span id="referenceCutInfo"></span>
-    </div>
-    <div class="row" id="testpressRow" style="align-items:center;">
-      <label class="chk"><input type="checkbox" id="testpress"> Testpress</label>
-      <input type="number" id="testpressQty" class="hidden" min="1" step="1" style="width:80px;">
-      <span id="testpressInfo"></span>
-    </div>
-    <p class="proof-note hidden" id="testpressNote"></p>
-  </section>
+  <details class="panel" id="proofsSection">
+    <summary>Reference cut &amp; Testpress</summary>
+      <div class="row" id="referenceCutRow" style="align-items:center;">
+        <label class="chk"><input type="checkbox" id="referenceCut"> Reference cut (one acetate)</label>
+        <span id="referenceCutInfo"></span>
+      </div>
+      <div class="row" id="testpressRow" style="align-items:center;">
+        <label class="chk"><input type="checkbox" id="testpress"> Testpress</label>
+        <input type="number" id="testpressQty" class="hidden" min="1" step="1" style="width:80px;">
+        <span id="testpressInfo"></span>
+      </div>
+      <p class="proof-note hidden" id="testpressNote"></p>
+    
+  </details>
+
+
+  <!-- ============ LABELS ============ -->
+  <details class="panel">
+    <summary>Labels</summary>
+      <div class="label-cols2" id="labelSides"></div>
+    
+  </details>
+
+
+  <!-- ============ INNER SLEEVE ============ -->
+  <details class="panel">
+    <summary>Inner Sleeve</summary>
+      <details class="specs no-print" id="innersleevespecs">
+        <summary>Specifications</summary>
+        <div class="specs-body"></div>
+      </details>
+      <div class="row">
+        <div class="field" style="flex:0 0 auto;">
+          <select id="innersleeveProduct"></select>
+        </div>
+      </div>
+
+      <div id="innersleevePrintedBody">
+        <div class="row" style="align-items:end;">
+          <div class="field" style="flex:0 0 auto;">
+            <label>&nbsp;</label>
+            <button type="button" class="pickbtn no-print" id="innersleevepick" title="Choose inner sleeve artwork">↑</button>
+          </div>
+          <div class="field">
+            <div class="filemeta empty" id="innersleevemeta"></div>
+            <label class="pagepick hidden no-print" id="innersleevepagewrap">page <select id="innersleevepage"></select> <span id="innersleevepagecount"></span></label>
+          </div>
+        </div>
+        <input type="file" id="innersleeveinput" class="hidden">
+        <div class="label-preview-wrap" id="innersleevepreviewwrap">
+          <div class="label-preview" id="innersleevepreview"><div class="label-placeholder">no artwork selected</div></div>
+        </div>
+        <div class="spread-caption" id="innersleevecaption"><span>back</span><span>front</span></div>
+        <table class="labelwarnings" id="innersleevewarnings"></table>
+      </div>
+    
+  </details>
+
+
+  <!-- ============ OUTER COVER ============ -->
+  <details class="panel">
+    <summary>Outer Cover</summary>
+      <details class="specs no-print" id="coverspecs">
+        <summary>Specifications</summary>
+        <div class="specs-body"></div>
+      </details>
+      <div class="row">
+        <div class="field" style="flex:0 0 auto;">
+          <select id="coverProduct"></select>
+        </div>
+      </div>
+
+      <div id="coverPrintedBody">
+        <div class="row" style="align-items:end;">
+          <div class="field" style="flex:0 0 auto;">
+            <label>&nbsp;</label>
+            <button type="button" class="pickbtn no-print" id="coverpick" title="Choose cover artwork">↑</button>
+          </div>
+          <div class="field">
+            <div class="filemeta empty" id="covermeta"></div>
+            <label class="pagepick hidden no-print" id="coverpagewrap">page <select id="coverpage"></select> <span id="coverpagecount"></span></label>
+          </div>
+        </div>
+        <input type="file" id="coverinput" class="hidden">
+        <div class="label-preview-wrap" id="coverpreviewwrap">
+          <div class="label-preview" id="coverpreview"><div class="label-placeholder">no artwork selected</div></div>
+        </div>
+        <div class="spread-caption" id="covercaption"><span>back</span><span>front</span></div>
+        <table class="labelwarnings" id="coverwarnings"></table>
+      </div>
+    
+  </details>
+
+
+  <!-- ============ INLAY ============ -->
+  <details class="panel">
+    <summary>Inlay</summary>
+      <details class="specs no-print" id="inlayspecs">
+        <summary>Specifications</summary>
+        <div class="specs-body"></div>
+      </details>
+      <div class="row">
+        <div class="field" style="flex:0 0 auto;">
+          <select id="inlayProduct"></select>
+        </div>
+      </div>
+      <div id="inlayPrintedBody" class="hidden">
+        <div class="label-cols2">
+          <div>
+            <div class="side-head">
+              <h3>Inlay Front</h3>
+            </div>
+            <div class="row" style="align-items:end;">
+              <div class="field" style="flex:0 0 auto;">
+                <label>&nbsp;</label>
+                <button type="button" class="pickbtn no-print" id="inlayfrontpick" title="Choose inlay front artwork">↑</button>
+              </div>
+              <div class="field">
+                <div class="filemeta empty" id="inlayfrontmeta"></div>
+                <label class="pagepick hidden no-print" id="inlayfrontpagewrap">page <select id="inlayfrontpage"></select> <span id="inlayfrontpagecount"></span></label>
+                <button type="button" class="pairbtn hidden no-print" id="inlaypair">Use page 2 for back</button>
+              </div>
+            </div>
+            <input type="file" id="inlayfrontinput" class="hidden">
+            <div class="label-preview-wrap" id="inlayfrontpreviewwrap">
+              <div class="label-preview" id="inlayfrontpreview"><div class="label-placeholder">no artwork selected</div></div>
+            </div>
+            <table class="labelwarnings" id="inlayfrontwarnings"></table>
+          </div>
+          <div>
+            <div class="side-head">
+              <h3>Inlay Back</h3>
+            </div>
+            <div class="row" style="align-items:end;">
+              <div class="field" style="flex:0 0 auto;">
+                <label>&nbsp;</label>
+                <button type="button" class="pickbtn no-print" id="inlaybackpick" title="Choose inlay back artwork">↑</button>
+              </div>
+              <div class="field">
+                <div class="filemeta empty" id="inlaybackmeta"></div>
+                <label class="pagepick hidden no-print" id="inlaybackpagewrap">page <select id="inlaybackpage"></select> <span id="inlaybackpagecount"></span></label>
+              </div>
+            </div>
+            <input type="file" id="inlaybackinput" class="hidden">
+            <div class="label-preview-wrap" id="inlaybackpreviewwrap">
+              <div class="label-preview" id="inlaybackpreview"><div class="label-placeholder">no artwork selected</div></div>
+            </div>
+            <table class="labelwarnings" id="inlaybackwarnings"></table>
+          </div>
+        </div>
+      </div>
+    
+  </details>
 
 
   <!-- ============ BILLING ADDRESS ============ -->
-  <section>
-    <h2>Billing Address</h2>
-    <div id="billingAddress"></div>
-  </section>
+  <details class="panel">
+    <summary>Billing Address</summary>
+      <div id="billingAddress"></div>
+    
+  </details>
 
 
   <!-- ============ SHIPPING ADDRESS(ES) ============ -->
-  <section>
-    <h2>Shipping</h2>
-    <div id="shipAddrs"></div>
-    <button type="button" class="addbtn no-print" id="addShipAddrBtn">+ add shipping address</button>
-  </section>
+  <details class="panel">
+    <summary>Shipping</summary>
+      <div id="shipAddrs"></div>
+      <button type="button" class="addbtn no-print" id="addShipAddrBtn">+ add shipping address</button>
+    
+  </details>
 
 
-  <!-- ============ STATUS ============ -->
+<!-- ============ STATUS ============ -->
   <section>
     <h2>Status</h2>
     <ul class="checklist" id="checklist"></ul>

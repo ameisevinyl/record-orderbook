@@ -553,7 +553,7 @@ function sideTemplate(side){
   return `
   <div id="sidebox-${side}">
     <div class="side-head">
-      <h2>Side ${side}</h2>
+      <h3>Side ${side}</h3>
       ${isB ? `<div class="side-opts"><label class="chk"><input type="checkbox" id="blankB"> blank / not used</label></div>` : ""}
     </div>
 

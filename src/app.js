@@ -36,3 +36,11 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshOrderStatus();
   initDebugMode();
 });
+
+// Print shows every panel; restore the folds afterwards.
+let foldedPanels = [];
+window.addEventListener("beforeprint", () => {
+  foldedPanels = [...document.querySelectorAll("details.panel:not([open])")];
+  foldedPanels.forEach(d => d.open = true);
+});
+window.addEventListener("afterprint", () => foldedPanels.forEach(d => d.open = false));
