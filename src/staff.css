@@ -1,0 +1,13 @@
+/* The staff's order view (src/staff.js): the customer page, read-only, with
+   the plant's bar on top. Tokens are the customer page's. */
+.staffbar{ font-size:12px; color:var(--ink-dim); margin:0 0 12px; }
+.staffbar b{ color:var(--ink); }
+.staffbar a{ color:inherit; }
+#staffTask{ margin-left:8px; font-family:var(--mono); }
+#staffTask.err{ color:var(--danger); font-weight:700; }
+/* Nothing is attached here, so the page's own checklist and its actions don't apply. */
+body.staff .actions, body.staff #sendPanel, body.staff #checklist{ display:none; }
+/* Locked fields stay readable. */
+body.staff .sheet input:disabled, body.staff .sheet select:disabled, body.staff .sheet textarea:disabled{
+  opacity:1; color:var(--ink); cursor:default;
+}
