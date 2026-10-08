@@ -65,6 +65,7 @@ test("prices are shown per piece and stored per unit", () => {
   assert.equal(parsePrice("1,22", 1000), 1220);
   assert.equal(parsePrice("1.15", 1000), 1150);
   assert.equal(parsePrice(" 400 ", "order"), 400);
+  assert.equal(parsePrice("1,22 €", 1000), 1220);
   assert.equal(parsePrice("", 1000), null);
   assert.ok(Number.isNaN(parsePrice("abc", 1000)));
   assert.ok(Number.isNaN(parsePrice("-1", 1000)));

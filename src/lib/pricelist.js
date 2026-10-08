@@ -107,6 +107,6 @@ export const perPiece = (price, unit) => price === null ? "" : String(Math.round
 // "" -> null (not filled in), "1,22" -> 1220 per 1000, junk or negative -> NaN.
 export function parsePrice(text, unit){
   if(!text.trim()) return null;
-  const value = Number(text.trim().replace(",", "."));
+  const value = Number(text.replace(/[€\s]/g, "").replace(",", "."));
   return Number.isFinite(value) && value >= 0 ? Math.round(value * pieces(unit) * 100) / 100 : NaN;
 }
