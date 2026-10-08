@@ -11,3 +11,13 @@ body.staff .actions, body.staff #sendPanel, body.staff #checklist{ display:none;
 body.staff .sheet input:disabled, body.staff .sheet select:disabled, body.staff .sheet textarea:disabled{
   opacity:1; color:var(--ink); cursor:default;
 }
+
+/* The Quote panel: staff only, the one place that writes. */
+body.staff .manual{ color:var(--danger); font-weight:700; }
+#staffQuote table{ border-collapse:collapse; margin:0 0 8px; }
+#staffQuote th, #staffQuote td{ text-align:left; padding:2px 18px 2px 0; }
+#staffQuote button{
+  font-family:var(--sans); font-size:13px; font-weight:600; background:var(--panel); color:var(--ink);
+  border:1px solid var(--edge); padding:2px 12px; border-radius:3px; cursor:pointer;
+}
+#staffQuote button:disabled{ opacity:.5; cursor:default; }

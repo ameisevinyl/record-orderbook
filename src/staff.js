@@ -16,6 +16,12 @@ import { VERDICT, renderUnmanaged, renderHistory } from "./lib/plant-overview.js
 import { renderStaffBar, renderStaffStatus, openItems, renderLineStatus } from "./lib/staff-info.js";
 import { applyProject, showAudioChecks } from "./modules/tracklist.js";
 import { showLabelChecks } from "./modules/labels.js";
+import { showPricing } from "./modules/pricing.js";
+import { validatePricelist, upgradePricelist } from "./lib/pricelist.js";
+import { vatCase } from "./lib/vat-case.js";
+import { normalizeVatId } from "./lib/vat-rates.js";
+import { buildPriceQuote } from "./lib/price-quote.js";
+import { renderQuotePanel } from "./lib/staff-quote.js";
 import { showPartChecks } from "./modules/printed-parts.js";
 
 const job = staffJob();
@@ -42,8 +48,64 @@ function task(text, error = false){
 }
 
 // Every control but the folding stays off — also the ones the page makes later.
+// The staff's own controls (the quote's) are marked data-staff and stay on.
 function lock(){
-  for(const el of document.querySelectorAll(".sheet input, .sheet select, .sheet textarea, .sheet button")) el.disabled = true;
+  for(const el of document.querySelectorAll(".sheet :is(input, select, textarea, button):not([data-staff])")) el.disabled = true;
+}
+
+const today = () => new Date().toLocaleDateString("sv");
+
+// The Quote panel: the order priced from the live pricelist, the VAT treatment
+// proposed from the billing address and the VAT ID (checked on VIES by the
+// plant server when asked), saved as price_quote.json.
+async function startQuote(project, data){
+  const box = document.getElementById("staffQuote");
+  let pricelist;
+  try{
+    const file = await getJson("/api/staff-file?name=pricelist");
+    pricelist = validatePricelist(upgradePricelist(JSON.parse(file.text), today()));
+  }catch(error){
+    box.innerHTML = renderQuotePanel({error: `the pricelist can't be read: ${error.message}`});
+    return;
+  }
+  const billing = project.shippingBilling.billing;
+  const id = normalizeVatId(billing.vat);
+  const earlier = data.quote && data.quote.vat && data.quote.vat.vatId;
+  const state = {saved: data.quote, savedHash: data.quoteHash, chosen: "",
+    vatId: earlier && earlier.id === id ? {name: "", checked: "", ...earlier} : {id, status: id ? "unchecked" : "none", name: "", checked: ""}};
+  const rateFor = kind => kind === "domestic" || kind === "plus-vat" ? pricelist.vat.rate : kind === "none" ? null : 0;
+  const render = () => {
+    const proposal = vatCase({plantCountry: pricelist.vat.country, plantRate: pricelist.vat.rate, billingCountry: billing.countryCode,
+      vatId: state.vatId.id, vatIdStatus: state.vatId.status});
+    const kind = state.chosen || proposal.case;
+    const built = buildPriceQuote({project, pricelist, config: CONFIG, today: today(), vat: {case: kind, rate: rateFor(kind), vatId: state.vatId}});
+    box.innerHTML = renderQuotePanel({saved: state.saved, built, proposal, chosen: state.chosen, vatId: state.vatId, billingCountry: billing.countryCode});
+    return built;
+  };
+  let built = render();
+  box.addEventListener("click", async event => {
+    const act = event.target.dataset.act;
+    try{
+      if(act === "vatCheck"){
+        task("asking VIES");
+        state.vatId = await (await post("/api/vat-check", {vatId: state.vatId.id})).json();
+        task("");
+        built = render();
+      }else if(act === "saveQuote" && built.ok){
+        const {hash} = await (await post("/api/quote", {job, quote: built.quote, basedOn: state.savedHash})).json();
+        Object.assign(state, {saved: built.quote, savedHash: hash});
+        showPricing(state.saved);
+        built = render();
+      }
+    }catch(error){
+      task(`quote: ${error.message}`, true);
+    }
+  });
+  box.addEventListener("change", event => {
+    if(event.target.dataset.act !== "vatCase") return;
+    state.chosen = event.target.value;
+    built = render();
+  });
 }
 
 async function start(){
@@ -53,6 +115,7 @@ async function start(){
   sheet.insertAdjacentHTML("afterbegin", renderStaffBar(job, data.stage));
   const project = prepareProject(data.project, CONFIG);
   await applyProject(project, new Map());
+  showPricing(data.quote);
   document.getElementById("stamp").textContent = job;
 
   // The page's own status list counts every file as missing (none is
@@ -61,7 +124,8 @@ async function start(){
   status.closest("section").querySelector("h2").textContent = "Status — plant checks";
   status.insertAdjacentHTML("afterend", '<ul class="checklist" id="staffChecklist"></ul>');
   const first = status.closest("section");
-  first.insertAdjacentHTML("beforebegin", '<details class="panel" open><summary>Plant</summary><div id="staffPanel"></div></details>');
+  first.insertAdjacentHTML("beforebegin", '<details class="panel" open><summary>Quote</summary><div id="staffQuote"></div></details>'
+    + '<details class="panel" open><summary>Plant</summary><div id="staffPanel"></div></details>');
   lock();
   new MutationObserver(lock).observe(sheet, {childList: true, subtree: true});
 
@@ -77,6 +141,7 @@ async function start(){
     document.getElementById("staffChecklist").innerHTML = renderStaffStatus(openItems({gaps, findings, artwork}), checked);
   };
   draw(null, [], [], false);
+  startQuote(project, data);
 
   // The two checks are tried one after the other and independently: a failed
   // audio check doesn't keep the artwork from being checked.

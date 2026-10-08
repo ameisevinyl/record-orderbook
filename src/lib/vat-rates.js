@@ -13,9 +13,12 @@ export const standardVatRate = countryCode => STANDARD_VAT[countryCode];
 // The 27 member states by ISO code (Greece is GR here, EL in a VAT ID).
 export const EU_COUNTRIES = Object.keys(STANDARD_VAT).filter(code => code !== "GB" && code !== "CH");
 
+// A VAT ID without spaces, dots and dashes, upper case (as plant/vies.py cleans it).
+export const normalizeVatId = vatId => String(vatId ?? "").replace(/[\s.\-]/g, "").toUpperCase();
+
 // The country a VAT ID belongs to, from its prefix; null when it has none.
 export function vatIdCountry(vatId){
-  const prefix = (/^[A-Z]{2}/.exec(String(vatId ?? "").replace(/[\s.\-]/g, "").toUpperCase()) || [null])[0];
+  const prefix = (/^[A-Z]{2}/.exec(normalizeVatId(vatId)) || [null])[0];
   return prefix === "EL" ? "GR" : prefix;
 }
 
