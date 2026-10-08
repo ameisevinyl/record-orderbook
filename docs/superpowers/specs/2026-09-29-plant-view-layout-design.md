@@ -1,5 +1,7 @@
 # Plant view layout — plain HTML structure — design
 
+> 2026-10-08: the left nav and the section links beside the page are gone — the home is the dashboard table under a small header (file menu, status, statistics), a job's section links are one row above its sections. See `2026-10-08-backend-structure-design.md` §2.
+
 Status: approved 2026-09-29, built.
 
 ## Context

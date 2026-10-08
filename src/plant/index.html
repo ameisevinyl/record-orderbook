@@ -3,22 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Plant view</title>
+<title>Orderbook</title>
 <link rel="stylesheet" href="/src/plant/structure.css">
 <link rel="stylesheet" href="/src/plant/theme.css">
 </head>
 <body>
 <header>
-  <h1><a href="#/">Plant view</a></h1>
-  <nav id="menu"></nav>
-  <button type="button" id="btnLoad">Load project zip</button>
-  <button type="button" id="btnLoadFolder">Load project folder</button>
+  <h1><a href="#/" id="title">Orderbook</a></h1>
+  <details id="menu">
+    <summary>Menu</summary>
+    <ul id="menuItems"></ul>
+  </details>
   <input type="file" id="zipInput" accept=".zip,application/zip" hidden>
   <input type="file" id="folderInput" webkitdirectory hidden>
   <pre id="status">idle</pre>
+  <p id="stats"></p>
+  <div id="attention"></div>
   <p id="error"></p>
 </header>
-<nav id="nav"></nav>
 <main id="out"></main>
 <div id="tip" hidden></div>
 <script type="module" src="/src/plant/app.js"></script>

@@ -1,10 +1,13 @@
-/* Structure only: the two columns, and how the pictures stack. No
+/* Structure only: the header block, the table header and the drop-down, and how the pictures stack. No
    fonts, spacing or colours of the page's own — a plant's theme or a
    CSS reset goes on top of this later. Lines on the pictures use HTML's
    named colours. */
 
-body{ display:grid; grid-template-columns:max-content 1fr; }
-header{ grid-column:1 / -1; }
+/* The drop-down floats under its button; the dashboard's header row stays
+   on top while the table scrolls. */
+#menu{ position:relative; }
+#menu ul{ position:absolute; top:100%; left:0; z-index:4; list-style:none; }
+table.dashboard thead th{ position:sticky; top:0; z-index:2; }
 
 /* Waveform: the played part and the markers lie on the picture. */
 .wave{ position:relative; }

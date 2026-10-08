@@ -27,6 +27,9 @@ export function stageLabel(stage){
   return stage.split("/").map(part => part.replace(/^\d\d_/, "")).join(" › ");
 }
 
+// "10_ORDERS/20_PRESS" → "PRESS": a stage's own name.
+export const ownName = stage => stage.split("/").at(-1).replace(/^\d\d_/, "");
+
 // "2026-09-24T12:00:00.000Z" → "2026-09-24 12:00" (UTC, as stored)
 export const when = iso => escapeHtml((iso || "").slice(0, 16).replace("T", " "));
 

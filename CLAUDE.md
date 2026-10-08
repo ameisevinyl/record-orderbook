@@ -180,8 +180,10 @@ configured on purpose — keep it that way unless asked.
   innerSleeve, outerCover, inlay) and press, pack, ship (hand-confirmed
   steps only); a line the order has no printed part for is not on the order
   (`needed: false`) and counts as done, so it never holds up the lines after
-  it. The dashboard (`src/lib/dashboard.js`, the plant view's home) shows a
-  row per order and a column per line; `CONFIG.dashboardViews` are the
+  it. The dashboard (`src/lib/dashboard.js`, the plant view's home) is one
+  table, INBOX to DONE, a row per order and a column per line, under a
+  small header (the plant's name, a file menu with load zip/folder, archive
+  and the settings pages, the status line, statistics); `CONFIG.dashboardViews` are the
   column presets (`#/view/<preset>`); `#/archive` lists the zips
   `plant/archive.py` wrote. Spec:
   `docs/superpowers/specs/2026-10-02-production-lines-design.md`.

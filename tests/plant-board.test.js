@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderNav, renderHome, renderInbox, renderArchive } from "../src/lib/plant-board.js";
+import { renderAttention, renderJobBar, renderInbox, renderArchive } from "../src/lib/plant-board.js";
 
 const board = {stages: [
   {stage: "00_INBOX", jobs: [{job: "j1", catalogue: "X<1>", title: "T", artist: "A"}]},
@@ -10,34 +10,18 @@ const board = {stages: [
   {stage: "20_DONE", jobs: []}
 ], inbox: ["new.zip", "Download"], problems: ["j is in more than one stage"]};
 
-test("nav: stages nested under their grouping stage, counts, each job once, inbox items", () => {
-  const html = renderNav(board, null);
-  assert.ok(html.startsWith("<h2>Jobs</h2>"));
-  assert.ok(html.includes("<li>ORDERS<ul><li>PREPRESS (1)"), "grouping stage is a heading, no count, no jobs");
-  assert.ok(!html.includes("lost"), "a job put into a grouping stage isn't listed in the nav");
-  assert.ok(html.includes("<li>INBOX (3)"));
-  assert.ok(html.includes('<a href="#/inbox/new.zip">new.zip</a> (new zip)'));
-  assert.ok(html.includes('<a href="#/inbox/Download">Download</a> (new folder)'));
-  assert.equal(html.split("X&lt;1&gt;").length - 1, 1);
-  assert.ok(html.includes('<a href="#/job/bad">bad (unreadable)</a>'));
-  assert.ok(html.includes("<li>DONE (0)</li>"));
-  assert.ok(!html.includes("Sections"));
-});
-
-test("nav: the open job is marked and its section links follow", () => {
-  const html = renderNav(board, "j1");
-  assert.ok(html.includes('<a href="#/job/j1" aria-current="page"><b>X&lt;1&gt; — T</b></a>'));
-  assert.ok(html.includes('<h2>Sections</h2><ul><li><a href="#/job/j1/basic">Basic</a></li>'));
-  assert.ok(html.includes('<a href="#/job/j1/shipping">Shipping &amp; billing</a>'));
-});
-
-test("home: problems, jobs in a grouping stage linked, the inbox count", () => {
-  const html = renderHome(board);
+test("attention: problems and jobs in a grouping stage linked; nothing to say gives nothing", () => {
+  const html = renderAttention(board);
   assert.ok(html.includes("<li>j is in more than one stage</li>"));
   assert.ok(html.includes('<a href="#/job/lost%20%26%20%231">lost &amp; #1</a> is in 10_ORDERS — move it to one of its sub-stages'));
-  assert.ok(html.includes("2 new in the inbox."));
-  assert.ok(!html.includes("X&lt;1&gt;"), "catalogue numbers are in the nav only");
-  assert.ok(renderHome({stages: [], inbox: [], problems: []}).includes("Nothing needs attention."));
+  assert.equal(renderAttention({stages: [], inbox: [], problems: []}), "");
+});
+
+test("job bar: a jump link per section of the open job", () => {
+  const html = renderJobBar("j1");
+  assert.ok(html.startsWith('<p class="jump"><a href="#/job/j1/basic">Basic</a>'));
+  assert.ok(html.includes('<a href="#/job/j1/shipping">Shipping &amp; billing</a>'));
+  assert.ok(renderJobBar("a b").includes('href="#/job/a%20b/basic"'));
 });
 
 test("inbox: the item as a table row, a merge per matching job, then accept", () => {

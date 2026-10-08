@@ -1,10 +1,9 @@
-// Plant view page: a two-column page — the jobs tree and the open job's
-// section links in <nav>, the chosen view in <main> — under one CLI
-// status line. Views: the overview (what needs attention), a zip or
-// folder in the inbox (new job or resend), a job in six sections. A job
-// is checked on every load (the server re-reads only changed files, the
-// rules here always run), then its spectrograms are made in the
-// background.
+// Plant view page: a small header (title with the plant's name, the file
+// menu, the CLI status line, the statistics) over the chosen view in <main>.
+// Views: the dashboard (every order's lines), the archive, a zip or folder
+// in the inbox (new job or resend), a job in six sections. A job is checked
+// on every load (the server re-reads only changed files, the rules here
+// always run), then its spectrograms are made in the background.
 import { CONFIG } from "../config.js";
 import { prepareProject, historyEntry, productionTitle } from "../lib/project.js";
 import { projectGaps } from "../lib/completeness.js";
@@ -15,18 +14,21 @@ import { getFormat } from "../lib/format-catalogue.js";
 import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf, useVersion } from "../lib/versions.js";
 import { projectFileName } from "../lib/package-naming.js";
 import { renderBasic, renderProduction, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
-import { renderNav, renderHome, renderInbox, renderArchive } from "../lib/plant-board.js";
-import { dashboardRows, renderDashboard, viewLines, viewFromHash } from "../lib/dashboard.js";
+import { renderAttention, renderJobBar, renderInbox, renderArchive } from "../lib/plant-board.js";
+import { dashboardRows, dashboardStats, renderDashboard, viewLines, viewFromHash } from "../lib/dashboard.js";
+import { parsePlantConfig } from "../lib/plant-config.js";
 import { lineState, logEntry, stageReady } from "../lib/lines.js";
-import { menuHtml } from "../lib/menu.js";
+import { dropdownHtml } from "../lib/menu.js";
 
 const zipInput = document.getElementById("zipInput");
 const folderInput = document.getElementById("folderInput");
-const nav = document.getElementById("nav");
 const out = document.getElementById("out");
 const error = document.getElementById("error");
 const status = document.getElementById("status");
-document.getElementById("menu").innerHTML = menuHtml("/");
+const stats = document.getElementById("stats");
+const attention = document.getElementById("attention");
+const menu = document.getElementById("menu");
+document.getElementById("menuItems").innerHTML = dropdownHtml();
 
 // Loads can take a while; only the most recent view may render.
 let latest = 0;
@@ -125,11 +127,12 @@ async function route(reload = true){
     busy("reading the jobs");
     const board = await getJson("/api/board");
     if(id !== latest) return;
-    nav.innerHTML = renderNav(board, kind === "job" ? name : null);
+    stats.textContent = dashboardStats(board);
+    attention.innerHTML = renderAttention(board);
     if(kind === "job") await showJob(name, section, id);
     else if(kind === "inbox") await showInbox(name, id);
     else if(location.hash === "#/archive") out.innerHTML = renderArchive(board.archive);
-    else out.innerHTML = dashboardHtml(board) + renderHome(board);
+    else out.innerHTML = dashboardHtml(board);
   }catch(err){
     if(id !== latest) return;
     if(kind === "job" && err.message === `no job ${name}`) leave(name);
@@ -186,7 +189,7 @@ async function showJob(job, section, id){
   const full = rescan;
   rescan = false;
   const lines = Object.keys(CONFIG.lines);
-  out.innerHTML = renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps)
+  out.innerHTML = renderJobBar(job) + renderBasic(project, CONFIG, {job, stage: data.stage, stages: data.stages}, gaps)
     + renderProduction(lines.map(n => lineState(project, CONFIG, n, null)), CONFIG.partners)
     + renderArtwork(files, checkable, null, printCheck, base, gaps)
     + renderAudio(project, files, null, [], base, gaps)
@@ -490,10 +493,21 @@ setInterval(async ()=>{
 
 // A section link clicked again keeps the page's hash, so no hashchange
 // fires: scroll here.
-nav.addEventListener("click", e => {
-  const link = e.target.closest("a");
+out.addEventListener("click", e => {
+  const link = e.target.closest(".jump a");
   if(link && link.hash === location.hash) scrollToSection(parseHash().section);
 });
+
+// The file menu closes on a choice and on a click anywhere else.
+menu.addEventListener("click", e => { if(e.target.closest("button, a")) menu.open = false; });
+document.addEventListener("click", e => { if(!menu.contains(e.target)) menu.open = false; });
+
+// The plant's name in the title, from its config; "Orderbook" without.
+getJson("/api/staff-file?name=plant-config").then(({text}) => {
+  const name = parsePlantConfig(text).imprint.recipientName;
+  document.getElementById("title").textContent = `${name} · orderbook`;
+  document.title = `${name} · orderbook`;
+}).catch(() => {});
 
 // CMYK readout: the preview's own numbers under the pointer (artwork.py
 // writes them next to the preview; fetched once per preview).
