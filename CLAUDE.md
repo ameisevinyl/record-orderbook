@@ -196,7 +196,11 @@ configured on purpose — keep it that way unless asked.
   open/save a JSON file, prices per piece) and the plant identity in
   `dist/plant-config.html` (`plant.config.local.js`, open/save); both share
   `src/sheet.css` / `sheet.js`. The pricelist takes its VAT country/rate
-  from the plant config (`src/lib/vat-rates.js`). Spec:
+  from the plant config (`src/lib/vat-rates.js`). Served by the plant
+  server (`/src/pricelist.html`, `/src/plant-config.html`) the two editors
+  read and write the real files on disk (`/api/staff-file`,
+  `plant/staff_files.py`, 409 when changed meanwhile); the `dist/` files keep
+  open/save as downloads. Spec:
   `docs/superpowers/specs/2026-10-08-pricelist-quote-design.md`.
 - Deep checks on disk (`plant/checks.py`, `spectrum.py`, `artwork.py`):
   see `plant/CLAUDE.md`. Python only reads facts; the rules live in

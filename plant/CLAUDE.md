@@ -46,3 +46,7 @@
   hole drawn on in CMYK, as `<cat>_proof_…` (`proofFileName`) in the
   job folder via `/api/proof`; the customer's viewer converts for the
   screen. Spec: `docs/superpowers/specs/2026-10-02-customer-proof-design.md`.
+- `staff_files.py` — the pricelist and plant config for the two staff
+  editors: read (the committed example before the plant has its own), write
+  by hash like project.json (409 when changed meanwhile). Spec:
+  `docs/superpowers/specs/2026-10-08-backend-structure-design.md` §1.

@@ -34,14 +34,16 @@ now). The order view (3), Pricelist and Plant config are pages of their own
 (`/order/<job>`, `sheet.css` pages); a dashboard row click navigates to the
 order page.
 
-- `GET/PUT /api/pricelist` and `/api/plant-config` read and write the real
-  files (`src/pricelist.json`, `src/plant.config.local.js`). The page keeps
+- `GET` and `POST /api/staff-file?name=pricelist|plant-config` (POST so the
+  JSON-only guard applies) read and write the real files (`src/pricelist.json`, `src/plant.config.local.js`). The page keeps
   parsing, validating and formatting (`lib/pricelist.js`, `lib/plant-config.js`);
   Python writes atomically and refuses with 409 when the file changed since the
   page read it (same rule as `project.json`). Served by the server, the pages
   read the live `src/` files, no rebuild; Open/Save-as-download stays for the
   standalone `dist/` pages.
-- Menu holds "Load zip" / "Load folder" (existing `/api/upload*`).
+- Menu bar: Plant view, Pricelist, Plant config (one list, `src/lib/menu.js`)
+  beside the Load zip / Load folder buttons (existing `/api/upload*`). Archive
+  and Fixers join with their parts.
 - Small enough to land as the first commit of 2.
 
 ## 2 Dashboard
