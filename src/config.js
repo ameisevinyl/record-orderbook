@@ -155,8 +155,8 @@ export const CONFIG = {
         // diameterMm is the trim size (the physical label after
         // cutting) — data size (with bleed) is derived, see above.
         // products: what the pricelist prices on top of the blank record
-        // (a white/blank label has no product).
-        label: { diameterMm: 100, bleedMm: 3, products: [{ id:"printed-cmyk", name:"printed (CMYK)" }] },
+        // (a white/blank label is the whitelabel product).
+        label: { diameterMm: 100, bleedMm: 3, products: [{ id:"printed-cmyk", name:"printed (CMYK)" }, { id:"whitelabel", name:"whitelabel" }] },
         innerSleeve: {
           products: [
             { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",
@@ -252,7 +252,7 @@ export const CONFIG = {
         }
       },
       printableParts: {
-        label: { diameterMm: 100, bleedMm: 3, products: [{ id:"printed-cmyk", name:"printed (CMYK)" }] },
+        label: { diameterMm: 100, bleedMm: 3, products: [{ id:"printed-cmyk", name:"printed (CMYK)" }, { id:"whitelabel", name:"whitelabel" }] },
         innerSleeve: {
           products: [
             { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",
@@ -335,7 +335,7 @@ export const CONFIG = {
         }
       },
       printableParts: {
-        label: { diameterMm: 92, bleedMm: 3, products: [{ id:"printed-cmyk", name:"printed (CMYK)" }] },
+        label: { diameterMm: 92, bleedMm: 3, products: [{ id:"printed-cmyk", name:"printed (CMYK)" }, { id:"whitelabel", name:"whitelabel" }] },
         innerSleeve: {
           products: [
             { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",

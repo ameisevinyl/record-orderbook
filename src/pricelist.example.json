@@ -74,6 +74,15 @@
         { "from": 1000, "price": 191 }
       ]
     },
+    "12/label/whitelabel": {
+      "name": "12\" LP labels: whitelabel",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 90 },
+        { "from": 500, "price": 83 },
+        { "from": 1000, "price": 76 }
+      ]
+    },
     "12/innerSleeve/sleeve-white-cutout": {
       "name": "12\" LP inner sleeve: white, center cut-out",
       "unit": 1000,
@@ -258,6 +267,15 @@
         { "from": 100, "price": 150 },
         { "from": 500, "price": 138 },
         { "from": 1000, "price": 128 }
+      ]
+    },
+    "7/label/whitelabel": {
+      "name": "7\" SP labels: whitelabel",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 60 },
+        { "from": 500, "price": 55 },
+        { "from": 1000, "price": 51 }
       ]
     },
     "7/innerSleeve/sleeve-white-cutout": {
