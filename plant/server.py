@@ -165,7 +165,14 @@ class Handler(BaseHTTPRequestHandler):
             raise JobError("request is not a JSON object")
         return request
 
+    def host_ok(self):
+        """Only the loopback names: a page on another name that resolves to
+        127.0.0.1 (DNS rebinding) would be same-origin for the browser."""
+        return self.headers.get("Host", "").rsplit(":", 1)[0] in ("127.0.0.1", "localhost")
+
     def do_GET(self):
+        if not self.host_ok():
+            return self.reply(403, "forbidden host")
         route = urlsplit(self.path).path
         api = {"/api/board": self.get_board, "/api/job": self.get_job, "/api/job/stamp": self.get_stamp,
                "/api/inbox": self.get_inbox, "/api/zip": self.get_zip,
@@ -178,6 +185,8 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, target.read_bytes(), TYPES.get(target.suffix, "application/octet-stream"))
 
     def do_POST(self):
+        if not self.host_ok():
+            return self.reply(403, "forbidden host")
         api = {"/api/upload": self.upload, "/api/upload/file": self.upload_file, "/api/upload/done": self.upload_done,
                "/api/accept": self.accept, "/api/merge": self.merge,
                "/api/move": self.move, "/api/assign": self.assign,

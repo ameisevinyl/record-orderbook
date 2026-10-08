@@ -106,6 +106,22 @@ class HttpTest(unittest.TestCase):
             self.assertEqual(self.post("/api/staff-file", {**body, "text": '{"a": 3}', "basedOn": saved["hash"]})[0], 409)
             self.assertEqual((Path(tmp) / "pricelist.json").read_text(), '{"a": 2}')
 
+    def test_other_host_names_are_refused(self):
+        # DNS rebinding: a page on another name that resolves to 127.0.0.1 is
+        # same-origin for the browser, so the JSON-only guard doesn't stop it.
+        for method, path in (("GET", "/api/board"), ("POST", "/api/staff-file")):
+            for host in ("evil.example", "evil.example:8765", ""):
+                conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=30)
+                conn.putrequest(method, path, skip_host=True)
+                if host:
+                    conn.putheader("Host", host)
+                conn.putheader("Content-Type", "application/json")
+                conn.putheader("Content-Length", "2")
+                conn.endheaders(b"{}")
+                self.assertEqual(conn.getresponse().status, 403, (method, host))
+        self.assertEqual(self.get("/api/board")[0], 200)
+        self.assertEqual(self.request("GET", "/api/board", headers={"Host": "localhost:8765"})[0], 200)
+
     def test_staff_file_refuses_what_is_not_the_file(self):
         with tempfile.TemporaryDirectory() as tmp, self.staff_files(tmp):
             self.assertEqual(self.get("/api/staff-file?name=jobs")[0], 400)
