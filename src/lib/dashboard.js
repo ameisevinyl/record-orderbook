@@ -5,6 +5,7 @@
 import { prepareProject } from "./project.js";
 import { lineState } from "./lines.js";
 import { escapeHtml } from "./plant-overview.js";
+import { orderUrl } from "./staff-mode.js";
 
 // The archive holds zips (plant/archive.py), not jobs: its own view.
 const INBOX = "00_INBOX", ARCHIVE = "99_ARCHIVE";
@@ -22,7 +23,7 @@ function shownStages(board){
 // The quote is a file in the job's folder (the board carries the file list).
 const hasQuote = card => (card.files || []).some(f => f.name === "price_quote.json");
 
-const cardOf = (card, extra = {}) => ({name: card.catalogue || card.job, href: `#/job/${encodeURIComponent(card.job)}`,
+const cardOf = (card, extra = {}) => ({name: card.catalogue || card.job, href: orderUrl(card.job),
   title: [card.catalogue || card.job, card.title, card.artist].filter(Boolean).join(" — "), cls: "", ...extra});
 
 // board: /api/board. Returns {columns, unreadable}: per CONFIG.board column

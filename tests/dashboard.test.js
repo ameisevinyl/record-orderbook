@@ -63,7 +63,7 @@ test("cards: a production order sits in every lane that is open for it; waiting 
   // TP001 asked for testpresses: they come before the press, which waits for their approval.
   assert.deepEqual([cards(columns, "TESTPRESS"), cards(columns, "PRESS")], [["TP001"], ["KLM003"]]);
   const klm = columns[2].lanes[0].cards[0];
-  assert.deepEqual([klm.href, klm.title], ["#/job/KLM001", "KLM001 — High <Riding> — The Band"]);
+  assert.deepEqual([klm.href, klm.title], ["/order/KLM001", "KLM001 — High <Riding> — The Band"]);
 });
 
 test("cards: an order through every line waits in the last stage column, after the ones moved there", () => {
@@ -91,7 +91,7 @@ test("render: two header rows (groups, lanes), a row per card of the longest lan
     + '<th scope="colgroup" colspan="6">PREPRESS (1)</th><th scope="colgroup" colspan="5">PRESS (3)</th><th scope="col" rowspan="2">DONE (2)</th></tr>'
     + '<tr><th scope="col">MASTERING (1)</th>'));
   assert.ok(html.includes('<th scope="col">SLEEVES (0)</th>') && html.includes('<th scope="col">INVOICE (3)</th>') && html.includes('<th scope="col">TESTPRESS (1)</th>'));
-  assert.ok(html.includes('<a class="card" href="#/job/KLM001" title="KLM001 — High &lt;Riding&gt; — The Band">KLM001</a>'));
+  assert.ok(html.includes('<a class="card" href="/order/KLM001" title="KLM001 — High &lt;Riding&gt; — The Band">KLM001</a>'));
   assert.ok(html.includes('<a class="card new" href="#/inbox/r.zip" title="received, not yet an order">r.zip</a>'));
   assert.equal(html.match(/<tr>/g).length - 2, 3, "three rows for the three cards of INBOX");
   assert.ok(html.includes("<td></td>"));
