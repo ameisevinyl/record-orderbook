@@ -10,5 +10,14 @@ export const STANDARD_VAT = {
 
 export const standardVatRate = countryCode => STANDARD_VAT[countryCode];
 
+// The 27 member states by ISO code (Greece is GR here, EL in a VAT ID).
+export const EU_COUNTRIES = Object.keys(STANDARD_VAT).filter(code => code !== "GB" && code !== "CH");
+
+// The country a VAT ID belongs to, from its prefix; null when it has none.
+export function vatIdCountry(vatId){
+  const prefix = (/^[A-Z]{2}/.exec(String(vatId ?? "").replace(/[\s.\-]/g, "").toUpperCase()) || [null])[0];
+  return prefix === "EL" ? "GR" : prefix;
+}
+
 // The pricelist's vat block for a country; rate null = no standard rate known.
 export const vatFor = countryCode => ({ country: countryCode, rate: STANDARD_VAT[countryCode] ?? null });
