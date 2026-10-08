@@ -25,6 +25,7 @@ import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
 import { collectProofs, applyProofs, proofIssues } from "./proofs.js";
 import { collectShippingBilling, applyShippingBilling } from "./shipping-billing.js";
 import { storedFileText } from "../lib/staff-mode.js";
+import { audioFactsText } from "../lib/audio-facts.js";
 
 // Renders "file: <current name> — <status>", plus a tight second line
 // with the original filename when it differs from the current one —
@@ -1131,6 +1132,17 @@ export async function applyProject(p, fileMap){
   syncAlbumArtistToLinkedTracks();
   document.getElementById("stamp").textContent = document.getElementById("catalogue").value || "— unsaved —";
   recompute();
+}
+
+// The plant's audio facts in the file lines of the staff's order view
+// (applyProject marked the lines of files it did not attach).
+export function showAudioChecks(facts){
+  for(const line of document.querySelectorAll(".filemeta[data-stored]")){
+    const file = facts.files[line.dataset.stored];
+    if(!file) continue;
+    renderFileMeta(line, line.dataset.stored, null, audioFactsText(file));
+    line.classList.toggle("warn", !!file.error);
+  }
 }
 
 function collectPackageFiles(forSend = false){
