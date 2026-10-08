@@ -14,7 +14,7 @@ from pathlib import Path
 
 import jobs
 
-DONE, ARCHIVE = "20_DONE", "99_ARCHIVE"
+DONE, ARCHIVE = "20_DONE", jobs.ARCHIVE
 
 
 def arrived(project, stage):

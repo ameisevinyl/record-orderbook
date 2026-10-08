@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import stat
 import tempfile
 import unittest
@@ -95,6 +96,22 @@ class JobsTest(Tree):
         self.assertEqual(card["project"]["catalogue"], "X")
         self.assertEqual([f["name"] for f in card["files"]], ["L.pdf"])
         self.assertEqual(card["artwork"], {"L.pdf": {"kind": "pdf", "sha256": "abc"}})
+
+    def test_archived_lists_the_archive_zips_newest_first(self):
+        folder = self.root / "99_ARCHIVE"
+        for name, data, when in (("old.zip", b"1", 1_000_000_000), ("new.zip", b"22", 1_700_000_000)):
+            (folder / name).write_bytes(data)
+            os.utime(folder / name, (when, when))
+        (folder / ".new.zip.part").write_bytes(b"half")
+        (folder / "notes.txt").write_text("x")
+        listing = jobs.archived(self.root)
+        self.assertEqual([(e["name"], e["size"]) for e in listing], [("new.zip", 2), ("old.zip", 1)])
+        self.assertRegex(listing[0]["modified"], r"^2023-11-14T\d\d:\d\d:\d\dZ$")
+        self.assertEqual(jobs.board(self.root)["archive"], listing)
+
+    def test_archived_without_an_archive_stage_is_empty(self):
+        (self.root / "99_ARCHIVE").rmdir()
+        self.assertEqual(jobs.archived(self.root), [])
 
     def test_move_renames_and_logs(self):
         self.job("00_INBOX", "j", {"plant": {"stage": "00_INBOX"}})

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderNav, renderHome, renderInbox, renderBoard } from "../src/lib/plant-board.js";
+import { renderNav, renderHome, renderInbox, renderBoard, renderArchive } from "../src/lib/plant-board.js";
 
 const board = {stages: [
   {stage: "00_INBOX", jobs: [{job: "j1", catalogue: "X<1>", title: "T", artist: "A"}]},
@@ -62,4 +62,13 @@ test("board grid: a row per job, a column per line, the current step or ✓", ()
 
 test("nav: a Board link first", () => {
   assert.ok(renderNav({stages: [], inbox: []}, null).startsWith('<p><a href="#/board">Board</a></p>'));
+});
+
+test("archive: the zips with size and date; nothing archived", () => {
+  const html = renderArchive([{name: "K_x_261001-1000.zip", size: 3 * 1048576, modified: "2026-10-01T12:00:00Z"},
+    {name: "a<b>.zip", size: 100, modified: "2026-09-01T08:30:00Z"}]);
+  assert.ok(html.includes("<h2>Archive</h2>"));
+  assert.ok(html.includes("<tr><td>K_x_261001-1000</td><td>3.0 MB</td><td>2026-10-01 12:00</td></tr>"));
+  assert.ok(html.includes("<td>a&lt;b&gt;</td><td>1 KB</td>"));
+  assert.ok(renderArchive([]).includes("Nothing archived."));
 });

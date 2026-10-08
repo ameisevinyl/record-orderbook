@@ -28,7 +28,7 @@ export function stageLabel(stage){
 }
 
 // "2026-09-24T12:00:00.000Z" → "2026-09-24 12:00" (UTC, as stored)
-const when = iso => escapeHtml((iso || "").slice(0, 16).replace("T", " "));
+export const when = iso => escapeHtml((iso || "").slice(0, 16).replace("T", " "));
 
 function section(id, body){
   const [, title] = SECTIONS.find(([key]) => key === id);
@@ -362,7 +362,7 @@ export function renderShipping(project, gaps){
 
 // --- 5 Unmanaged files ------------------------------------------------
 
-function formatSize(bytes){
+export function formatSize(bytes){
   return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 }
 

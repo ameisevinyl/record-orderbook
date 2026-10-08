@@ -27,6 +27,7 @@ STAGE = re.compile(r"\d\d_[A-Z0-9_]+")
 STAMP = re.compile(r"_\d{6}-\d{4}$")
 DEFAULT_STAGES = ["00_INBOX", "10_ORDERS/10_PREPRESS", "10_ORDERS/20_PRESS", "20_DONE", "99_ARCHIVE"]
 INBOX = "00_INBOX"
+ARCHIVE = "99_ARCHIVE"
 # Written by the customer page into every package; replaced on a resend.
 TEXT_FILES = ("order_summary.txt", "tracklist.txt")
 CHUNK = 1 << 20
@@ -229,7 +230,7 @@ def board(root):
                 cards.append({"job": job, "error": str(error)})
         columns.append({"stage": stage, "jobs": cards})
     problems += [f"more than one job {key}: {', '.join(where)}" for key, where in seen.items() if len(where) > 1]
-    return {"stages": columns, "inbox": inbox(root), "problems": problems}
+    return {"stages": columns, "inbox": inbox(root), "problems": problems, "archive": archived(root)}
 
 
 def job_paths(folder):
@@ -240,14 +241,31 @@ def job_paths(folder):
             and not p.name.startswith(".")]
 
 
+def iso(mtime):
+    """A modification time as ISO, UTC."""
+    return datetime.fromtimestamp(mtime, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def files(folder):
     """job_paths() with size and modification time (ISO, UTC)."""
     listing = []
     for p in job_paths(folder):
         st = p.stat()
-        modified = datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-        listing.append({"name": p.relative_to(folder).as_posix(), "size": st.st_size, "modified": modified})
+        listing.append({"name": p.relative_to(folder).as_posix(), "size": st.st_size, "modified": iso(st.st_mtime)})
     return listing
+
+
+def archived(root):
+    """The zips plant/archive.py wrote into the archive stage, newest first."""
+    folder = root / ARCHIVE
+    if not folder.is_dir():
+        return []
+    listing = []
+    for p in folder.iterdir():
+        if p.is_file() and p.suffix == ".zip" and not p.name.startswith("."):
+            st = p.stat()
+            listing.append({"name": p.name, "size": st.st_size, "modified": iso(st.st_mtime)})
+    return sorted(listing, key=lambda e: e["modified"], reverse=True)
 
 
 def stamp(folder):

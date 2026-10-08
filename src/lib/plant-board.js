@@ -3,7 +3,7 @@
 // (what needs attention) and a zip or folder in the inbox. Pure, like
 // plant-overview.js: every value is escaped here.
 
-import { escapeHtml, stageLabel, SECTIONS, listTable } from "./plant-overview.js";
+import { escapeHtml, stageLabel, SECTIONS, listTable, formatSize, when } from "./plant-overview.js";
 import { productionTitle } from "./project.js";
 
 const jobLink = job => `#/job/${encodeURIComponent(job)}`;
@@ -75,4 +75,11 @@ export function renderBoard(rows, lineNames){
   return `<h2>Board</h2>` + listTable(["Job", ...lineNames], rows.map(r => [
     `<a href="${jobLink(r.job)}">${escapeHtml([r.catalogue || r.job, r.title].filter(Boolean).join(" — "))}</a>`,
     ...lineNames.map(n => cell(r.states[n]))]));
+}
+
+// The archive stage: the zips archive.py wrote (name, size, when).
+export function renderArchive(items){
+  return `<h2>Archive</h2>` + (items.length
+    ? listTable(["Archived job", "Size", "Archived"], items.map(i => [escapeHtml(i.name.replace(/\.zip$/i, "")), formatSize(i.size), when(i.modified)]))
+    : "<p>Nothing archived.</p>");
 }

@@ -133,6 +133,11 @@ class HttpTest(unittest.TestCase):
             self.assertFalse((Path(tmp) / "pricelist.json").exists())
             self.assertFalse((Path(tmp) / "plant.config.local.js").exists())
 
+    def test_board_lists_the_archive(self):
+        self.assertEqual(self.get("/api/board")[1]["archive"], [])
+        (self.root / "99_ARCHIVE" / "j.zip").write_bytes(b"zip")
+        self.assertEqual([e["name"] for e in self.get("/api/board")[1]["archive"]], ["j.zip"])
+
     def test_inbox_lists_jobs_with_the_same_catalogue(self):
         folder = self.root / "20_DONE" / "old"
         folder.mkdir()
