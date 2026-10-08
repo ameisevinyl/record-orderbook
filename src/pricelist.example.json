@@ -1,7 +1,8 @@
 {
   "version": 1,
   "currency": "EUR",
-  "valid": "sample",
+  "created": "2026-10-08",
+  "validUntil": "2026-12-31",
   "vat": {
     "country": "ES",
     "rate": 21

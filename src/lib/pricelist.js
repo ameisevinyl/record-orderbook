@@ -48,17 +48,41 @@ export function priceItems(config){
   return items;
 }
 
+const pad = n => String(n).padStart(2, "0");
+
+// A real calendar date, YYYY-MM-DD.
+export function isDate(text){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if(!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d;
+}
+
+// The last day of the quarter the date falls in: the default end of validity.
+export function quarterEnd(date){
+  const year = Number(date.slice(0, 4)), month = Math.ceil(Number(date.slice(5, 7)) / 3) * 3;
+  return `${year}-${pad(month)}-${pad(new Date(Date.UTC(year, month, 0)).getUTCDate())}`;
+}
+
+// Files from before `created`/`validUntil` carried a free-text `valid` label.
+export function upgradePricelist(list, today){
+  const { valid, ...rest } = list;
+  const created = rest.created || today;
+  return { ...rest, created, validUntil: rest.validUntil || quarterEnd(created) };
+}
+
 // Keeps what the plant filled in, adds what config gained, drops what it
 // lost (returned as `orphans`, so the caller can say so).
-export function mergePricelist(items, existing = {}){
-  const { items: old = {}, discounts, ...rest } = existing; // discounts: dropped for now
+export function mergePricelist(items, existing, today){
+  const { items: old = {}, discounts, ...rest } = upgradePricelist(existing, today); // discounts: dropped for now
   const merged = {};
   for(const { key, name } of items){
     merged[key] = { name, unit: unitOf(key), tiers: [{ from: 1, price: null }], ...old[key], name };
   }
   return {
     list: {
-      version: 1, currency: "EUR", valid: "", vat: { country: "ES", rate: 21 },
+      version: 1, currency: "EUR", created: rest.created, validUntil: rest.validUntil, vat: { country: "ES", rate: 21 },
       ...rest, items: merged
     },
     orphans: Object.keys(old).filter(key => !(key in merged))
@@ -76,6 +100,9 @@ export function validatePricelist(list){
   if(!list || typeof list !== "object") fail("", "must be an object");
   if(list.version !== 1) fail("version", "must be 1");
   if(typeof list.currency !== "string" || !/^[A-Z]{3}$/.test(list.currency)) fail("currency", "must be an ISO 4217 code");
+  if(!isDate(list.created)) fail("created", "must be a date, YYYY-MM-DD");
+  if(!isDate(list.validUntil)) fail("validUntil", "must be a date, YYYY-MM-DD");
+  if(list.validUntil < list.created) fail("validUntil", "must not be before created");
   const vat = list.vat || {};
   if(typeof vat.country !== "string" || !/^[A-Z]{2}$/.test(vat.country)) fail("vat.country", "must be an ISO 3166 code");
   if(vat.rate !== null && !(Number.isFinite(vat.rate) && vat.rate >= 0 && vat.rate <= 100)) fail("vat.rate", "must be null or a number from 0 to 100");

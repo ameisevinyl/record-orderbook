@@ -18,19 +18,20 @@ const read = path => existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) :
 
 const [command, flag] = process.argv.slice(2);
 const items = priceItems(CONFIG);
+const today = new Date().toLocaleDateString("sv");
 
 if(command === "extract"){
   items.forEach(({ key, name }) => console.log(`${key}\t${name}`));
 }else if(command === "generate"){
   const target = flag === "--example" ? EXAMPLE : LOCAL;
-  const { list, orphans } = mergePricelist(items, read(target));
+  const { list, orphans } = mergePricelist(items, read(target) || {}, today);
   writeFileSync(target, formatPricelist(list));
   console.log(`wrote ${target}: ${items.length} items, ${unpriced(list).length} unpriced`);
   if(orphans.length) console.log(`dropped (no longer in config): ${orphans.join(", ")}`);
 }else if(command === "check"){
   const path = existsSync(LOCAL) ? LOCAL : EXAMPLE;
   const list = validatePricelist(read(path));
-  const { list: merged, orphans } = mergePricelist(items, list);
+  const { list: merged, orphans } = mergePricelist(items, list, today);
   const missing = items.filter(({ key }) => !(key in list.items)).map(i => i.key);
   const open = unpriced(merged).filter(key => !missing.includes(key));
   console.log(`${path}: ${items.length} items`);
