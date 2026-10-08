@@ -17,6 +17,7 @@ import { projectFileName } from "../lib/package-naming.js";
 import { renderBasic, renderProduction, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
 import { renderNav, renderHome, renderInbox, renderBoard } from "../lib/plant-board.js";
 import { lineState, logEntry } from "../lib/lines.js";
+import { menuHtml } from "../lib/menu.js";
 
 const zipInput = document.getElementById("zipInput");
 const folderInput = document.getElementById("folderInput");
@@ -24,6 +25,7 @@ const nav = document.getElementById("nav");
 const out = document.getElementById("out");
 const error = document.getElementById("error");
 const status = document.getElementById("status");
+document.getElementById("menu").innerHTML = menuHtml("/");
 
 // Loads can take a while; only the most recent view may render.
 let latest = 0;
