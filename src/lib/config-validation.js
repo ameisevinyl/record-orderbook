@@ -188,6 +188,8 @@ function validateLines(lines, partners){
     object(line, path);
     array(line.parts, `${path}.parts`).forEach((p, i) => string(p, `${path}.parts[${i}]`));
     if(line.stage !== undefined) string(line.stage, `${path}.stage`);
+    if(line.title !== undefined) string(line.title, `${path}.title`);
+    if(line.option !== undefined && line.option !== "testpress") fail(`${path}.option`, 'must be "testpress"');
     array(line.steps, `${path}.steps`).forEach((step, i) => {
       const [kind, arg] = String(step).split(":");
       if(!(CHECK_STEPS.includes(step) || step === "approve" || ((kind === "back" || kind === "send") && arg))){
@@ -199,12 +201,18 @@ function validateLines(lines, partners){
   }
 }
 
-function validateViews(views, lines){
-  for(const [name, names] of Object.entries(object(views, "CONFIG.dashboardViews"))){
-    array(names, `CONFIG.dashboardViews.${name}`).forEach((line, i) => {
-      if(!lines[line]) fail(`CONFIG.dashboardViews.${name}[${i}]`, "must name a line");
+function validateBoard(board, lines){
+  array(board, "CONFIG.board").forEach((column, i) => {
+    const path = `CONFIG.board[${i}]`;
+    object(column, path);
+    string(column.title, `${path}.title`);
+    if((column.stage === undefined) === (column.lines === undefined)) fail(path, "must have either a stage or lines");
+    if(column.stage !== undefined) string(column.stage, `${path}.stage`);
+    if(column.quote !== undefined && typeof column.quote !== "boolean") fail(`${path}.quote`, "must be true or false");
+    (column.lines === undefined ? [] : array(column.lines, `${path}.lines`)).forEach((line, j) => {
+      if(!lines[line]) fail(`${path}.lines[${j}]`, "must name a line");
     });
-  }
+  });
 }
 
 export function validatePlant(value){
@@ -305,7 +313,7 @@ export function validateConfig(config){
   validateProofs(config.proofs);
   validatePrintProfiles(config.printProfiles);
   validateLines(config.lines, config.partners);
-  validateViews(config.dashboardViews, config.lines);
+  validateBoard(config.board, config.lines);
   array(config.fixerStages, "CONFIG.fixerStages").forEach((s, i) => string(s, `CONFIG.fixerStages[${i}]`));
 
   string(config.locale, "CONFIG.locale");

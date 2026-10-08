@@ -10,13 +10,15 @@
 <body>
 <header>
   <h1><a href="#/" id="title">Orderbook</a></h1>
-  <details id="menu">
-    <summary>Menu</summary>
-    <ul id="menuItems"></ul>
-  </details>
+  <div id="bar">
+    <details id="menu">
+      <summary>File</summary>
+      <ul id="menuItems"></ul>
+    </details>
+    <pre id="status"></pre>
+  </div>
   <input type="file" id="zipInput" accept=".zip,application/zip" hidden>
   <input type="file" id="folderInput" webkitdirectory hidden>
-  <pre id="status">idle</pre>
   <p id="stats"></p>
   <div id="attention"></div>
   <p id="error"></p>

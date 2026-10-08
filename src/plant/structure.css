@@ -3,11 +3,12 @@
    CSS reset goes on top of this later. Lines on the pictures use HTML's
    named colours. */
 
-/* The drop-down floats under its button; the dashboard's header row stays
-   on top while the table scrolls. */
+/* The drop-down floats under its button; the board's two header rows stay
+   on top while the table scrolls (the second one below the first). */
 #menu{ position:relative; }
 #menu ul{ position:absolute; top:100%; left:0; z-index:4; list-style:none; }
-table.dashboard thead th{ position:sticky; top:0; z-index:2; }
+table.board thead th{ position:sticky; top:0; z-index:2; }
+table.board thead tr + tr th{ top:var(--head-row, 28px); }
 
 /* Waveform: the played part and the markers lie on the picture. */
 .wave{ position:relative; }

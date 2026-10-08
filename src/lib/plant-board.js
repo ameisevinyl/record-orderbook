@@ -11,12 +11,14 @@ const jobLink = job => `#/job/${encodeURIComponent(job)}`;
 const groupingStages = stages => stages.filter(s => stages.some(t => t.stage.startsWith(s.stage + "/")));
 
 // What needs a person's look: problems the server found, and jobs put by
-// hand into a grouping stage (linked: the dashboard doesn't list them).
+// hand into a grouping stage (linked: the board doesn't list them), and
+// the jobs that can't be read (placeCards' unreadable: {job, text}).
 // Nothing to say gives "".
-export function renderAttention({stages, problems}){
+export function renderAttention({stages, problems}, unreadable = []){
   const items = problems.map(p => `<li>${escapeHtml(p)}</li>`).concat(groupingStages(stages).flatMap(({stage, jobs}) =>
     jobs.map(job => `<li><a href="${jobLink(job.job)}">${escapeHtml(job.job)}</a> is in ${escapeHtml(stage)}`
-      + ` — move it to one of its sub-stages</li>`)));
+      + ` — move it to one of its sub-stages</li>`)),
+    unreadable.map(({job, text}) => `<li><a href="${jobLink(job)}">${escapeHtml(job)}</a> can't be read: ${escapeHtml(text)}</li>`));
   return items.length ? `<ul>${items.join("")}</ul>` : "";
 }
 

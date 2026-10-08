@@ -46,26 +46,36 @@ order page.
   and Fixers join with their parts.
 - Small enough to land as the first commit of 2.
 
-## 2 Dashboard
+## 2 Dashboard (the board)
 
-- A row per order, stages INBOX to DONE; ARCHIVE is its own view. Pure
-  rendering in `src/lib` (replaces `renderBoard`), tested like
-  `plant-board.js`. Cells keep today's plain text vocabulary (`✓`, `waiting`,
-  `not checked`, the step name), in line with DESIGN.md's one-alarm rule; no
-  new colours. A row click opens the order.
-- **The real work:** `lineState()` knows only artwork checks (`ROWS` in
-  `lines.js`), and `jobs.board()` reads only `.checks/artwork.json`. Columns
-  are added in two steps:
-  - v1: the artwork lines, one per product (labels, inner sleeves, covers,
-    inlays), plus log-only steps for press, pack and ship (`approve`, `send`,
-    `back` kinds exist). An order has a column only for the products it orders.
-  - v2: audio (master, reference cut, plating) once its step semantics are
-    defined; then `board()` also reads the audio cache and `lines.js` gets
-    audio step kinds.
-- **Role presets** are `CONFIG.dashboardViews` (printed, pressing; mastering
-  joins with the audio lines), a link row on the dashboard (`#/view/<preset>`)
-  choosing which line columns show. One renderer. Per-role pages with their
-  own content can follow when they have content of their own.
+Sketch: `docs/kanban_board_template.csv`. The German chain is the model:
+Anfrage (INBOX), Angebot (QUOTES), Angebotsbestätigung (the job moves from
+INBOX to PREPRESS), Auftrag (production lanes, and INVOICE at the same
+time), Lieferschein, Rechnung.
+
+- **A kanban, not a table per order:** columns are lanes (`CONFIG.board`),
+  orders are cards (the catalogue number, linking to the order) in every lane
+  whose line is open for them: on the order, not done, not waiting for an
+  earlier line. The same order can sit in several lanes. Two header rows
+  (groups, lanes), sticky; pure rendering in `src/lib/dashboard.js`.
+- **Columns:** INBOX · QUOTES · PREPRESS (MASTERING, PLATING, LABELS,
+  SLEEVES, COVERS, INLAYS) · PRESS (TESTPRESS, PRESS, PACK, INVOICE, SHIP) · DONE.
+  INBOX and DONE show the jobs in their stage folder; QUOTES the jobs in the
+  INBOX folder that have a `price_quote.json` (INBOX the ones without, and
+  received zips/folders as "new" cards). The lanes show jobs in the ORDERS
+  sub-stages only.
+- **Lines** (`CONFIG.lines`, hand-confirmed unless they check artwork):
+  mastering (approve, cut), plating (to the plater, stampers back; after
+  mastering), labels/sleeves/covers/inlays (artwork checks, approve, printer),
+  testpress (only when ordered; after plating; back, then approved), press
+  (after plating, labels and the testpress), pack (after press and the printed parts),
+  invoice (open from the start of production), ship (after pack). Linking
+  mastering to the audio checks, and the Lieferschein as a step, come later.
+- **Nothing open:** an order through every line is a card in the last stage
+  column marked "all lines through, move to DONE"; the move stays manual (the
+  archive clock starts at it).
+- **Unreadable jobs** are listed in the header's problem list, not as cards.
+- Role views come back as filters of the same board when they have content.
 - The archive stage holds zips, not jobs: `#/archive` lists them from
   `/api/board` (`archive`).
 

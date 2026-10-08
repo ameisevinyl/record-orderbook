@@ -15,6 +15,8 @@ test("attention: problems and jobs in a grouping stage linked; nothing to say gi
   assert.ok(html.includes("<li>j is in more than one stage</li>"));
   assert.ok(html.includes('<a href="#/job/lost%20%26%20%231">lost &amp; #1</a> is in 10_ORDERS — move it to one of its sub-stages'));
   assert.equal(renderAttention({stages: [], inbox: [], problems: []}), "");
+  const unreadable = renderAttention({stages: [], inbox: [], problems: []}, [{job: "b & d", text: "not <valid> JSON"}]);
+  assert.ok(unreadable.includes('<li><a href="#/job/b%20%26%20d">b &amp; d</a> can\'t be read: not &lt;valid&gt; JSON</li>'));
 });
 
 test("job bar: a jump link per section of the open job", () => {

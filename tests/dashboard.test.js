@@ -1,88 +1,105 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
-import { lineCell, viewLines, viewFromHash, dashboardRows, dashboardStats, renderDashboard } from "../src/lib/dashboard.js";
+import { laneOpen, placeCards, dashboardStats, renderBoard } from "../src/lib/dashboard.js";
 
-const printed = {projectVersion: 1, format: "7", catalogue: "K",
-  labels: {sides: {A: {fileName: "K_labels_A_v1.pdf"}, B: {fileName: "K_labels_B_v1.pdf"}}}};
-const white = {projectVersion: 1, format: "7", catalogue: "W", labels: {sides: {A: {whitelabel: true}, B: {whitelabel: true}}}};
+const hand = (step, extra = {}) => ({step, by: "staff", at: "t", files: {}, ...extra});
+const labels = {A: {fileName: "x_labels_A_v1.pdf"}, B: {fileName: "x_labels_B_v1.pdf"}};
+const white = {A: {whitelabel: true}, B: {whitelabel: true}};
+const project = (catalogue, over = {}) => ({projectVersion: 1, format: "7", catalogue, labels: {sides: labels}, ...over});
+const job = (name, p, extra = {}) => ({job: name, catalogue: p.catalogue, title: "", artist: "", project: p, artwork: {}, files: [], ...extra});
+const stamper = {mastering: [hand("approve"), hand("back:cut")], plating: [hand("send:plater", {to: "external"}), hand("back:stampers")]};
+const everything = {...stamper, press: [hand("approve"), hand("back:pressed")], pack: [hand("back:packed")],
+  invoice: [hand("back:invoiced")], ship: [hand("back:shipped")]};
+
 const board = {stages: [
-  {stage: "00_INBOX", jobs: [{job: "K_x_261001-1000", catalogue: "K", title: "High <Riding>", project: printed, artwork: {}}]},
+  {stage: "00_INBOX", jobs: [job("XYZ001", project("XYZ001")), job("XYZ002", project("XYZ002"), {files: [{name: "price_quote.json"}]})]},
   {stage: "10_ORDERS", jobs: []},
   {stage: "10_ORDERS/10_PREPRESS", jobs: [
+    job("KLM001", project("KLM001"), {title: "High <Riding>", artist: "The Band"}),
     {job: "bad", error: "project.json is not valid JSON"},
-    {job: "Z", catalogue: "Z", title: "", project: {projectVersion: 1, format: "99", catalogue: "Z"}, artwork: {}}]},
-  {stage: "10_ORDERS/20_PRESS", jobs: [{job: "W_y_261001-1000", catalogue: "W", title: "", project: white, artwork: {}}]},
-  {stage: "20_DONE", jobs: []},
+    job("Z", {projectVersion: 1, format: "99", catalogue: "Z"})]},
+  {stage: "10_ORDERS/20_PRESS", jobs: [
+    job("KLM003", project("KLM003", {labels: {sides: white}, plant: {lines: stamper}})),
+    job("ALL001", project("ALL001", {labels: {sides: white}, plant: {lines: everything}})),
+    job("TP001", project("TP001", {labels: {sides: white}, proofs: {testpresses: 3}, plant: {lines: stamper}}))]},
+  {stage: "20_DONE", jobs: [job("FCK006", project("FCK006"))]},
   {stage: "99_ARCHIVE", jobs: []}
 ], inbox: ["r.zip", "Folder"]};
-const views = Object.keys(CONFIG.dashboardViews);
 
-test("cells: plain words, empty when the order doesn't have the line, the alarm only for a stopped check", () => {
-  const base = {needed: true, done: false, waiting: false, checking: false, step: "size", why: ""};
-  assert.deepEqual(lineCell({...base, needed: false}), {text: "", cls: "", title: ""});
-  assert.deepEqual(lineCell(undefined), {text: "", cls: "", title: ""});
-  assert.deepEqual(lineCell({...base, done: true}), {text: "✓", cls: "done", title: ""});
-  assert.deepEqual(lineCell({...base, waiting: true}), {text: "waiting", cls: "wait", title: ""});
-  assert.deepEqual(lineCell({...base, checking: true}), {text: "not checked", cls: "wait", title: ""});
-  assert.deepEqual(lineCell({...base, why: "Label A: 96×96mm, expected 98×98mm"}),
-    {text: "size", cls: "stop", title: "Label A: 96×96mm, expected 98×98mm"});
-  assert.deepEqual(lineCell({...base, step: "approve"}), {text: "approve", cls: "", title: ""});
+const cards = (columns, title) => columns.flatMap(c => c.lanes).find(l => l.title === title).cards.map(c => c.name);
+
+test("a lane is open for an order that has the line, hasn't finished it and isn't held up", () => {
+  assert.equal(laneOpen({needed: true, done: false, waiting: false}), true);
+  assert.equal(laneOpen({needed: false, done: true, waiting: false}), false);
+  assert.equal(laneOpen({needed: true, done: true, waiting: false}), false);
+  assert.equal(laneOpen({needed: true, done: false, waiting: true}), false);
 });
 
-test("view lines: a known preset, else every line; the hash picks the preset", () => {
-  assert.deepEqual(viewLines(CONFIG, "printed"), ["labels", "innerSleeve", "outerCover", "inlay"]);
-  assert.deepEqual(viewLines(CONFIG, "pressing"), ["press", "pack", "ship"]);
-  for(const unknown of ["", "nope", "constructor"]) assert.deepEqual(viewLines(CONFIG, unknown), Object.keys(CONFIG.lines));
-  assert.equal(viewFromHash("#/view/printed", views), "printed");
-  for(const hash of ["#/", "#/board", "#/view/nope", "#/view/", "#/job/printed", ""]) assert.equal(viewFromHash(hash, views), "", hash);
+test("columns come from CONFIG.board: stage columns are single lanes, groups hold the lines' lanes", () => {
+  const {columns} = placeCards(board, CONFIG);
+  assert.deepEqual(columns.map(c => [c.title, c.single]), [["INBOX", true], ["QUOTES", true], ["PREPRESS", false], ["PRESS", false], ["DONE", true]]);
+  assert.deepEqual(columns[2].lanes.map(l => l.title), ["MASTERING", "PLATING", "LABELS", "SLEEVES", "COVERS", "INLAYS"]);
+  assert.deepEqual(columns[3].lanes.map(l => l.title), ["TESTPRESS", "PRESS", "PACK", "INVOICE", "SHIP"]);
 });
 
-test("rows: per stage that can hold jobs, not the grouping stage or the archive; errors and received items as rows", () => {
-  const groups = dashboardRows(board, CONFIG);
-  assert.deepEqual(groups.map(g => g.stage), ["00_INBOX", "10_ORDERS/10_PREPRESS", "10_ORDERS/20_PRESS", "20_DONE"]);
-  const [k, zip, folder] = groups[0].rows;
-  assert.equal(k.name, "K — High <Riding>");
-  // Printed labels nobody checked yet; press, pack and ship wait behind them.
-  assert.equal(k.cells.labels.text, "not checked");
-  assert.equal(k.cells.innerSleeve.text, "", "no printed sleeve ordered");
-  assert.deepEqual(["press", "pack", "ship"].map(n => k.cells[n].text), ["waiting", "waiting", "waiting"]);
-  // What came in and isn't a job yet: after the jobs, by name.
-  assert.deepEqual([zip.received, zip.note, folder.received, folder.note], ["r.zip", "new zip", "Folder", "new folder"]);
-  // Whitelabel: no labels line, the press is next.
-  const [w] = groups[2].rows;
-  assert.deepEqual([w.cells.labels.text, w.cells.press.text, w.cells.pack.text], ["", "approve", "waiting"]);
-  const [bad, z] = groups[1].rows;
-  assert.deepEqual([bad.error, bad.cells], ["project.json is not valid JSON", {}]);
-  assert.match(z.error, /Unknown format ID "99"/);
-  assert.deepEqual(dashboardRows({stages: board.stages.slice(0, 1)}, CONFIG)[0].rows.length, 1, "a board without inbox items");
+test("cards: inbox and quotes by their stage folder and quote file, received items after the jobs", () => {
+  const {columns} = placeCards(board, CONFIG);
+  assert.deepEqual(cards(columns, "INBOX"), ["XYZ001", "r.zip", "Folder"]);
+  assert.deepEqual(cards(columns, "QUOTES"), ["XYZ002"]);
+  const received = columns[0].lanes[0].cards[1];
+  assert.deepEqual([received.href, received.cls], ["#/inbox/r.zip", " new"]);
 });
 
-test("render: one table, every stage with its count, a sticky-able header, everything escaped", () => {
-  const all = renderDashboard(dashboardRows(board, CONFIG), viewLines(CONFIG, ""));
-  assert.ok(all.includes("<thead>") && all.includes("<tbody>"));
-  assert.ok(all.includes('<a href="#/job/K_x_261001-1000">K — High &lt;Riding&gt;</a>'));
-  assert.ok(all.includes("INBOX (3)") && all.includes("ORDERS › PREPRESS (2)") && all.includes("ORDERS › PRESS (1)"));
-  assert.ok(all.includes("DONE (0)"), "an empty stage is still there");
-  assert.ok(all.includes('<td class="wait">not checked</td>'));
-  assert.ok(all.includes('<td colspan="7" class="stop">project.json is not valid JSON</td>'));
-  assert.ok(all.includes('<td><a href="#/inbox/r.zip">r.zip</a></td><td colspan="7" class="wait">new zip — not yet an order</td>'));
-  assert.ok(all.includes('<a href="#/inbox/Folder">Folder</a>'));
-  assert.ok(!all.includes("Columns:"), "no preset links");
-  for(const line of Object.keys(CONFIG.lines)) assert.ok(all.includes(`<th scope="col">${line}</th>`), line);
-  const some = renderDashboard(dashboardRows(board, CONFIG), viewLines(CONFIG, "printed"));
-  assert.ok(!some.includes('<th scope="col">press</th>'));
-  assert.ok(some.includes('<td colspan="4" class="stop">'));
+test("cards: a production order sits in every lane that is open for it; waiting lanes stay empty", () => {
+  const {columns} = placeCards(board, CONFIG);
+  // KLM001: printed labels nobody checked, nothing done: mastering, labels and the invoice are open.
+  assert.deepEqual(["MASTERING", "PLATING", "LABELS", "SLEEVES", "PRESS", "PACK", "INVOICE", "SHIP"]
+    .map(t => cards(columns, t).includes("KLM001")), [true, false, true, false, false, false, true, false]);
+  // KLM003: whitelabel with the stampers done: pressing, and the invoice.
+  assert.deepEqual(["MASTERING", "LABELS", "PRESS", "PACK", "INVOICE", "SHIP"].map(t => cards(columns, t).includes("KLM003")),
+    [false, false, true, false, true, false]);
+  assert.deepEqual(cards(columns, "INVOICE"), ["KLM001", "KLM003", "TP001"]);
+  // TP001 asked for testpresses: they come before the press, which waits for their approval.
+  assert.deepEqual([cards(columns, "TESTPRESS"), cards(columns, "PRESS")], [["TP001"], ["KLM003"]]);
+  const klm = columns[2].lanes[0].cards[0];
+  assert.deepEqual([klm.href, klm.title], ["#/job/KLM001", "KLM001 — High <Riding> — The Band"]);
 });
 
-test("stats: orders, in production, per stage, items received", () => {
-  assert.equal(dashboardStats(board), "4 orders · 3 in production · INBOX 1 · PREPRESS 2 · PRESS 1 · DONE 0 · 2 received");
-  assert.equal(dashboardStats({stages: [{stage: "00_INBOX", jobs: [{job: "a"}]}], inbox: []}), "1 order · 0 in production · INBOX 1");
+test("cards: an order through every line waits in the last stage column, after the ones moved there", () => {
+  const {columns} = placeCards(board, CONFIG);
+  assert.deepEqual(cards(columns, "DONE"), ["FCK006", "ALL001"]);
+  const ready = columns[4].lanes[0].cards[1];
+  assert.equal(ready.cls, " ready");
+  assert.match(ready.title, /all lines through, move to DONE/);
+  assert.ok(!["TESTPRESS", "PRESS", "PACK", "INVOICE", "SHIP"].some(t => cards(columns, t).includes("ALL001")));
 });
 
-test("a printed part nobody uploaded is a stopped cell, not 'not checked'", () => {
-  const nofile = {projectVersion: 1, format: "7", catalogue: "N"};
-  const groups = dashboardRows({stages: [{stage: "00_INBOX", jobs: [
-    {job: "N", catalogue: "N", title: "", project: nofile, artwork: {}}]}]}, CONFIG);
-  assert.deepEqual(groups[0].rows[0].cells.labels, {text: "size", cls: "stop", title: "Label A: no file uploaded yet"});
+test("unreadable: a job the server couldn't read or the page refuses is listed, not a card", () => {
+  const {columns, unreadable} = placeCards(board, CONFIG);
+  assert.deepEqual(unreadable.map(u => u.job), ["bad", "Z"]);
+  assert.equal(unreadable[0].text, "project.json is not valid JSON");
+  assert.match(unreadable[1].text, /Unknown format ID "99"/);
+  assert.ok(!columns.flatMap(c => c.lanes).some(l => l.cards.some(c => c.name === "bad" || c.name === "Z")));
+  assert.equal(placeCards({stages: board.stages.slice(0, 1)}, CONFIG).columns[0].lanes[0].cards.length, 1, "a board without inbox items");
+});
+
+test("render: two header rows (groups, lanes), a row per card of the longest lane, everything escaped", () => {
+  const html = renderBoard(placeCards(board, CONFIG).columns);
+  // The counters stand behind the titles: cards per lane, orders per group.
+  assert.ok(html.includes('<thead><tr><th scope="col" rowspan="2">INBOX (3)</th><th scope="col" rowspan="2">QUOTES (1)</th>'
+    + '<th scope="colgroup" colspan="6">PREPRESS (1)</th><th scope="colgroup" colspan="5">PRESS (3)</th><th scope="col" rowspan="2">DONE (2)</th></tr>'
+    + '<tr><th scope="col">MASTERING (1)</th>'));
+  assert.ok(html.includes('<th scope="col">SLEEVES (0)</th>') && html.includes('<th scope="col">INVOICE (3)</th>') && html.includes('<th scope="col">TESTPRESS (1)</th>'));
+  assert.ok(html.includes('<a class="card" href="#/job/KLM001" title="KLM001 — High &lt;Riding&gt; — The Band">KLM001</a>'));
+  assert.ok(html.includes('<a class="card new" href="#/inbox/r.zip" title="received, not yet an order">r.zip</a>'));
+  assert.equal(html.match(/<tr>/g).length - 2, 3, "three rows for the three cards of INBOX");
+  assert.ok(html.includes("<td></td>"));
+  const odd = renderBoard([{title: "X", single: true, lanes: [{title: "X", cards: [{name: "A<b>", href: "#/job/A%3Cb%3E", title: "t", cls: ""}]}]}]);
+  assert.ok(odd.includes(">A&lt;b&gt;</a>"));
+});
+
+test("stats: orders and how many are in production (the stage counts are in the headers)", () => {
+  assert.equal(dashboardStats(board), "9 orders · 6 in production");
+  assert.equal(dashboardStats({stages: [{stage: "00_INBOX", jobs: [{job: "a"}]}], inbox: []}), "1 order · 0 in production");
 });

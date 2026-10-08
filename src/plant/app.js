@@ -1,6 +1,6 @@
 // Plant view page: a small header (title with the plant's name, the file
 // menu, the CLI status line, the statistics) over the chosen view in <main>.
-// Views: the dashboard (every order's lines), the archive, a zip or folder
+// Views: the board (the orders as cards in their lanes), the archive, a zip or folder
 // in the inbox (new job or resend), a job in six sections. A job is checked
 // on every load (the server re-reads only changed files, the rules here
 // always run), then its spectrograms are made in the background.
@@ -15,7 +15,7 @@ import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf, useVer
 import { projectFileName } from "../lib/package-naming.js";
 import { renderBasic, renderProduction, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
 import { renderAttention, renderJobBar, renderInbox, renderArchive } from "../lib/plant-board.js";
-import { dashboardRows, dashboardStats, renderDashboard, viewLines, viewFromHash } from "../lib/dashboard.js";
+import { placeCards, dashboardStats, renderBoard } from "../lib/dashboard.js";
 import { parsePlantConfig } from "../lib/plant-config.js";
 import { lineState, logEntry, stageReady } from "../lib/lines.js";
 import { dropdownHtml } from "../lib/menu.js";
@@ -51,7 +51,7 @@ const getJson = async path => (await api(path)).json();
 const postJson = async (path, body) => (await api(path, body)).json();
 
 // --- Status line: what the page does, else what the server does in the
-// background (spectrograms), else "idle"; a CLI spinner while anything
+// background (spectrograms), else nothing; a CLI spinner while anything
 // runs. Text only.
 const SPINNER = "|/-\\";
 let task = "", background = "", spin = 0, spinner = null;
@@ -63,7 +63,7 @@ function show(){
     clearInterval(spinner);
     spinner = null;
   }
-  status.textContent = text ? `${text}  ${SPINNER[spin++ % SPINNER.length]}` : "idle";
+  status.textContent = text ? `${text}  ${SPINNER[spin++ % SPINNER.length]}` : "";
 }
 
 function busy(text){
@@ -96,7 +96,7 @@ async function readStream(res, onStep){
   }
 }
 
-// --- Routes: #/ · #/view/<preset> · #/archive · #/inbox/<item> · #/job/<job>[/<section>]
+// --- Routes: #/ · #/archive · #/inbox/<item> · #/job/<job>[/<section>]
 
 function parseHash(){
   const [, kind, name, section] = /^#\/(job|inbox)\/([^/]+)(?:\/(\w+))?$/.exec(location.hash) || [];
@@ -127,12 +127,13 @@ async function route(reload = true){
     busy("reading the jobs");
     const board = await getJson("/api/board");
     if(id !== latest) return;
+    const {columns, unreadable} = placeCards(board, CONFIG);
     stats.textContent = dashboardStats(board);
-    attention.innerHTML = renderAttention(board);
+    attention.innerHTML = renderAttention(board, unreadable);
     if(kind === "job") await showJob(name, section, id);
     else if(kind === "inbox") await showInbox(name, id);
     else if(location.hash === "#/archive") out.innerHTML = renderArchive(board.archive);
-    else out.innerHTML = dashboardHtml(board);
+    else out.innerHTML = renderBoard(columns);
   }catch(err){
     if(id !== latest) return;
     if(kind === "job" && err.message === `no job ${name}`) leave(name);
@@ -140,13 +141,6 @@ async function route(reload = true){
   }finally{
     if(id === latest) busy("");
   }
-}
-
-// The dashboard: every order's lines, the columns of the preset in the hash.
-function dashboardHtml(board){
-  const views = Object.keys(CONFIG.dashboardViews);
-  const view = viewFromHash(location.hash, views);
-  return renderDashboard(dashboardRows(board, CONFIG), viewLines(CONFIG, view), view, views);
 }
 
 // The open job's folder is gone: back to the overview, which says so.

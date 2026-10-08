@@ -72,10 +72,10 @@ test("review: an accept on a file without hash counts", () => {
 });
 
 // An order: labels A/B printed by default; sleeve: the coverSleeve parts; log: project.plant.lines.
-function order({labels, sleeve = {}, log = {}} = {}){
+function order({labels, sleeve = {}, log = {}, proofs = {}} = {}){
   return prepareProject({projectVersion: 1, format: "7", catalogue: "K",
     labels: {sides: labels || {A: {fileName: "K_labels_A_v1.pdf"}, B: {fileName: "K_labels_B_v1.pdf"}}},
-    coverSleeve: sleeve, plant: {lines: log}}, CONFIG);
+    coverSleeve: sleeve, proofs, plant: {lines: log}}, CONFIG);
 }
 const white = {A: {whitelabel: true}, B: {whitelabel: true}};
 const hand = (step, extra = {}) => ({step, by: "staff", at: "t", files: {}, ...extra});
@@ -101,24 +101,31 @@ test("a printed part that is ordered but not uploaded stands at size, not at app
   assert.match(s.why, /no file uploaded yet/);
 });
 
-test("log-only lines need no check results and wait for the lines they come after", () => {
+test("hand-confirmed lines need no check results and wait for the lines they come after", () => {
   // Whitelabel, no printed sleeves: nothing to wait for but the log.
   const plain = order({labels: white});
-  const press = lineState(plain, CONFIG, "press", null);
-  assert.deepEqual([press.checking, press.waiting, press.step], [false, false, "approve"]);
-  assert.equal(lineState(plain, CONFIG, "pack", null).waiting, true, "pack waits for press");
-  const pressed = order({labels: white, log: {press: [hand("approve"), hand("back:pressed")]}});
+  const mastering = lineState(plain, CONFIG, "mastering", null);
+  assert.deepEqual([mastering.checking, mastering.waiting, mastering.step], [false, false, "approve"]);
+  assert.equal(lineState(plain, CONFIG, "plating", null).waiting, true, "plating waits for mastering");
+  assert.equal(lineState(plain, CONFIG, "press", null).waiting, true, "press waits for plating");
+  const invoice = lineState(plain, CONFIG, "invoice", null);
+  assert.deepEqual([invoice.waiting, invoice.step], [false, "back:invoiced"], "the invoice is open from the start");
+  const stampers = {mastering: [hand("approve"), hand("back:cut")],
+    plating: [hand("send:plater", {to: "external"}), hand("back:stampers")]};
+  const press = lineState(order({labels: white, log: stampers}), CONFIG, "press", null);
+  assert.deepEqual([press.waiting, press.step], [false, "approve"]);
+  const pressed = order({labels: white, log: {...stampers, press: [hand("approve"), hand("back:pressed")]}});
   assert.equal(lineState(pressed, CONFIG, "press", null).done, true);
   const pack = lineState(pressed, CONFIG, "pack", null);
   assert.deepEqual([pack.waiting, pack.step], [false, "back:packed"]);
-  // Printed labels not checked yet: press waits for them.
-  const waiting = lineState(order(), CONFIG, "press", null);
+  // Printed labels not checked yet: press waits for them as well.
+  const waiting = lineState(order({log: stampers}), CONFIG, "press", null);
   assert.deepEqual([waiting.checking, waiting.waiting], [false, true]);
 });
 
 test("lines of a stage, and when they are all ready to move on", () => {
-  assert.deepEqual(linesOfStage(CONFIG, "10_ORDERS/10_PREPRESS"), ["labels", "innerSleeve", "outerCover", "inlay"]);
-  assert.deepEqual(linesOfStage(CONFIG, "10_ORDERS/20_PRESS"), ["press", "pack", "ship"]);
+  assert.deepEqual(linesOfStage(CONFIG, "10_ORDERS/10_PREPRESS"), ["mastering", "plating", "labels", "innerSleeve", "outerCover", "inlay"]);
+  assert.deepEqual(linesOfStage(CONFIG, "10_ORDERS/20_PRESS"), ["testpress", "press", "pack", "invoice", "ship"]);
   assert.deepEqual(linesOfStage(CONFIG, "20_DONE"), []);
   const ready = {ready: true}, notReady = {ready: false};
   assert.equal(stageReady(CONFIG, "10_ORDERS/10_PREPRESS", [{line: "labels", ...ready}, {line: "press", ...notReady}]), true,
@@ -138,4 +145,19 @@ test("a printed part with a slot still empty stops the line at size, with and wi
   assert.deepEqual([none.checking, none.step, none.why], [false, "size", "Cover: no file uploaded yet"]);
   // Files there but unchecked: still waiting for the check.
   assert.equal(lineState(order(), CONFIG, "labels", null).checking, true);
+});
+
+test("the testpress line is on the order only when testpresses were ordered, and the press waits for it", () => {
+  const stampers = {mastering: [hand("approve"), hand("back:cut")], plating: [hand("send:plater", {to: "external"}), hand("back:stampers")]};
+  const none = order({labels: white, log: stampers});
+  assert.equal(lineNeeded(none, CONFIG, "testpress"), false);
+  assert.equal(lineState(none, CONFIG, "press", null).waiting, false);
+  const asked = order({labels: white, log: stampers, proofs: {testpresses: 3}});
+  const tp = lineState(asked, CONFIG, "testpress", null);
+  assert.deepEqual([tp.needed, tp.waiting, tp.step], [true, false, "back:pressed"]);
+  assert.equal(lineState(asked, CONFIG, "press", null).waiting, true, "press waits for the testpresses");
+  assert.equal(lineState(order({labels: white, proofs: {testpresses: 3}}), CONFIG, "testpress", null).waiting, true, "testpresses need the stampers");
+  const approved = order({labels: white, proofs: {testpresses: 3},
+    log: {...stampers, testpress: [hand("back:pressed"), hand("approve")]}});
+  assert.equal(lineState(approved, CONFIG, "press", null).waiting, false);
 });

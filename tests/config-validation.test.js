@@ -262,22 +262,47 @@ test("requires uniquely identified label products", () => {
   assert.throws(() => validateConfig(duplicate), /label\.products contains duplicate ID/);
 });
 
-test("validates line stages and dashboard views; the plant's lines and presets", () => {
+test("validates line stages and titles and the board columns; the plant's lanes", () => {
   const stage = copy();
   stage.lines.labels.stage = 5;
   assert.throws(() => validateConfig(stage), /CONFIG\.lines\.labels\.stage must be a non-empty string/);
 
-  const view = copy();
-  view.dashboardViews.printed = ["labels", "polish"];
-  assert.throws(() => validateConfig(view), /CONFIG\.dashboardViews\.printed\[1\] must name a line/);
+  const title = copy();
+  title.lines.labels.title = 5;
+  assert.throws(() => validateConfig(title), /CONFIG\.lines\.labels\.title must be a non-empty string/);
+
+  const lane = copy();
+  lane.board[2].lines = ["labels", "polish"];
+  assert.throws(() => validateConfig(lane), /CONFIG\.board\[2\]\.lines\[1\] must name a line/);
+
+  const both = copy();
+  both.board[0].lines = ["labels"];
+  assert.throws(() => validateConfig(both), /CONFIG\.board\[0\] must have either a stage or lines/);
+  const neither = copy();
+  delete neither.board[0].stage;
+  assert.throws(() => validateConfig(neither), /CONFIG\.board\[0\] must have either a stage or lines/);
+
+  const heading = copy();
+  heading.board[1].title = "";
+  assert.throws(() => validateConfig(heading), /CONFIG\.board\[1\]\.title must be a non-empty string/);
 
   const missing = copy();
-  delete missing.dashboardViews;
-  assert.throws(() => validateConfig(missing), /CONFIG\.dashboardViews must be an object/);
+  delete missing.board;
+  assert.throws(() => validateConfig(missing), /CONFIG\.board must be an array/);
 
-  assert.deepEqual(Object.keys(CONFIG.lines), ["labels", "innerSleeve", "outerCover", "inlay", "press", "pack", "ship"]);
-  assert.deepEqual(CONFIG.lines.press.after, ["labels"]);
+  const option = copy();
+  option.lines.testpress.option = "polish";
+  assert.throws(() => validateConfig(option), /CONFIG\.lines\.testpress\.option must be "testpress"/);
+
+  assert.deepEqual(Object.keys(CONFIG.lines), ["mastering", "plating", "labels", "innerSleeve", "outerCover", "inlay",
+    "testpress", "press", "pack", "invoice", "ship"]);
+  assert.deepEqual(CONFIG.lines.plating.after, ["mastering"]);
+  assert.deepEqual([CONFIG.lines.testpress.option, CONFIG.lines.testpress.after], ["testpress", ["plating"]]);
+  assert.deepEqual(CONFIG.lines.press.after, ["plating", "labels", "testpress"]);
   assert.deepEqual(CONFIG.lines.pack.after, ["press", "innerSleeve", "outerCover", "inlay"]);
-  assert.deepEqual(CONFIG.dashboardViews, {
-    printed: ["labels", "innerSleeve", "outerCover", "inlay"], pressing: ["press", "pack", "ship"]});
+  assert.equal(CONFIG.lines.invoice.after, undefined, "the invoice is open from the start of production");
+  assert.deepEqual(CONFIG.board.map(c => c.title), ["INBOX", "QUOTES", "PREPRESS", "PRESS", "DONE"]);
+  assert.deepEqual(CONFIG.board.flatMap(c => c.lines || []).map(n => CONFIG.lines[n].title),
+    ["MASTERING", "PLATING", "LABELS", "SLEEVES", "COVERS", "INLAYS", "TESTPRESS", "PRESS", "PACK", "INVOICE", "SHIP"]);
+  assert.deepEqual(CONFIG.board.slice(0, 2).map(c => [c.stage, c.quote]), [["00_INBOX", false], ["00_INBOX", true]]);
 });

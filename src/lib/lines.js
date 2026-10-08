@@ -49,9 +49,14 @@ function emptySlots(project, config, lineName){
   }[part]()));
 }
 
-// A line with no parts is every order's; one with parts only when an order has one of them printed.
+// What an order can ask for besides its parts (a line's `option`).
+const OPTIONS = {testpress: project => project.proofs.testpresses > 0};
+
+// A line with an option is only on orders that ask for it. One with no parts
+// is every order's; one with parts only when an order has one of them printed.
 export function lineNeeded(project, config, lineName){
-  const {parts} = config.lines[lineName];
+  const {parts, option} = config.lines[lineName];
+  if(option && !OPTIONS[option](project)) return false;
   return !parts.length || parts.some(part => ordered(project, config, part));
 }
 

@@ -453,36 +453,50 @@ export const CONFIG = {
     labels: ISO_COATED_V2, innerSleeve: ISO_COATED_V2, outerCover: ISO_COATED_V2, inlay: ISO_COATED_V2
   },
 
-  // Production lines (src/lib/lines.js), in dashboard column order: per
-  // product its steps in order. Check steps (size, resolution, pdf, bleed,
-  // colour) pass by the artwork checks; approve, send:<partners list> and
-  // back:<what> are confirmed by staff. parts: the printed parts whose
-  // files the line checks; an order without any of them printed doesn't
-  // have the line, and none at all = a line of hand-confirmed steps for
-  // every order. after: lines that must be through first. stage: the stage
-  // folder the line belongs to (the job page suggests moving on when all
-  // lines of its stage are through).
+  // Production lines (src/lib/lines.js): per product its steps in order.
+  // Check steps (size, resolution, pdf, bleed, colour) pass by the artwork
+  // checks; approve, send:<partners list> and back:<what> are confirmed by
+  // staff. title: the lane's heading on the board. parts: the printed parts
+  // whose files the line checks; an order without any of them printed
+  // doesn't have the line, and none at all = a line of hand-confirmed steps
+  // for every order. option: the line is only on orders that ask for it
+  // ("testpress"). after: lines that must be through first. stage: the
+  // stage folder the line belongs to (the job page suggests moving on when
+  // all lines of its stage are through).
   lines: {
-    labels:      { parts: ["labels"],      stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
-    innerSleeve: { parts: ["innerSleeve"], stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
-    outerCover:  { parts: ["outerCover"],  stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
-    inlay:       { parts: ["inlay"],       stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
-    press: { parts: [], stage: "10_ORDERS/20_PRESS", steps: ["approve", "back:pressed"], after: ["labels"] },
-    pack:  { parts: [], stage: "10_ORDERS/20_PRESS", steps: ["back:packed"], after: ["press", "innerSleeve", "outerCover", "inlay"] },
-    ship:  { parts: [], stage: "10_ORDERS/20_PRESS", steps: ["back:shipped"], after: ["pack"] }
+    mastering:   { title: "MASTERING", parts: [], stage: "10_ORDERS/10_PREPRESS", steps: ["approve", "back:cut"] },
+    plating:     { title: "PLATING", parts: [], stage: "10_ORDERS/10_PREPRESS", steps: ["send:plater", "back:stampers"], after: ["mastering"] },
+    labels:      { title: "LABELS", parts: ["labels"], stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
+    innerSleeve: { title: "SLEEVES", parts: ["innerSleeve"], stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
+    outerCover:  { title: "COVERS", parts: ["outerCover"], stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
+    inlay:       { title: "INLAYS", parts: ["inlay"], stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
+    // The first records off the stampers, approved before the run.
+    testpress: { title: "TESTPRESS", parts: [], option: "testpress", stage: "10_ORDERS/20_PRESS", steps: ["back:pressed", "approve"], after: ["plating"] },
+    press:   { title: "PRESS", parts: [], stage: "10_ORDERS/20_PRESS", steps: ["approve", "back:pressed"], after: ["plating", "labels", "testpress"] },
+    pack:    { title: "PACK", parts: [], stage: "10_ORDERS/20_PRESS", steps: ["back:packed"], after: ["press", "innerSleeve", "outerCover", "inlay"] },
+    // Open from the start of production: the customer's confirmation of the quote.
+    invoice: { title: "INVOICE", parts: [], stage: "10_ORDERS/20_PRESS", steps: ["back:invoiced"] },
+    ship:    { title: "SHIP", parts: [], stage: "10_ORDERS/20_PRESS", steps: ["back:shipped"], after: ["pack"] }
   },
-  // The dashboard's column presets (#/view/<name>): which lines show; the
-  // default shows all of them. A mastering preset joins with the audio lines.
-  dashboardViews: {
-    printed: ["labels", "innerSleeve", "outerCover", "inlay"],
-    pressing: ["press", "pack", "ship"]
-  },
+  // The board (src/lib/dashboard.js), left to right. A column with a stage
+  // lists the orders in that stage folder (quote: only those with, or
+  // without, a price_quote.json); one with lines is a group of lanes: an
+  // order is a card in each lane whose line is on the order, not done and
+  // not waiting. Orders through every line wait in the last stage column.
+  board: [
+    { title: "INBOX", stage: "00_INBOX", quote: false },
+    { title: "QUOTES", stage: "00_INBOX", quote: true },
+    { title: "PREPRESS", lines: ["mastering", "plating", "labels", "innerSleeve", "outerCover", "inlay"] },
+    { title: "PRESS", lines: ["testpress", "press", "pack", "invoice", "ship"] },
+    { title: "DONE", stage: "20_DONE" }
+  ],
   // Stages in which fixers run by themselves when a job is opened; in the
   // others (press, done, archive) opening a job only looks.
   fixerStages: ["00_INBOX", "10_ORDERS/10_PREPRESS"],
   // Who a send step can go to; a plant lists its named suppliers here.
   partners: {
-    printer: ["in-house", "external"]
+    printer: ["in-house", "external"],
+    plater: ["in-house", "external"]
   },
 
   // UI language for the info-panel text below. Only "en" has content

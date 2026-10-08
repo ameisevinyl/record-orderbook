@@ -176,17 +176,20 @@ configured on purpose — keep it that way unless asked.
   results), approve, send to a partner,
   back — where a line stands is derived on every scan; `plant.lines` in
   `project.json` keeps an append-only log whose entries count while their
-  files keep their sha256. Lines run per printed product (labels,
-  innerSleeve, outerCover, inlay) and press, pack, ship (hand-confirmed
-  steps only); a line the order has no printed part for is not on the order
-  (`needed: false`) and counts as done, so it never holds up the lines after
-  it. The dashboard (`src/lib/dashboard.js`, the plant view's home) is one
-  table, INBOX to DONE, a row per order and a column per line, under a
-  small header (the plant's name, a file menu with load zip/folder, archive
-  and the settings pages, the status line, statistics); `CONFIG.dashboardViews` are the
-  column presets (`#/view/<preset>`); `#/archive` lists the zips
-  `plant/archive.py` wrote. Spec:
-  `docs/superpowers/specs/2026-10-02-production-lines-design.md`.
+  files keep their sha256. Lines: mastering, plating, labels, innerSleeve,
+  outerCover, inlay, testpress (only when ordered), press, pack, invoice, ship (`CONFIG.lines`; the
+  printed products check artwork, the rest are hand-confirmed steps); a line
+  the order has no printed part for is not on the order (`needed: false`) and
+  counts as done, so it never holds up the lines after it. The plant view's
+  home is the board (`src/lib/dashboard.js`, `docs/kanban_board_template.csv`
+  is the sketch): `CONFIG.board` lists the columns, INBOX, QUOTES (an inbox
+  job with a `price_quote.json`), the PREPRESS and PRESS groups of lanes,
+  DONE; an order is a card in every lane whose line is open for it (on the
+  order, not done, not waiting). Moving a job from INBOX to PREPRESS is the
+  customer's order confirmation. Under a small header (the plant's name, a
+  file menu with load zip/folder, archive and the settings pages, the status
+  line, statistics); `#/archive` lists the zips `plant/archive.py` wrote.
+  Spec: `docs/superpowers/specs/2026-10-02-production-lines-design.md`.
   Grouping stages (10_ORDERS) hold no jobs. `project.json` is the reference and
   the naming convention strict: a slot's file and its `_v<N>` versions
   are managed (versions listed with "use", checked once in use); every

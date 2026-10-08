@@ -27,7 +27,7 @@ When a line is through, the job moves on.
 lines: {
   labels: { parts: ["labels"],
             steps: ["size", "resolution", "pdf", "bleed", "colour", "approve", "send:printer", "back:printed"] }
-  // innerSleeve, outerCover, inlay, press, pack, ship: see CONFIG.lines; audio (master, reference cut, plating) and invoice follow
+  // mastering, plating, innerSleeve, outerCover, inlay, press, pack, invoice, ship: see CONFIG.lines
 },
 partners: { printer: ["in-house", "external"] }   // a plant lists its named suppliers here
 ```
