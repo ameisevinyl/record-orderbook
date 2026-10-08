@@ -252,13 +252,3 @@ test("print profiles per printed part with a condition id; neutral tolerance", (
   delete tol.formats[0].printCheck.black.neutralTolPct;
   assert.throws(() => validateConfig(tol), /CONFIG\.formats\[0\]\.printCheck\.black\.neutralTolPct must be a positive number/);
 });
-
-test("requires uniquely identified extras per format", () => {
-  const missing = copy();
-  delete missing.formats[0].extras;
-  assert.throws(() => validateConfig(missing), /extras must be an array/);
-
-  const duplicate = copy();
-  duplicate.formats[0].extras.push({ ...duplicate.formats[0].extras[0] });
-  assert.throws(() => validateConfig(duplicate), /extras contains duplicate ID/);
-});

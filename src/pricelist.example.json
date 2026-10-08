@@ -6,16 +6,35 @@
     "country": "ES",
     "rate": 21
   },
-  "discounts": [
-    {
-      "id": "season-sample",
-      "label": "Sample season discount",
-      "percent": 5,
-      "from": "2026-01-01",
-      "to": "2026-03-31"
-    }
-  ],
   "items": {
+    "12/mastering/lacquerCut": {
+      "name": "12\" LP lacquer cut, per side",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 120 }
+      ]
+    },
+    "12/mastering/plating1": {
+      "name": "12\" LP 1-step plating (father), per side",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 135 }
+      ]
+    },
+    "12/mastering/plating2": {
+      "name": "12\" LP 2-step plating (father & mother), per side",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 240 }
+      ]
+    },
+    "12/record/setup": {
+      "name": "12\" LP pressing setup",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 75 }
+      ]
+    },
     "12/record/black": {
       "name": "12\" LP record, black",
       "unit": 1000,
@@ -165,18 +184,32 @@
         { "from": 1, "price": 3 }
       ]
     },
-    "12/extra/master-stamper": {
-      "name": "12\" LP master cut & stamper",
+    "7/mastering/lacquerCut": {
+      "name": "7\" SP lacquer cut, per side",
       "unit": "order",
       "tiers": [
-        { "from": 1, "price": 400 }
+        { "from": 1, "price": 80 }
       ]
     },
-    "12/extra/plastic-bag": {
-      "name": "12\" LP plastic bag",
-      "unit": 1000,
+    "7/mastering/plating1": {
+      "name": "7\" SP 1-step plating (father), per side",
+      "unit": "order",
       "tiers": [
-        { "from": 1, "price": 60 }
+        { "from": 1, "price": 90 }
+      ]
+    },
+    "7/mastering/plating2": {
+      "name": "7\" SP 2-step plating (father & mother), per side",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 160 }
+      ]
+    },
+    "7/record/setup": {
+      "name": "7\" SP pressing setup",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 50 }
       ]
     },
     "7/record/black": {
@@ -326,20 +359,6 @@
       "unit": 1,
       "tiers": [
         { "from": 1, "price": 3 }
-      ]
-    },
-    "7/extra/master-stamper": {
-      "name": "7\" SP master cut & stamper",
-      "unit": "order",
-      "tiers": [
-        { "from": 1, "price": 400 }
-      ]
-    },
-    "7/extra/plastic-bag": {
-      "name": "7\" SP plastic bag",
-      "unit": 1000,
-      "tiers": [
-        { "from": 1, "price": 60 }
       ]
     }
   }

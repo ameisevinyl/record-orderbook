@@ -62,12 +62,6 @@ export const CONFIG = {
       // formats that don't offer it.
       centerHole: { normal: 7.4 },
       proofs: { referenceCut: true, testpress: true },
-      // Orderable services and extras beyond the parts above; named here
-      // so the pricelist is derived from config alone (prices: pricelist.json).
-      extras: [
-        { id:"master-stamper", name:"master cut & stamper" },
-        { id:"plastic-bag", name:"plastic bag" }
-      ],
       // Playing time per side in minutes, per cut type and RPM.
       // "recommended" — stay below this for a full cutting level; above
       //                 it the customer sees a warning
@@ -229,12 +223,6 @@ export const CONFIG = {
       rpm: 33,
       centerHole: { normal: 7.4 },
       proofs: { referenceCut: true, testpress: true },
-      // Orderable services and extras beyond the parts above; named here
-      // so the pricelist is derived from config alone (prices: pricelist.json).
-      extras: [
-        { id:"master-stamper", name:"master cut & stamper" },
-        { id:"plastic-bag", name:"plastic bag" }
-      ],
       timeLimits: {
         normal:      { recommended:{45:8,   33:12}, max:{45:8,   33:14} },
         soundsystem: { recommended:{45:4.5, 33:7},  max:{45:6,   33:9} }
@@ -318,12 +306,6 @@ export const CONFIG = {
       centerHole: { normal: 7.4, big: 38 },
       bigCenterDefault: true,
       proofs: { referenceCut: true, testpress: true },
-      // Orderable services and extras beyond the parts above; named here
-      // so the pricelist is derived from config alone (prices: pricelist.json).
-      extras: [
-        { id:"master-stamper", name:"master cut & stamper" },
-        { id:"plastic-bag", name:"plastic bag" }
-      ],
       timeLimits: {
         normal:      { recommended:{45:4.5, 33:6.5}, max:{45:6.0, 33:8.0} },
         soundsystem: { recommended:{45:3.5, 33:5.0}, max:{45:4.5, 33:6.0} }

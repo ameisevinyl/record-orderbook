@@ -191,7 +191,9 @@ configured on purpose — keep it that way unless asked.
   prices per item key derived from CONFIG (`src/lib/pricelist.js`,
   `build/pricelist.js`); `src/lib/quote.js` turns an order into a net
   quote. `vat` is stored, not applied yet. The `pricelist-filler`
-  agent fills the list from a plant's PDF/CSV. Spec:
+  agent fills the list from a plant's PDF/CSV; staff edit it in
+  `dist/pricelist.html` (`src/pricelist.html` + `pricelist-page.js`,
+  open/save a JSON file, prices per piece). Spec:
   `docs/superpowers/specs/2026-10-08-pricelist-quote-design.md`.
 - Deep checks on disk (`plant/checks.py`, `spectrum.py`, `artwork.py`):
   see `plant/CLAUDE.md`. Python only reads facts; the rules live in

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { CONFIG } from "../src/config.js";
-import { priceItems, mergePricelist, unpriced, validatePricelist, formatPricelist } from "../src/lib/pricelist.js";
+import { priceItems, mergePricelist, unpriced, validatePricelist, formatPricelist, perPiece, parsePrice } from "../src/lib/pricelist.js";
 
 const example = JSON.parse(readFileSync(new URL("../src/pricelist.example.json", import.meta.url), "utf8"));
 
@@ -11,7 +11,8 @@ test("derives one unique item per product of every enabled format", () => {
   assert.equal(new Set(keys).size, keys.length);
   assert.ok(keys.includes("7/record/colour"));
   assert.ok(keys.includes("7/innerSleeve/sleeve-printed"));
-  assert.ok(keys.includes("7/extra/master-stamper"));
+  assert.ok(keys.includes("7/mastering/plating2"));
+  assert.ok(keys.includes("12/record/setup"));
   assert.ok(!keys.some(k => k.startsWith("10/")), "disabled format");
 });
 
@@ -49,11 +50,22 @@ test("validation rejects malformed lists", () => {
   assert.throws(bad(l => { l.items["7/record/black"].tiers = []; }), /tiers/);
   assert.throws(bad(l => { l.items["7/record/black"].tiers = [{ from: 500, price: 1 }, { from: 100, price: 2 }]; }), /ascend/);
   assert.throws(bad(l => { l.items["7/record/black"].tiers[0].price = -1; }), /price/);
-  assert.throws(bad(l => { l.discounts.push({ ...l.discounts[0] }); }), /unique/);
 });
 
 test("formatPricelist keeps one tier per line and round-trips", () => {
   const text = formatPricelist(example);
   assert.match(text, /\{ "from": 100, "price": \d+ \}/);
   assert.deepEqual(JSON.parse(text), example);
+});
+
+test("prices are shown per piece and stored per unit", () => {
+  assert.equal(perPiece(1220, 1000), "1.22");
+  assert.equal(perPiece(400, "order"), "400");
+  assert.equal(perPiece(null, 1000), "");
+  assert.equal(parsePrice("1,22", 1000), 1220);
+  assert.equal(parsePrice("1.15", 1000), 1150);
+  assert.equal(parsePrice(" 400 ", "order"), 400);
+  assert.equal(parsePrice("", 1000), null);
+  assert.ok(Number.isNaN(parsePrice("abc", 1000)));
+  assert.ok(Number.isNaN(parsePrice("-1", 1000)));
 });
