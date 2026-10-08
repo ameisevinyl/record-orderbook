@@ -66,3 +66,22 @@ test("pricelist page: no plant server — the embedded template, no menu", async
   assert.equal(els.get("file").textContent, "pricelist.json");
   assert.deepEqual(menu, []);
 });
+
+test("pricelist page: on the plant server — the file on disk, VAT from the live plant config, menu", async () => {
+  const pricelist = { text: read("src/pricelist.example.json"), hash: "", exists: false };
+  const { els, menu } = await run("pricelist", { pricelist, "plant-config": example });
+  assert.equal(els.get("file").textContent, "src/pricelist.json (new, from the example)");
+  const editor = els.get("editor").innerHTML;
+  assert.ok(editor.includes("src/plant.config.local.js (Tuff Gong International, JM)"));
+  assert.ok(editor.includes('data-m="vatCountry" value="JM"'));   // the example list says ES
+  assert.ok(els.get("status").textContent.includes("no standard VAT rate for JM"));
+  assert.equal(menu.length, 1);
+  assert.ok(menu[0].includes('aria-current="page">Pricelist</a>'));
+});
+
+test("pricelist page: a pricelist on disk that doesn't parse is no dead end", async () => {
+  const { els } = await run("pricelist", { pricelist: { text: "garbage", hash: "h", exists: true }, "plant-config": example });
+  assert.equal(els.get("status").className, "err");
+  assert.ok(els.get("editor").innerHTML.includes("Open a pricelist.json"));
+  assert.ok(!els.get("btnOpen").added.includes("hidden"));
+});

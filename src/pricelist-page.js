@@ -8,7 +8,7 @@ import { validatePricelist, upgradePricelist, formatPricelist, perPiece, parsePr
 import { validatePlant } from "./lib/config-validation.js";
 import { parsePlantConfig } from "./lib/plant-config.js";
 import { standardVatRate, vatFor } from "./lib/vat-rates.js";
-import { $, esc, download, onDropFile, installSheetKeys } from "./sheet.js";
+import { $, esc, download, onDropFile, installSheetKeys, serverFile, saveServerFile, installMenu } from "./sheet.js";
 
 // build/build.js embeds src/pricelist.example.json and the plant config here.
 const TEMPLATE = null;
@@ -24,6 +24,7 @@ let fileName = "pricelist.json";
 let dirty = false;
 let plant = null;   // the plant config the VAT comes from
 let plantName = "plant.config.local.js";
+let remote = null;   // {hash} while the plant server holds the pricelist
 
 const priced = item => item.tiers.filter(t => t.price !== null);
 const flat = item => item.unit === "order";
@@ -220,7 +221,7 @@ $("editor").addEventListener("click", e => {
   edit();
 });
 
-function load(text, name){
+function load(text, name, fromDisk = false){
   try{
     list = validatePricelist(upgradePricelist(JSON.parse(text), today()));
   }catch(error){
@@ -229,7 +230,7 @@ function load(text, name){
     return;
   }
   cols = [...new Set(Object.values(list.items).filter(i => !flat(i)).flatMap(i => priced(i).map(t => t.from)))].sort((a, b) => a - b);
-  fileName = name;
+  fileName = remote && !fromDisk ? `${name} → src/pricelist.json` : name;
   dirty = !!syncVat();
   render();
   status();
@@ -243,26 +244,54 @@ $("input").addEventListener("change", async () => {
 });
 onDropFile((text, name) => name.endsWith(".js") ? loadPlant(text, name) : load(text, name));
 
-$("btnSave").addEventListener("click", () => {
+$("btnSave").addEventListener("click", async () => {
   list.created = today();
   status();
   render();
   if($("btnSave").disabled) return;
-  download(formatPricelist(list), fileName, "application/json");
+  const text = formatPricelist(list);
+  if(remote){
+    try{
+      remote.hash = await saveServerFile("pricelist", text, remote.hash);
+    }catch(error){
+      $("status").className = "err";
+      $("status").textContent = `couldn't save: ${error.message}`;
+      return;
+    }
+  }else download(text, fileName, "application/json");
   dirty = false;
   status();
+  if(remote) $("status").textContent = "saved to disk";
 });
 window.addEventListener("beforeunload", e => { if(dirty) e.preventDefault(); });
 
 installSheetKeys();
 
-if(PLANT_TEMPLATE){
-  try{
-    validatePlant(PLANT_TEMPLATE);
-    plant = structuredClone(PLANT_TEMPLATE);
-  }catch(error){ console.error(error); }
+async function start(){
+  const [disk, plantDisk] = await Promise.all([serverFile("pricelist"), serverFile("plant-config")]);
+  if(disk){
+    remote = { hash: disk.hash };
+    installMenu("/src/pricelist.html");
+    if(plantDisk){
+      try{
+        plant = parsePlantConfig(plantDisk.text);
+        plantName = "src/plant.config.local.js";
+      }catch(error){ console.error(error); }
+    }
+    render();   // the "open a file" placeholder, if the file on disk doesn't parse
+    // load() leaves "unsaved changes" on when the VAT followed the plant config.
+    load(disk.text, disk.exists ? "src/pricelist.json" : "src/pricelist.json (new, from the example)", true);
+    return;
+  }
+  if(PLANT_TEMPLATE){
+    try{
+      validatePlant(PLANT_TEMPLATE);
+      plant = structuredClone(PLANT_TEMPLATE);
+    }catch(error){ console.error(error); }
+  }
+  if(TEMPLATE) load(JSON.stringify(TEMPLATE), "pricelist.json");
+  else render();
+  dirty = false;
+  status();
 }
-if(TEMPLATE) load(JSON.stringify(TEMPLATE), "pricelist.json");
-else render();
-dirty = false;
-status();
+start();
