@@ -271,6 +271,15 @@ export function validateConfig(config){
     validateTimeLimits(format.timeLimits, `${path}.timeLimits`);
     validatePrintCheck(format.printCheck, `${path}.printCheck`);
     validateProducts(object(format.printableParts, `${path}.printableParts`), `${path}.printableParts`);
+    const extraIds = new Set();
+    array(format.extras, `${path}.extras`).forEach((extra, j) => {
+      const extraPath = `${path}.extras[${j}]`;
+      object(extra, extraPath);
+      string(extra.id, `${extraPath}.id`);
+      string(extra.name, `${extraPath}.name`);
+      if(extraIds.has(extra.id)) fail(`${path}.extras`, `contains duplicate ID "${extra.id}"`);
+      extraIds.add(extra.id);
+    });
     const proofs = object(format.proofs, `${path}.proofs`);
     for(const name of ["referenceCut", "testpress"]){
       if(typeof proofs[name] !== "boolean") fail(`${path}.proofs.${name}`, "must be a boolean");

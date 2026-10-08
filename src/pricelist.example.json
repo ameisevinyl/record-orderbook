@@ -1,0 +1,346 @@
+{
+  "version": 1,
+  "currency": "EUR",
+  "valid": "sample",
+  "vat": {
+    "country": "ES",
+    "rate": 21
+  },
+  "discounts": [
+    {
+      "id": "season-sample",
+      "label": "Sample season discount",
+      "percent": 5,
+      "from": "2026-01-01",
+      "to": "2026-03-31"
+    }
+  ],
+  "items": {
+    "12/record/black": {
+      "name": "12\" LP record, black",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 3380 },
+        { "from": 500, "price": 3110 },
+        { "from": 1000, "price": 2873 }
+      ],
+      "includes": "label, white paperbag",
+      "min": 0
+    },
+    "12/record/colour": {
+      "name": "12\" LP record, colour",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 5980 },
+        { "from": 500, "price": 5502 },
+        { "from": 1000, "price": 5083 }
+      ]
+    },
+    "12/record/random": {
+      "name": "12\" LP record, random colour",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 4680 },
+        { "from": 500, "price": 4306 },
+        { "from": 1000, "price": 3978 }
+      ]
+    },
+    "12/innerSleeve/sleeve-white-cutout": {
+      "name": "12\" LP inner sleeve: white, center cut-out",
+      "unit": 1000,
+      "tiers": [
+        { "from": 1, "price": 0 }
+      ]
+    },
+    "12/innerSleeve/sleeve-black-cutout": {
+      "name": "12\" LP inner sleeve: black, center cut-out",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 520 },
+        { "from": 500, "price": 478 },
+        { "from": 1000, "price": 442 }
+      ]
+    },
+    "12/innerSleeve/sleeve-brown-cutout": {
+      "name": "12\" LP inner sleeve: brown, center cut-out",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 520 },
+        { "from": 500, "price": 478 },
+        { "from": 1000, "price": 442 }
+      ]
+    },
+    "12/innerSleeve/sleeve-black-closed": {
+      "name": "12\" LP inner sleeve: black, closed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 650 },
+        { "from": 500, "price": 598 },
+        { "from": 1000, "price": 552 }
+      ]
+    },
+    "12/innerSleeve/sleeve-printed": {
+      "name": "12\" LP inner sleeve: printed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 2340 },
+        { "from": 500, "price": 2153 },
+        { "from": 1000, "price": 1989 }
+      ]
+    },
+    "12/outerCover/cover-printed": {
+      "name": "12\" LP cover: printed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 3640 },
+        { "from": 500, "price": 3349 },
+        { "from": 1000, "price": 3094 }
+      ]
+    },
+    "12/outerCover/cover-printed-inside-out": {
+      "name": "12\" LP cover: printed (inside out)",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 3640 },
+        { "from": 500, "price": 3349 },
+        { "from": 1000, "price": 3094 }
+      ]
+    },
+    "12/outerCover/cover-white-closed": {
+      "name": "12\" LP cover: white, closed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 1300 },
+        { "from": 500, "price": 1196 },
+        { "from": 1000, "price": 1105 }
+      ]
+    },
+    "12/outerCover/cover-black-closed": {
+      "name": "12\" LP cover: black, closed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 1300 },
+        { "from": 500, "price": 1196 },
+        { "from": 1000, "price": 1105 }
+      ]
+    },
+    "12/outerCover/cover-brown-closed": {
+      "name": "12\" LP cover: brown, closed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 1300 },
+        { "from": 500, "price": 1196 },
+        { "from": 1000, "price": 1105 }
+      ]
+    },
+    "12/outerCover/cover-red-paperbag-cutout": {
+      "name": "12\" LP cover: red paperbag, center cut-out, heavy stock",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 1820 },
+        { "from": 500, "price": 1674 },
+        { "from": 1000, "price": 1547 }
+      ]
+    },
+    "12/inlay/inlay-printed": {
+      "name": "12\" LP inlay: printed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 1300 },
+        { "from": 500, "price": 1196 },
+        { "from": 1000, "price": 1105 }
+      ]
+    },
+    "12/referenceCut": {
+      "name": "12\" LP reference cut",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 156 }
+      ]
+    },
+    "12/testpress": {
+      "name": "12\" LP testpress",
+      "unit": 1,
+      "tiers": [
+        { "from": 1, "price": 3 }
+      ]
+    },
+    "12/extra/master-stamper": {
+      "name": "12\" LP master cut & stamper",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 400 }
+      ]
+    },
+    "12/extra/plastic-bag": {
+      "name": "12\" LP plastic bag",
+      "unit": 1000,
+      "tiers": [
+        { "from": 1, "price": 60 }
+      ]
+    },
+    "7/record/black": {
+      "name": "7\" SP record, black",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 1300 },
+        { "from": 500, "price": 1196 },
+        { "from": 1000, "price": 1105 }
+      ],
+      "includes": "label, white paperbag",
+      "min": 0
+    },
+    "7/record/colour": {
+      "name": "7\" SP record, colour",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 2300 },
+        { "from": 500, "price": 2116 },
+        { "from": 1000, "price": 1955 }
+      ]
+    },
+    "7/record/random": {
+      "name": "7\" SP record, random colour",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 1800 },
+        { "from": 500, "price": 1656 },
+        { "from": 1000, "price": 1530 }
+      ]
+    },
+    "7/innerSleeve/sleeve-white-cutout": {
+      "name": "7\" SP inner sleeve: white, center cut-out",
+      "unit": 1000,
+      "tiers": [
+        { "from": 1, "price": 0 }
+      ]
+    },
+    "7/innerSleeve/sleeve-black-cutout": {
+      "name": "7\" SP inner sleeve: black, center cut-out",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 200 },
+        { "from": 500, "price": 184 },
+        { "from": 1000, "price": 170 }
+      ]
+    },
+    "7/innerSleeve/sleeve-brown-cutout": {
+      "name": "7\" SP inner sleeve: brown, center cut-out",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 200 },
+        { "from": 500, "price": 184 },
+        { "from": 1000, "price": 170 }
+      ]
+    },
+    "7/innerSleeve/sleeve-black-closed": {
+      "name": "7\" SP inner sleeve: black, closed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 250 },
+        { "from": 500, "price": 230 },
+        { "from": 1000, "price": 212 }
+      ]
+    },
+    "7/innerSleeve/sleeve-printed": {
+      "name": "7\" SP inner sleeve: printed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 900 },
+        { "from": 500, "price": 828 },
+        { "from": 1000, "price": 765 }
+      ]
+    },
+    "7/outerCover/cover-printed": {
+      "name": "7\" SP cover: printed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 1400 },
+        { "from": 500, "price": 1288 },
+        { "from": 1000, "price": 1190 }
+      ]
+    },
+    "7/outerCover/cover-printed-inside-out": {
+      "name": "7\" SP cover: printed (inside out)",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 1400 },
+        { "from": 500, "price": 1288 },
+        { "from": 1000, "price": 1190 }
+      ]
+    },
+    "7/outerCover/cover-white-closed": {
+      "name": "7\" SP cover: white, closed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 500 },
+        { "from": 500, "price": 460 },
+        { "from": 1000, "price": 425 }
+      ]
+    },
+    "7/outerCover/cover-black-closed": {
+      "name": "7\" SP cover: black, closed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 500 },
+        { "from": 500, "price": 460 },
+        { "from": 1000, "price": 425 }
+      ]
+    },
+    "7/outerCover/cover-brown-closed": {
+      "name": "7\" SP cover: brown, closed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 500 },
+        { "from": 500, "price": 460 },
+        { "from": 1000, "price": 425 }
+      ]
+    },
+    "7/outerCover/cover-red-paperbag-cutout": {
+      "name": "7\" SP cover: red paperbag, center cut-out, heavy stock",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 700 },
+        { "from": 500, "price": 644 },
+        { "from": 1000, "price": 595 }
+      ]
+    },
+    "7/inlay/inlay-printed": {
+      "name": "7\" SP inlay: printed",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 500 },
+        { "from": 500, "price": 460 },
+        { "from": 1000, "price": 425 }
+      ]
+    },
+    "7/referenceCut": {
+      "name": "7\" SP reference cut",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 60 }
+      ]
+    },
+    "7/testpress": {
+      "name": "7\" SP testpress",
+      "unit": 1,
+      "tiers": [
+        { "from": 1, "price": 3 }
+      ]
+    },
+    "7/extra/master-stamper": {
+      "name": "7\" SP master cut & stamper",
+      "unit": "order",
+      "tiers": [
+        { "from": 1, "price": 400 }
+      ]
+    },
+    "7/extra/plastic-bag": {
+      "name": "7\" SP plastic bag",
+      "unit": 1000,
+      "tiers": [
+        { "from": 1, "price": 60 }
+      ]
+    }
+  }
+}

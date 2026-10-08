@@ -28,3 +28,6 @@ __pycache__/
 
 # Output profiles the plant server downloads (CONFIG.printProfiles).
 /plant/icc/
+
+# The plant's real prices; src/pricelist.example.json is the template.
+/src/pricelist.json

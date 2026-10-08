@@ -131,6 +131,7 @@ changed files of a resend.
 ```
 node --test tests/            # run all unit tests
 node build/build.js           # build dist/index.html from src/
+node build/pricelist.js extract|generate|check   # item keys from CONFIG / sync src/pricelist.json / find unpriced
 uv run --project plant plant/server.py [--jobs <folder>]   # plant view on http://127.0.0.1:8765/, jobs tree default plant/jobs/ (won't start below the versions in plant/pyproject.toml)
 uv run --project plant plant/archive.py --jobs <folder> --days 60   # cron: zip long-done jobs into 99_ARCHIVE
 uv run --project plant python -m unittest discover plant   # plant server + checks tests
@@ -185,6 +186,13 @@ configured on purpose — keep it that way unless asked.
   `structure.css` is structure only, `theme.css` on top carries the design
   system (DESIGN.md tokens; a plant overrides the `:root` values). Spec:
   `docs/superpowers/specs/2026-09-29-plant-view-layout-design.md`.
+- Prices: `src/pricelist.json` (gitignored, the plant's real prices; the
+  committed `src/pricelist.example.json` is the template) holds net
+  prices per item key derived from CONFIG (`src/lib/pricelist.js`,
+  `build/pricelist.js`); `src/lib/quote.js` turns an order into a net
+  quote. `vat` is stored, not applied yet. The `pricelist-filler`
+  agent fills the list from a plant's PDF/CSV. Spec:
+  `docs/superpowers/specs/2026-10-08-pricelist-quote-design.md`.
 - Deep checks on disk (`plant/checks.py`, `spectrum.py`, `artwork.py`):
   see `plant/CLAUDE.md`. Python only reads facts; the rules live in
   `src/lib/audio-checks.js` and `src/lib/artwork-checks.js`.
