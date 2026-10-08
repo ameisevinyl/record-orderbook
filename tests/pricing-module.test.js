@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { showPricing } from "../src/modules/pricing.js";
+import { showPricing, initPricing } from "../src/modules/pricing.js";
 
 // Just enough DOM for the panel: a table that collects its rows.
 function stubDom(){
@@ -16,11 +16,14 @@ function stubDom(){
     }
   };
   const panel = {classList: {toggle: (name, on) => { if(name === "hidden") hidden.value = on; }}};
+  const handlers = {};
+  const sheet = {addEventListener: (type, fn) => { handlers[type] = fn; }};
   globalThis.document = {
+    querySelector: () => sheet,
     getElementById: id => id === "pricingTable" ? table : panel,
     createElement: () => ({scope: "", textContent: ""})
   };
-  return {rows, hidden};
+  return {rows, hidden, handlers};
 }
 
 const quote = {currency: "EUR", net: 810, perCopy: 2.7, validUntil: "2026-12-31",
@@ -37,6 +40,22 @@ test("a quote shows its rows (as text) and the panel; none, or junk, hides it", 
     assert.deepEqual([hidden.value, rows.length], [true, 0]);
     showPricing({unrelated: true});
     assert.deepEqual([hidden.value, rows.length], [true, 0]);
+  }finally{
+    delete globalThis.document;
+  }
+});
+
+test("an edit of the order takes the quote's panel away: it was priced for the order as sent", () => {
+  const {rows, hidden, handlers} = stubDom();
+  try{
+    initPricing();
+    showPricing(quote);
+    assert.equal(hidden.value, false);
+    handlers.input();
+    assert.deepEqual([hidden.value, rows.length], [true, 0]);
+    showPricing(quote);
+    handlers.change();
+    assert.equal(hidden.value, true);
   }finally{
     delete globalThis.document;
   }

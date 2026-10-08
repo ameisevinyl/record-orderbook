@@ -27,3 +27,10 @@ export function showPricing(quote){
     tr.insertCell().textContent = value;
   }
 }
+
+// The quote was priced for the order as the plant had it: an edit takes the
+// panel away rather than leave a price that no longer fits.
+export function initPricing(){
+  const sheet = document.querySelector(".sheet");
+  for(const type of ["input", "change"]) sheet.addEventListener(type, () => showPricing(null));
+}

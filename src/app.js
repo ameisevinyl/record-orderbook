@@ -6,6 +6,7 @@ import { initLabels } from "./modules/labels.js";
 import { initPrintedParts } from "./modules/printed-parts.js";
 import { initVinylColor } from "./modules/vinyl-color.js";
 import { initProofs } from "./modules/proofs.js";
+import { initPricing } from "./modules/pricing.js";
 import { initShippingBilling } from "./modules/shipping-billing.js";
 import { validateConfig } from "./lib/config-validation.js";
 
@@ -32,6 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initPrintedParts(refreshOrderStatus);
   initVinylColor();
   initProofs(refreshOrderStatus);
+  initPricing();
   initShippingBilling();
   refreshOrderStatus();
   initDebugMode();

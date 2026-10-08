@@ -35,10 +35,13 @@ export function buildPriceQuote({project, pricelist, config, today, vat}){
   const order = orderFromProject(project);
   const copies = order.colours.reduce((sum, c) => sum + c.qty, 0);
   if(!copies) return {ok: false, reason: "no quantity", missing: []};
+  // A quote out of date or without a VAT rate would tell the customer a wrong price.
+  if(pricelist.validUntil < today) return {ok: false, reason: `pricelist expired ${pricelist.validUntil}`, missing: []};
+  const charged = vat.case === "domestic" || vat.case === "plus-vat";
+  if(charged && (vat.rate === null || vat.rate === undefined)) return {ok: false, reason: "VAT rate unknown", missing: []};
   const result = priceOrder(order, pricelist, config);
   if(result.missing.length) return {ok: false, reason: "prices missing", missing: result.missing};
-  const charged = vat.case === "domestic" || vat.case === "plus-vat";
-  const amount = charged && vat.rate ? cents(result.net * vat.rate / 100) : 0;
+  const amount = charged ? cents(result.net * vat.rate / 100) : 0;
   return {ok: true, quote: {
     version: 1, created: today, validUntil: pricelist.validUntil, currency: pricelist.currency,
     order, lines: result.lines, net: result.net, copies, perCopy: cents(result.net / copies),

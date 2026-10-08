@@ -46,3 +46,10 @@ export function renderQuotePanel(s){
   html += `<p><button type="button" data-staff data-act="saveQuote"${built.ok ? "" : " disabled"}>${saved ? "Update quote" : "Save quote"}</button></p>`;
   return html;
 }
+
+// Whether what a quote was built from (the order's and the pricelist's hashes
+// when the page loaded) has changed since; "" if not, else why not to save.
+export function staleReason(then, now){
+  const changed = [then.projectHash !== now.projectHash && "order", then.listHash !== now.listHash && "pricelist"].filter(Boolean);
+  return changed.length ? `the ${changed.join(" and the ")} changed since this page loaded — reload it` : "";
+}

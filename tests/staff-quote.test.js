@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderQuotePanel } from "../src/lib/staff-quote.js";
+import { renderQuotePanel, staleReason } from "../src/lib/staff-quote.js";
 
 const quote = {currency: "EUR", created: "2026-10-09", validUntil: "2026-12-31", net: 810, copies: 300, perCopy: 2.7, lines: [
   {key: "7/mastering/lacquerCut", name: "Lacquer cut <A>", qty: 2, unit: "order", price: 60, amount: 120},
@@ -47,4 +47,12 @@ test("VAT: the billing country, the ID and what VIES said, the proposal, the ove
 
 test("a pricelist that can't be read is the whole panel", () => {
   assert.equal(renderQuotePanel({error: "pricelist: <bad>"}), '<p class="manual">pricelist: &lt;bad&gt;</p>');
+});
+
+test("a quote built from an order or pricelist that has changed since is stale", () => {
+  const then = {projectHash: "p1", listHash: "l1"};
+  assert.equal(staleReason(then, {projectHash: "p1", listHash: "l1"}), "");
+  assert.match(staleReason(then, {projectHash: "p2", listHash: "l1"}), /the order changed since this page loaded/);
+  assert.match(staleReason(then, {projectHash: "p1", listHash: "l2"}), /the pricelist changed/);
+  assert.match(staleReason(then, {projectHash: "p2", listHash: "l2"}), /the order and the pricelist changed/);
 });

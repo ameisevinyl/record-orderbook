@@ -21,7 +21,7 @@ import { validatePricelist, upgradePricelist } from "./lib/pricelist.js";
 import { vatCase } from "./lib/vat-case.js";
 import { normalizeVatId } from "./lib/vat-rates.js";
 import { buildPriceQuote } from "./lib/price-quote.js";
-import { renderQuotePanel } from "./lib/staff-quote.js";
+import { renderQuotePanel, staleReason } from "./lib/staff-quote.js";
 import { showPartChecks } from "./modules/printed-parts.js";
 
 const job = staffJob();
@@ -60,9 +60,10 @@ const today = () => new Date().toLocaleDateString("sv");
 // plant server when asked), saved as price_quote.json.
 async function startQuote(project, data){
   const box = document.getElementById("staffQuote");
-  let pricelist;
+  let pricelist, listHash;
   try{
     const file = await getJson("/api/staff-file?name=pricelist");
+    listHash = file.hash;
     pricelist = validatePricelist(upgradePricelist(JSON.parse(file.text), today()));
   }catch(error){
     box.innerHTML = renderQuotePanel({error: `the pricelist can't be read: ${error.message}`});
@@ -92,6 +93,11 @@ async function startQuote(project, data){
         task("");
         built = render();
       }else if(act === "saveQuote" && built.ok){
+        // The quote was priced from the order and pricelist as this page read them.
+        const stale = staleReason({projectHash: data.projectHash, listHash}, {
+          projectHash: (await getJson(`/api/job?job=${query}`)).projectHash,
+          listHash: (await getJson("/api/staff-file?name=pricelist")).hash});
+        if(stale) throw new Error(stale);
         const {hash} = await (await post("/api/quote", {job, quote: built.quote, basedOn: state.savedHash})).json();
         Object.assign(state, {saved: built.quote, savedHash: hash});
         showPricing(state.saved);

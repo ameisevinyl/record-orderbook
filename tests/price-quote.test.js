@@ -77,3 +77,17 @@ test("what the customer reads: net, per copy, the VAT line — never a product l
   assert.equal(reverse[2][1], "no VAT — reverse charge, VAT due from the recipient");
   assert.ok(!JSON.stringify(customerPricing(quote)).match(/Lacquer|Plating|setup|Record|Label/i));
 });
+
+test("no quote while the VAT rate is unknown for a case that charges VAT, or the pricelist has run out", () => {
+  const unknown = build(vat("plus-vat", null));
+  assert.deepEqual([unknown.ok, unknown.reason], [false, "VAT rate unknown"]);
+  assert.equal(build(vat("domestic", undefined)).ok, false);
+  assert.equal(build(vat("export", 0)).ok, true, "no VAT charged, no rate needed");
+  assert.equal(build(vat("none", null)).ok, true);
+  const old = pricelist();
+  old.validUntil = "2026-10-08";
+  const expired = build(vat("domestic", 19), project(), old);   // today is 2026-10-09
+  assert.deepEqual([expired.ok, expired.reason], [false, "pricelist expired 2026-10-08"]);
+  old.validUntil = "2026-10-09";
+  assert.equal(build(vat("domestic", 19), project(), old).ok, true, "valid through the day itself");
+});
