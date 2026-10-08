@@ -1,6 +1,7 @@
 // The staff app's menu, shared by the plant view and the staff editors.
 export const MENU = [
   ["Plant view", "/"],
+  ["Archive", "/#/archive"],
   ["Pricelist", "/src/pricelist.html"],
   ["Plant config", "/src/plant-config.html"]
 ];

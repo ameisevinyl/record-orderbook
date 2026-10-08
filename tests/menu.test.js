@@ -6,7 +6,7 @@ test("menu: absolute, unique hrefs; staff pages are served from src/", () => {
   const hrefs = MENU.map(([, href]) => href);
   assert.equal(new Set(hrefs).size, hrefs.length);
   assert.ok(hrefs.every(h => h.startsWith("/")));
-  assert.deepEqual(hrefs, ["/", "/src/pricelist.html", "/src/plant-config.html"]);
+  assert.deepEqual(hrefs, ["/", "/#/archive", "/src/pricelist.html", "/src/plant-config.html"]);
 });
 
 test("menuHtml: one link per entry, only the current one marked", () => {

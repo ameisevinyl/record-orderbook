@@ -15,7 +15,8 @@ import { getFormat } from "../lib/format-catalogue.js";
 import { jobFiles, assignedName, mergeResend, nextVersionName, versionOf, useVersion } from "../lib/versions.js";
 import { projectFileName } from "../lib/package-naming.js";
 import { renderBasic, renderProduction, renderArtwork, renderAudio, renderShipping, renderUnmanaged, renderHistory } from "../lib/plant-overview.js";
-import { renderNav, renderHome, renderInbox, renderBoard } from "../lib/plant-board.js";
+import { renderNav, renderHome, renderInbox, renderArchive } from "../lib/plant-board.js";
+import { dashboardRows, renderDashboard, viewLines, viewFromHash } from "../lib/dashboard.js";
 import { lineState, logEntry, stageReady } from "../lib/lines.js";
 import { menuHtml } from "../lib/menu.js";
 
@@ -93,7 +94,7 @@ async function readStream(res, onStep){
   }
 }
 
-// --- Routes: #/ · #/board · #/inbox/<item> · #/job/<job>[/<section>]
+// --- Routes: #/ · #/view/<preset> · #/archive · #/inbox/<item> · #/job/<job>[/<section>]
 
 function parseHash(){
   const [, kind, name, section] = /^#\/(job|inbox)\/([^/]+)(?:\/(\w+))?$/.exec(location.hash) || [];
@@ -127,8 +128,8 @@ async function route(reload = true){
     nav.innerHTML = renderNav(board, kind === "job" ? name : null);
     if(kind === "job") await showJob(name, section, id);
     else if(kind === "inbox") await showInbox(name, id);
-    else if(location.hash === "#/board") out.innerHTML = boardHtml(board);
-    else out.innerHTML = renderHome(board);
+    else if(location.hash === "#/archive") out.innerHTML = renderArchive(board.archive);
+    else out.innerHTML = dashboardHtml(board) + renderHome(board);
   }catch(err){
     if(id !== latest) return;
     if(kind === "job" && err.message === `no job ${name}`) leave(name);
@@ -138,20 +139,11 @@ async function route(reload = true){
   }
 }
 
-// Every job's production lines, from what /api/board carries (the last
-// check results; a job never opened has none and reads "not checked").
-function boardHtml(board){
-  const names = Object.keys(CONFIG.lines);
-  const rows = board.stages.flatMap(s => s.jobs).filter(card => !card.error).map(card => {
-    let states = {};
-    try{
-      const project = prepareProject(card.project, CONFIG);
-      const results = Object.keys(card.artwork || {}).length ? card.artwork : null;
-      states = Object.fromEntries(names.map(n => [n, lineState(project, CONFIG, n, results)]));
-    }catch{ /* an unreadable project: an empty row */ }
-    return {job: card.job, catalogue: card.catalogue, title: card.title, states};
-  });
-  return renderBoard(rows, names);
+// The dashboard: every order's lines, the columns of the preset in the hash.
+function dashboardHtml(board){
+  const views = Object.keys(CONFIG.dashboardViews);
+  const view = viewFromHash(location.hash, views);
+  return renderDashboard(dashboardRows(board, CONFIG), viewLines(CONFIG, view), view, views);
 }
 
 // The open job's folder is gone: back to the overview, which says so.

@@ -36,7 +36,7 @@ export function renderNav({stages, inbox}, openJob){
     const items = received.concat(jobs.map(jobItem));
     return `<li>${escapeHtml(ownName(stage))} (${items.length})${items.length ? `<ul>${items.join("")}</ul>` : ""}</li>`;
   };
-  let html = `<p><a href="#/board">Board</a></p><h2>Jobs</h2><ul>${stages.filter(s => !s.stage.includes("/")).map(stageItem).join("")}</ul>`;
+  let html = `<h2>Jobs</h2><ul>${stages.filter(s => !s.stage.includes("/")).map(stageItem).join("")}</ul>`;
   if(openJob){
     html += `<h2>Sections</h2><ul>` + SECTIONS.map(([id, title]) =>
       `<li><a href="${jobLink(openJob)}/${id}">${escapeHtml(title)}</a></li>`).join("") + `</ul>`;
@@ -66,15 +66,6 @@ export function renderInbox(item, info, plans){
       : "<p>No file changes; form fields are taken over.</p>")
     + `<p><button type="button" class="merge" data-job="${escapeHtml(job)}">Merge</button></p>`).join("");
   return html + `<h2>New job ${escapeHtml(info.job)}</h2><p><button type="button" id="accept">Accept as new job</button></p>`;
-}
-
-// The board: a row per job, a column per production line with where it
-// stands. rows: [{job, catalogue, title, states: {[line]: lineState()}}].
-export function renderBoard(rows, lineNames){
-  const cell = s => !s ? "" : s.done ? "✓" : s.waiting ? "waiting" : s.checking ? "not checked" : escapeHtml(s.step);
-  return `<h2>Board</h2>` + listTable(["Job", ...lineNames], rows.map(r => [
-    `<a href="${jobLink(r.job)}">${escapeHtml([r.catalogue || r.job, r.title].filter(Boolean).join(" — "))}</a>`,
-    ...lineNames.map(n => cell(r.states[n]))]));
 }
 
 // The archive stage: the zips archive.py wrote (name, size, when).

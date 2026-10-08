@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderNav, renderHome, renderInbox, renderBoard, renderArchive } from "../src/lib/plant-board.js";
+import { renderNav, renderHome, renderInbox, renderArchive } from "../src/lib/plant-board.js";
 
 const board = {stages: [
   {stage: "00_INBOX", jobs: [{job: "j1", catalogue: "X<1>", title: "T", artist: "A"}]},
@@ -12,7 +12,7 @@ const board = {stages: [
 
 test("nav: stages nested under their grouping stage, counts, each job once, inbox items", () => {
   const html = renderNav(board, null);
-  assert.ok(html.startsWith('<p><a href="#/board">Board</a></p><h2>Jobs</h2>'));
+  assert.ok(html.startsWith("<h2>Jobs</h2>"));
   assert.ok(html.includes("<li>ORDERS<ul><li>PREPRESS (1)"), "grouping stage is a heading, no count, no jobs");
   assert.ok(!html.includes("lost"), "a job put into a grouping stage isn't listed in the nav");
   assert.ok(html.includes("<li>INBOX (3)"));
@@ -48,20 +48,6 @@ test("inbox: the item as a table row, a merge per matching job, then accept", ()
   assert.ok(html.includes("Label A → X_labels_A_v3.pdf"));
   assert.ok(html.includes('class="merge" data-job="j1"'));
   assert.ok(html.includes('id="accept"'));
-});
-
-test("board grid: a row per job, a column per line, the current step or ✓", () => {
-  const rows = [{job: "K_x_261001-2006", catalogue: "K", title: "High <Riding>",
-    states: {labels: {step: "size", done: false, waiting: false, checking: false}}},
-    {job: "L_y_261001-2006", catalogue: "L", title: "", states: {labels: {step: null, done: true, waiting: false, checking: false}}}];
-  const html = renderBoard(rows, ["labels"]);
-  assert.ok(html.includes('<a href="#/job/K_x_261001-2006">K — High &lt;Riding&gt;</a>'));
-  assert.ok(html.includes("<td>size</td>"));
-  assert.ok(html.includes("<td>✓</td>"));
-});
-
-test("nav: a Board link first", () => {
-  assert.ok(renderNav({stages: [], inbox: []}, null).startsWith('<p><a href="#/board">Board</a></p>'));
 });
 
 test("archive: the zips with size and date; nothing archived", () => {

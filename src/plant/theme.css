@@ -57,6 +57,11 @@ header h1 a{ color:inherit; text-decoration:none; }
 #menu a{ color:var(--ink-dim); }
 #menu a[aria-current]{ color:var(--ink); font-weight:600; text-decoration:none; }
 
+/* --- Dashboard: a row per order, a column per line; plain words, one alarm colour. --- */
+table.dashboard td.wait{ color:var(--ink-dim); }
+table.dashboard td.stop{ color:var(--danger); font-weight:700; }
+table.dashboard tr.stage th{ text-align:left; background:var(--field); }
+
 /* --- Main: the chosen view. --- */
 main{ padding:16px 24px 80px; max-width:1040px; overflow-x:auto; }
 section{ margin:0 0 24px; }
