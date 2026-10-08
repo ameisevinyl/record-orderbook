@@ -4,9 +4,14 @@
 // piece, the file keeps the price per unit (see lib/pricelist.js). Adding or
 // removing items is `build/pricelist.js generate`'s job — the list comes from config.
 import { validatePricelist, formatPricelist, perPiece, parsePrice, unpriced } from "./lib/pricelist.js";
+import { validatePlant } from "./lib/config-validation.js";
+import { parsePlantConfig, formatPlantConfig } from "./lib/plant-config.js";
+import { standardVatRate } from "./lib/vat-rates.js";
+import { COUNTRIES } from "./lib/countries.js";
 
-// build/build.js embeds src/pricelist.example.json here.
+// build/build.js embeds src/pricelist.example.json and the plant config here.
 const TEMPLATE = null;
+const PLANT_TEMPLATE = null;
 
 const $ = id => document.getElementById(id);
 const esc = text => String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -17,6 +22,8 @@ let list = null;
 let cols = [];   // the quantity columns, ascending
 let fileName = "pricelist.json";
 let dirty = false;
+let plant = null;   // the plant config being edited
+let plantDirty = false;
 
 const priced = item => item.tiers.filter(t => t.price !== null);
 const flat = item => item.unit === "order";
@@ -56,8 +63,8 @@ function render(){
     <table class="meta"><thead><tr><th>valid</th><th>currency</th><th>VAT country</th><th>VAT %</th></tr></thead><tbody><tr>
       <td><input type="text" class="valid" data-m="valid" value="${esc(list.valid || "")}"></td>
       <td><input type="text" class="cur" data-m="currency" value="${esc(list.currency)}"></td>
-      <td><input type="text" class="vat" data-m="vatCountry" value="${esc(list.vat.country)}"></td>
-      <td><input type="text" class="num vat" data-m="vatRate" value="${list.vat.rate}"></td>
+      <td><input type="text" class="vat${plant ? " ro" : ""}" data-m="vatCountry" value="${esc(list.vat.country)}"${plant ? " readonly" : ""}></td>
+      <td><input type="text" class="num vat${vatDerived() ? " ro" : ""}" data-m="vatRate" value="${list.vat.rate}"${vatDerived() ? " readonly" : ""}></td>
     </tr></tbody></table>
     <p class="note">Net prices in € per piece; fixed = flat price per order. A price applies from its column's quantity up. Min = lowest line total.</p>
     <table><thead><tr><th>Item</th><th class="fixed">fixed</th>${heads}<th class="add"><button class="x" data-act="addCol" title="Add quantity column">+</button></th><th>Min total</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -70,9 +77,142 @@ function status(){
     try{ validatePricelist(list); }catch(e){ error = e.message; }
   }
   $("status").className = error ? "err" : "";
-  $("status").textContent = error || (list ? `${unpriced(list).length} unpriced${dirty ? " · unsaved changes" : ""}` : "");
+  const noRate = plant && standardVatRate(plant.imprint.countryCode) === undefined ? ` · no standard VAT rate for ${plant.imprint.countryCode}, check VAT %` : "";
+  $("status").textContent = error || (list ? `${unpriced(list).length} unpriced${noRate}${dirty ? " · unsaved changes" : ""}` : "");
   $("btnSave").disabled = !list || !!error;
   $("file").textContent = list ? fileName : "";
+}
+
+/* ---------------- plant config ---------------- */
+
+const IMPRINT = [
+  ["recipientName", "Name"], ["addressLine1", "Address line 1"], ["addressLine2", "Address line 2"],
+  ["addressLine3", "Address line 3"], ["postalCode", "Postal code"], ["city", "City"],
+  ["stateProvince", "State / province"], ["countryCode", "Country"], ["phone", "Phone"],
+  ["email", "Email"], ["vat", "VAT ID"]
+];
+
+// The pricelist's VAT country and rate come from the plant config.
+const vatDerived = () => plant && standardVatRate(plant.imprint.countryCode) !== undefined;
+function syncVat(){
+  if(!plant || !list) return;
+  const country = plant.imprint.countryCode, rate = standardVatRate(country);
+  if(list.vat.country !== country || (rate !== undefined && list.vat.rate !== rate)){
+    list.vat.country = country;
+    if(rate !== undefined) list.vat.rate = rate;
+    return true;
+  }
+}
+
+function renderPlant(){
+  if(!plant){
+    $("plant").innerHTML = "<p>Open a plant.config.local.js.</p>";
+    return;
+  }
+  const code = plant.imprint.countryCode;
+  const countries = `<select data-p="imprint.countryCode"><option value=""></option>`
+    + (COUNTRIES.some(([c]) => c === code) || !code ? "" : `<option value="${esc(code)}" selected>${esc(code)}</option>`)
+    + COUNTRIES.map(([c, name]) => `<option value="${c}"${c === code ? " selected" : ""}>${esc(name)} (${c})</option>`).join("") + "</select>";
+  const kv = IMPRINT.map(([key, label]) =>
+    `<tr><th>${label}</th><td>${key === "countryCode" ? countries : `<input type="text" data-p="imprint.${key}" value="${esc(plant.imprint[key])}">`}</td></tr>`).join("");
+  const services = plant.transfer.services.map((sv, i) => `<tr>
+      <td><input type="text" class="n" data-s="${i}" data-f="name" value="${esc(sv.name)}"></td>
+      <td><input type="text" class="u" data-s="${i}" data-f="url" value="${esc(sv.url)}"></td>
+      <td class="chk"><input type="checkbox" data-s="${i}" data-f="direct"${sv.direct ? " checked" : ""}></td>
+      <td><button class="x" data-act="rmService" data-s="${i}" title="Remove service">x</button></td></tr>`).join("");
+  $("plant").innerHTML = `
+    <table class="kv"><thead><tr><th colspan="2">Imprint</th></tr></thead><tbody>${kv}</tbody></table>
+    <table class="kv"><thead><tr><th colspan="2">Transfer</th></tr></thead><tbody>
+      <tr><th>Upload link</th><td><input type="text" data-p="transfer.uploadUrl" value="${esc(plant.transfer.uploadUrl)}"></td></tr>
+      <tr><th>Recipient email</th><td><input type="text" data-p="transfer.uploadEmail" value="${esc(plant.transfer.uploadEmail)}"></td></tr></tbody></table>
+    <table class="sv"><thead><tr><th>Transfer service</th><th>URL</th><th>Direct</th><th class="add"><button class="x" data-act="addService" title="Add service">+</button></th></tr></thead><tbody>${services}</tbody></table>
+    <p class="note">Save, put the file at src/plant.config.local.js and run node build/build.js for the order form.</p>`;
+}
+
+function plantStatus(){
+  let error = "";
+  if(plant){
+    try{
+      validatePlant(plant);
+      if(!/^[A-Z]{2}$/.test(plant.imprint.countryCode)) throw new Error("country code must be two capital letters");
+    }catch(e){ error = e.message; }
+  }
+  $("plantStatus").className = error ? "err" : "";
+  $("plantStatus").textContent = error || (plantDirty ? "unsaved changes" : "");
+  $("btnSavePlant").disabled = !plant || !!error;
+  $("plantFile").textContent = plant ? plantName : "";
+}
+
+let plantName = "plant.config.local.js";
+
+function plantEdited(){
+  plantDirty = true;
+  if(syncVat()){
+    dirty = true;
+    render();
+  }
+  plantStatus();
+  status();
+}
+
+$("plant").addEventListener("input", e => {
+  const { p, s, f } = e.target.dataset;
+  if(p){
+    const [section, key] = p.split(".");
+    plant[section][key] = key === "countryCode" ? e.target.value.trim().toUpperCase() : e.target.value.trim();
+  }else if(s !== undefined && f !== "direct") plant.transfer.services[s][f] = e.target.value.trim();
+  else return;
+  plantEdited();
+});
+$("plant").addEventListener("change", e => {
+  const { s, f } = e.target.dataset;
+  if(f !== "direct") return;
+  if(e.target.checked) plant.transfer.services[s].direct = true;
+  else delete plant.transfer.services[s].direct;
+  plantEdited();
+});
+$("plant").addEventListener("click", e => {
+  const { act, s } = e.target.dataset;
+  if(act === "addService") plant.transfer.services.push({ name: "", url: "" });
+  else if(act === "rmService") plant.transfer.services.splice(s, 1);
+  else return;
+  renderPlant();
+  plantEdited();
+});
+
+function loadPlant(text, name){
+  try{
+    plant = parsePlantConfig(text);
+  }catch(error){
+    $("plantStatus").className = "err";
+    $("plantStatus").textContent = `${name}: ${error.message}`;
+    return;
+  }
+  plantName = name;
+  plantDirty = false;
+  syncVat();
+  renderPlant();
+  plantStatus();
+  render();
+  status();
+}
+
+$("btnOpenPlant").addEventListener("click", () => $("inputPlant").click());
+$("inputPlant").addEventListener("change", async () => {
+  const file = $("inputPlant").files[0];
+  if(file) loadPlant(await file.text(), file.name);
+  $("inputPlant").value = "";
+});
+$("btnSavePlant").addEventListener("click", () => {
+  download(formatPlantConfig(plant), "plant.config.local.js", "text/javascript");
+  plantDirty = false;
+  plantStatus();
+});
+
+function download(text, name, type){
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  Object.assign(document.createElement("a"), { href: url, download: name }).click();
+  URL.revokeObjectURL(url);
 }
 
 function edit(){
@@ -195,18 +335,27 @@ document.addEventListener("drop", async e => {
   e.preventDefault();
   document.body.classList.remove("drag");
   const file = e.dataTransfer.files[0];
-  if(file) load(await file.text(), file.name);
+  if(!file) return;
+  if(file.name.endsWith(".js")) loadPlant(await file.text(), file.name);
+  else load(await file.text(), file.name);
 });
 
 $("btnSave").addEventListener("click", () => {
-  const url = URL.createObjectURL(new Blob([formatPricelist(list)], { type: "application/json" }));
-  Object.assign(document.createElement("a"), { href: url, download: fileName }).click();
-  URL.revokeObjectURL(url);
+  download(formatPricelist(list), fileName, "application/json");
   dirty = false;
   status();
 });
-window.addEventListener("beforeunload", e => { if(dirty) e.preventDefault(); });
+window.addEventListener("beforeunload", e => { if(dirty || plantDirty) e.preventDefault(); });
 
+if(PLANT_TEMPLATE){
+  try{
+    validatePlant(PLANT_TEMPLATE);
+    plant = structuredClone(PLANT_TEMPLATE);
+  }catch(error){ console.error(error); }
+}
 if(TEMPLATE) load(JSON.stringify(TEMPLATE), "pricelist.json");
 else render();
+syncVat();
+renderPlant();
+plantStatus();
 status();

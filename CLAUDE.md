@@ -193,7 +193,9 @@ configured on purpose — keep it that way unless asked.
   quote. `vat` is stored, not applied yet. The `pricelist-filler`
   agent fills the list from a plant's PDF/CSV; staff edit it in
   `dist/pricelist.html` (`src/pricelist.html` + `pricelist-page.js`,
-  open/save a JSON file, prices per piece). Spec:
+  open/save a JSON file, prices per piece; it also edits
+  `plant.config.local.js` (`src/lib/plant-config.js`) and takes the
+  pricelist's VAT country/rate from it, `src/lib/vat-rates.js`). Spec:
   `docs/superpowers/specs/2026-10-08-pricelist-quote-design.md`.
 - Deep checks on disk (`plant/checks.py`, `spectrum.py`, `artwork.py`):
   see `plant/CLAUDE.md`. Python only reads facts; the rules live in

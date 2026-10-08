@@ -42,8 +42,8 @@
   .btn:disabled{ opacity:.4; cursor:not-allowed; }
   header.top{ display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
   .actions{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  #status{ font-size:12px; color:var(--ink-dim); }
-  #status.err{ color:var(--danger); font-weight:700; }
+  #status, #plantStatus{ font-size:12px; color:var(--ink-dim); }
+  #status.err, #plantStatus.err{ color:var(--danger); font-weight:700; }
   body.drag .sheet{ outline:2px dashed var(--ink); outline-offset:8px; }
 
   /* A sheet, not a form: every value sits in a bordered cell, the input
@@ -84,6 +84,17 @@
   th.add{ padding:0; text-align:center; }
   th.add .x{ font-weight:700; }
   .meta{ width:auto; }
+  input.ro{ color:var(--ink-dim); cursor:default; }
+  table.kv th{ width:150px; font-weight:400; }
+  table.kv td input{ width:300px; text-align:left; }
+  td select{
+    display:block; width:300px; height:100%; min-height:22px; border:0; border-radius:0; background:transparent;
+    font:inherit; font-size:12.5px; color:var(--ink); padding:0 2px; outline:none;
+  }
+  td select:hover{ background:var(--field); }
+  td select:focus{ outline:2px solid var(--ink); outline-offset:-2px; background:var(--bg); }
+  table.sv td input.n{ width:150px; } table.sv td input.u{ width:300px; }
+  td.chk{ text-align:center; padding:0 8px; }
   .meta input.valid{ width:100px; } .meta input.cur, .meta input.vat{ width:70px; }
   td.p input{ width:64px; } td.min input{ width:64px; }
   .note{ margin:6px 0 0; font-size:12px; color:var(--ink-dim); }
@@ -93,6 +104,16 @@
 <body>
 <div class="sheet">
   <header class="top">
+    <h1>Plant config <span id="plantFile" style="font-weight:400;color:var(--ink-dim);font-size:13px;"></span></h1>
+    <div class="actions">
+      <span id="plantStatus"></span>
+      <button class="btn" id="btnOpenPlant">Open</button>
+      <button class="btn" id="btnSavePlant">Save</button>
+      <input type="file" id="inputPlant" accept=".js,text/javascript" class="hidden">
+    </div>
+  </header>
+  <div id="plant"></div>
+  <header class="top" style="margin-top:36px;">
     <h1>Pricelist <span id="file" style="font-weight:400;color:var(--ink-dim);font-size:13px;"></span></h1>
     <div class="actions">
       <span id="status"></span>

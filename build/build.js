@@ -79,7 +79,10 @@ const FILES = [
   "src/app.js",
 ];
 
-const PRICELIST_FILES = ["src/lib/format-catalogue.js", "src/lib/pricelist.js", "src/pricelist-page.js"];
+const PRICELIST_FILES = [
+  "src/lib/format-catalogue.js", "src/lib/pricelist.js", "src/lib/config-validation.js",
+  "src/lib/countries.js", "src/lib/vat-rates.js", "src/lib/plant-config.js", "src/pricelist-page.js"
+];
 
 const IMPORT_STATEMENT = /^import\s[\s\S]*?;\s*$/gm;
 
@@ -184,11 +187,16 @@ function main(){
 // The staff pricelist editor: its own page, the example list embedded as the
 // starting point (build-time marker, like BUILD_STAMP above).
 const TEMPLATE_MARKER = "const TEMPLATE = null;";
+const PLANT_MARKER = "const PLANT_TEMPLATE = null;";
 function buildPricelistPage(outDir){
   const js = buildBundle(PRICELIST_FILES);
-  if(js.split(TEMPLATE_MARKER).length !== 2) throw new Error("build.js: expected exactly one TEMPLATE marker in pricelist-page.js");
+  for(const marker of [TEMPLATE_MARKER, PLANT_MARKER]){
+    if(js.split(marker).length !== 2) throw new Error(`build.js: expected exactly one ${marker} in pricelist-page.js`);
+  }
+  // The plant config the order form is built with (local, else the sample): its object literal.
+  const plantLiteral = readFileSync(join(ROOT, PLANT_CONFIG), "utf8").match(/export\s+const\s+PLANT_CONFIG\s*=\s*([\s\S]*?);?\s*$/)[1];
   const example = readFileSync(join(ROOT, "src/pricelist.example.json"), "utf8");
-  const html = buildHtml(js.replace(TEMPLATE_MARKER, `const TEMPLATE = ${example.trim().replace(/<\//g, "<\\/")};`), "src/pricelist.html", "pricelist-page.js");
+  const html = buildHtml(js.replace(PLANT_MARKER, `const PLANT_TEMPLATE = ${plantLiteral.replace(/<\//g, "<\\/")};`).replace(TEMPLATE_MARKER, `const TEMPLATE = ${example.trim().replace(/<\//g, "<\\/")};`), "src/pricelist.html", "pricelist-page.js");
   const outPath = join(outDir, "pricelist.html");
   writeFileSync(outPath, html, "utf8");
   console.log(`built ${outPath} (${(Buffer.byteLength(html, "utf8") / 1024).toFixed(1)} KB)`);

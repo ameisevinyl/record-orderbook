@@ -189,7 +189,7 @@ function validateLines(lines, partners){
   }
 }
 
-function validatePlant(value){
+export function validatePlant(value){
   const plant = object(value, "CONFIG.plant");
   const imprint = object(plant.imprint, "CONFIG.plant.imprint");
   const imprintFields = [
