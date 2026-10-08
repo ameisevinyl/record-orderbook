@@ -250,3 +250,14 @@ test("print profiles per printed part with a condition id; neutral tolerance", (
   delete tol.formats[0].printCheck.black.neutralTolPct;
   assert.throws(() => validateConfig(tol), /CONFIG\.formats\[0\]\.printCheck\.black\.neutralTolPct must be a positive number/);
 });
+
+test("requires uniquely identified label products", () => {
+  const missing = copy();
+  delete missing.formats[0].printableParts.label.products;
+  assert.throws(() => validateConfig(missing), /label\.products must be an array/);
+
+  const duplicate = copy();
+  const labels = duplicate.formats[0].printableParts.label.products;
+  labels.push({ ...labels[0] });
+  assert.throws(() => validateConfig(duplicate), /label\.products contains duplicate ID/);
+});

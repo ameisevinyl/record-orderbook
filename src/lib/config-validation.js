@@ -98,6 +98,15 @@ function validateProducts(parts, path){
   const label = object(parts.label, `${path}.label`);
   number(label.diameterMm, `${path}.label.diameterMm`);
   number(label.bleedMm, `${path}.label.bleedMm`, true);
+  const labelIds = new Set();
+  array(label.products, `${path}.label.products`).forEach((product, i) => {
+    const productPath = `${path}.label.products[${i}]`;
+    object(product, productPath);
+    string(product.id, `${productPath}.id`);
+    string(product.name, `${productPath}.name`);
+    if(labelIds.has(product.id)) fail(`${path}.label.products`, `contains duplicate ID "${product.id}"`);
+    labelIds.add(product.id);
+  });
 
   for(const partName of ["innerSleeve", "outerCover", "inlay"]){
     const products = array(object(parts[partName], `${path}.${partName}`).products, `${path}.${partName}.products`);

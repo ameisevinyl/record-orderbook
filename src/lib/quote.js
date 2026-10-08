@@ -2,9 +2,10 @@
 // pricelist's `vat` is deliberately not read yet. Pure.
 //
 // order: { format, sides (1|2), plating ("1step" default | "2step"),
-//          colours:[{color, qty}], innerSleeve, outerCover, inlay
+//          colours:[{color, qty}], label (label product id, none/"" = blank),
+//          innerSleeve, outerCover, inlay
 //          (product ids, none/"" = nothing), referenceCut, testpress:qty }
-// Sleeve, cover and inlay are priced for the whole pressed quantity;
+// Label (both sides together), sleeve, cover and inlay are priced for the whole pressed quantity;
 // mastering (lacquer cut and plating per side) and the pressing setup (once) are on top.
 // An unpriced or unknown item lands in `missing`, never as a silent 0.
 
@@ -49,7 +50,7 @@ export function quote(order, pricelist, config){
   price(`${order.format}/mastering/${plating}`, order.sides);
   price(`${order.format}/record/setup`, 1);
   for(const [cls, qty] of Object.entries(byClass)) price(`${order.format}/record/${cls}`, qty);
-  for(const part of ["innerSleeve", "outerCover", "inlay"]){
+  for(const part of ["label", "innerSleeve", "outerCover", "inlay"]){
     if(order[part] && order[part] !== "none") price(`${order.format}/${part}/${order[part]}`, total);
   }
   if(order.referenceCut) price(`${order.format}/referenceCut`, 1);

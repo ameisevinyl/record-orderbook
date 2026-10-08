@@ -154,7 +154,9 @@ export const CONFIG = {
       printableParts: {
         // diameterMm is the trim size (the physical label after
         // cutting) — data size (with bleed) is derived, see above.
-        label: { diameterMm: 100, bleedMm: 3 },
+        // products: what the pricelist prices on top of the blank record
+        // (a white/blank label has no product).
+        label: { diameterMm: 100, bleedMm: 3, products: [{ id:"printed-cmyk", name:"printed (CMYK)" }] },
         innerSleeve: {
           products: [
             { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",
@@ -250,7 +252,7 @@ export const CONFIG = {
         }
       },
       printableParts: {
-        label: { diameterMm: 100, bleedMm: 3 },
+        label: { diameterMm: 100, bleedMm: 3, products: [{ id:"printed-cmyk", name:"printed (CMYK)" }] },
         innerSleeve: {
           products: [
             { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",
@@ -333,7 +335,7 @@ export const CONFIG = {
         }
       },
       printableParts: {
-        label: { diameterMm: 92, bleedMm: 3 },
+        label: { diameterMm: 92, bleedMm: 3, products: [{ id:"printed-cmyk", name:"printed (CMYK)" }] },
         innerSleeve: {
           products: [
             { id:"sleeve-white-cutout", name:"white, center cut-out", kind:"unprinted",

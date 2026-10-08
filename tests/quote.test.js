@@ -9,6 +9,7 @@ const list = {
   items: {
     "7/record/black": item("black", 1000, [{ from: 100, price: 1220 }, { from: 500, price: 1100 }]),
     "7/record/colour": item("colour", 1000, [{ from: 100, price: 2220 }]),
+    "7/label/printed-cmyk": item("labels", 1000, [{ from: 100, price: 150 }]),
     "7/record/random": item("random", 1000, [{ from: 50, price: 1720 }]),
     "7/outerCover/cover-printed": item("cover", 1000, [{ from: 1, price: 1150 }], 50),
     "7/innerSleeve/sleeve-black-cutout": item("sleeve", 1000, [{ from: 1, price: null }]),
@@ -63,4 +64,11 @@ test("mastering: per side, one side, 2-step plating, bad input", () => {
 test("per-piece unit and no quantity", () => {
   assert.equal(q({ testpress: 3 }).lines.find(l => l.key === "7/testpress").amount, 9);
   assert.equal(q({ colours: [] }).net, 0);
+});
+
+test("printed labels: priced per record on top of the blank record", () => {
+  const r = q({ label: "printed-cmyk" });
+  assert.deepEqual(r.lines.slice(3, 5).map(l => [l.key, l.amount]), [["7/record/black", 244], ["7/label/printed-cmyk", 30]]);
+  assert.equal(r.net, 200 + 300 + 50 + 244 + 30);
+  assert.ok(!q({ label: "none" }).lines.some(l => l.key.includes("/label/")));
 });

@@ -3,6 +3,7 @@
 // `vat` is stored for later and not applied (see quote.js).
 //
 // Item keys: <format>/record/<black|colour|random>,
+// <format>/label/<product id> (on top of the blank record),
 // <format>/<innerSleeve|outerCover|inlay>/<product id>,
 // <format>/referenceCut, <format>/testpress and, for every format,
 // <format>/mastering/<lacquerCut|plating1|plating2> (see MASTERING) and
@@ -39,6 +40,7 @@ export function priceItems(config){
     add("record/black", `record, ${vinyl.standardColor}`);
     if(vinyl.basicColors.length) add("record/colour", "record, colour");
     add("record/random", "record, random colour");
+    for(const product of format.printableParts.label.products) add(`label/${product.id}`, `labels: ${product.name}`);
     for(const [part, title] of Object.entries(PART_TITLE)){
       for(const product of format.printableParts[part].products) add(`${part}/${product.id}`, `${title}: ${product.name}`);
     }

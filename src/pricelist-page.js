@@ -14,7 +14,7 @@ import { $, esc, download, onDropFile, installSheetKeys } from "./sheet.js";
 const TEMPLATE = null;
 const PLANT_TEMPLATE = null;
 
-const KIND = { record: "records", innerSleeve: "inner sleeves", outerCover: "covers", inlay: "inlays", referenceCut: "proofs", testpress: "proofs", extra: "extras" };
+const KIND = { record: "records", label: "labels", innerSleeve: "inner sleeves", outerCover: "covers", inlay: "inlays", referenceCut: "proofs", testpress: "proofs", extra: "extras" };
 
 const today = () => new Date().toLocaleDateString("sv");   // YYYY-MM-DD
 

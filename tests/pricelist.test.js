@@ -12,6 +12,7 @@ test("derives one unique item per product of every enabled format", () => {
   assert.ok(keys.includes("7/record/colour"));
   assert.ok(keys.includes("7/innerSleeve/sleeve-printed"));
   assert.ok(keys.includes("7/mastering/plating2"));
+  assert.ok(keys.includes("7/label/printed-cmyk"));
   assert.ok(keys.includes("12/record/setup"));
   assert.ok(!keys.some(k => k.startsWith("10/")), "disabled format");
 });

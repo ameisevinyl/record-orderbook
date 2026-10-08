@@ -44,7 +44,7 @@
         { "from": 500, "price": 3110 },
         { "from": 1000, "price": 2873 }
       ],
-      "includes": "label, white paperbag",
+      "includes": "white paperbag",
       "min": 0
     },
     "12/record/colour": {
@@ -63,6 +63,15 @@
         { "from": 100, "price": 4680 },
         { "from": 500, "price": 4306 },
         { "from": 1000, "price": 3978 }
+      ]
+    },
+    "12/label/printed-cmyk": {
+      "name": "12\" LP labels: printed (CMYK)",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 225 },
+        { "from": 500, "price": 207 },
+        { "from": 1000, "price": 191 }
       ]
     },
     "12/innerSleeve/sleeve-white-cutout": {
@@ -221,7 +230,7 @@
         { "from": 500, "price": 1196 },
         { "from": 1000, "price": 1105 }
       ],
-      "includes": "label, white paperbag",
+      "includes": "white paperbag",
       "min": 0
     },
     "7/record/colour": {
@@ -240,6 +249,15 @@
         { "from": 100, "price": 1800 },
         { "from": 500, "price": 1656 },
         { "from": 1000, "price": 1530 }
+      ]
+    },
+    "7/label/printed-cmyk": {
+      "name": "7\" SP labels: printed (CMYK)",
+      "unit": 1000,
+      "tiers": [
+        { "from": 100, "price": 150 },
+        { "from": 500, "price": 138 },
+        { "from": 1000, "price": 128 }
       ]
     },
     "7/innerSleeve/sleeve-white-cutout": {
