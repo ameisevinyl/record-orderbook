@@ -78,7 +78,7 @@ export function validatePricelist(list){
   if(typeof list.currency !== "string" || !/^[A-Z]{3}$/.test(list.currency)) fail("currency", "must be an ISO 4217 code");
   const vat = list.vat || {};
   if(typeof vat.country !== "string" || !/^[A-Z]{2}$/.test(vat.country)) fail("vat.country", "must be an ISO 3166 code");
-  if(!Number.isFinite(vat.rate) || vat.rate < 0 || vat.rate > 100) fail("vat.rate", "must be a number from 0 to 100");
+  if(vat.rate !== null && !(Number.isFinite(vat.rate) && vat.rate >= 0 && vat.rate <= 100)) fail("vat.rate", "must be null or a number from 0 to 100");
 
   for(const [key, item] of Object.entries(list.items || {})){
     const path = `items["${key}"]`;

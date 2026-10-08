@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plant config</title>
+<!--
+  Plant config editor — page shell (source). Loads plant-config-page.js as ES modules for
+  development; `node build/build.js` inlines everything (sheet.css too) into one
+  self-contained dist file. Same design tokens as index.html.
+-->
+<link rel="stylesheet" href="sheet.css">
+<style>
+  table.kv th{ width:150px; font-weight:400; }
+  table.kv td input, table.kv td select{ width:300px; text-align:left; }
+  table.sv td input.n{ width:150px; } table.sv td input.u{ width:300px; }
+  td.chk{ text-align:center; padding:0 8px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header class="top">
+    <h1>Plant config <span id="file" style="font-weight:400;color:var(--ink-dim);font-size:13px;"></span></h1>
+    <div class="actions">
+      <span id="status"></span>
+      <button class="btn" id="btnOpen">Open</button>
+      <button class="btn" id="btnSave">Save</button>
+      <input type="file" id="input" accept=".js,text/javascript" class="hidden">
+    </div>
+  </header>
+  <div id="editor"></div>
+</div>
+<script type="module" src="plant-config-page.js"></script>
+</body>
+</html>

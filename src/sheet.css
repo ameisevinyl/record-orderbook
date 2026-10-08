@@ -1,0 +1,71 @@
+/* Shared look of the staff editors (pricelist, plant config): tokens as in index.html,
+   a sheet of bordered cells. Inlined into dist/*.html by build/build.js. */
+  :root{
+    --bg:      #ffffff;
+    --panel:   #ffffff;
+    --field:   #f6f6f5;
+    --edge:    #d6d6d3;
+    --ink:     #161616;
+    --ink-dim: #5c5c59;
+    --danger:  #b3261e;
+    --control-h: 30px;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "JetBrains Mono", "IBM Plex Mono", "Cascadia Code",
+            "Fira Code", "SF Mono", Consolas, "Roboto Mono", monospace;
+  }
+  *{ box-sizing:border-box; }
+  html{ background:var(--bg); }
+  body{ margin:0; padding:32px 20px 80px; background:var(--bg); color:var(--ink);
+        font-family:var(--sans); font-size:13.5px; line-height:1.5; }
+  .sheet{ max-width:1040px; margin:0 auto; }
+  ::selection{ background:var(--ink); color:#fff; }
+  input, select{ accent-color:var(--ink); }
+  h1{ font-size:18px; margin:0; }
+  h2{ font-size:15px; margin:24px 0 8px; }
+
+  input:focus-visible, button:focus-visible{ outline:2px solid var(--ink); outline-offset:1px; }
+  .btn{
+    font-family:var(--sans); font-size:13px; font-weight:600; background:var(--panel); color:var(--ink);
+    border:1px solid var(--edge); padding:0 14px; border-radius:3px; cursor:pointer; height:var(--control-h);
+  }
+  .btn:hover{ background:var(--field); border-color:var(--ink); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  header.top{ display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+  .actions{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  #status{ font-size:12px; color:var(--ink-dim); }
+  #status.err{ color:var(--danger); font-weight:700; }
+  body.drag .sheet{ outline:2px dashed var(--ink); outline-offset:8px; }
+
+  /* A sheet, not a form: every value sits in a bordered cell, the input
+     has no frame of its own, the selected cell gets the frame. */
+  table{ border-collapse:collapse; margin:8px 0 0; }
+  th, td{ border:1px solid var(--edge); padding:0; height:24px; }
+  th{
+    background:var(--field); font-size:12px; font-weight:600; color:var(--ink-dim);
+    text-align:left; padding:0 6px; white-space:nowrap;
+  }
+  td input{
+    display:block; width:100%; height:100%; min-height:22px; border:0; border-radius:0; background:transparent;
+    font:inherit; font-size:12.5px; color:var(--ink); padding:0 6px; outline:none;
+  }
+  td input:hover{ background:var(--field); }
+  td input:focus{ outline:2px solid var(--ink); outline-offset:-2px; background:var(--bg); }
+  td input.bad{ color:var(--danger); outline:2px solid var(--danger); outline-offset:-2px; }
+  .num{ font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right; }
+  /* Plain text controls inside the sheet, not buttons. */
+  .x{
+    border:0; background:none; font:inherit; color:var(--ink-dim); cursor:pointer;
+    padding:0 6px; height:24px;
+  }
+  .x:hover{ color:var(--ink); }
+  th.add{ padding:0; text-align:center; }
+  th.add .x{ font-weight:700; }
+  input.ro{ color:var(--ink-dim); cursor:default; }
+  td select{
+    display:block; width:100%; height:100%; min-height:22px; border:0; border-radius:0; background:transparent;
+    font:inherit; font-size:12.5px; color:var(--ink); padding:0 2px; outline:none;
+  }
+  td select:hover{ background:var(--field); }
+  td select:focus{ outline:2px solid var(--ink); outline-offset:-2px; background:var(--bg); }
+  .note{ margin:6px 0 0; font-size:12px; color:var(--ink-dim); }
+  .hidden{ display:none !important; }

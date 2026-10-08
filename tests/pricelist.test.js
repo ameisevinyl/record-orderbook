@@ -45,6 +45,7 @@ test("merge keeps filled prices, adds new items unpriced, drops orphans", () => 
 test("validation rejects malformed lists", () => {
   const bad = f => { const l = structuredClone(example); f(l); return () => validatePricelist(l); };
   assert.throws(bad(l => { l.vat.rate = 120; }), /vat\.rate/);
+  assert.doesNotThrow(bad(l => { l.vat.rate = null; }));
   assert.throws(bad(l => { l.vat.country = "es"; }), /vat\.country/);
   assert.throws(bad(l => { l.items["7/record/black"].unit = 0; }), /unit/);
   assert.throws(bad(l => { l.items["7/record/black"].tiers = []; }), /tiers/);

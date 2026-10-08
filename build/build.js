@@ -79,9 +79,15 @@ const FILES = [
   "src/app.js",
 ];
 
-const PRICELIST_FILES = [
-  "src/lib/format-catalogue.js", "src/lib/pricelist.js", "src/lib/config-validation.js",
-  "src/lib/countries.js", "src/lib/vat-rates.js", "src/lib/plant-config.js", "src/pricelist-page.js"
+// The staff editors: own page each, sharing sheet.css and sheet.js.
+const SHEET_FILES = ["src/lib/config-validation.js", "src/lib/plant-config.js", "src/sheet.js"];
+const PAGES = [
+  { shell: "src/pricelist.html", script: "pricelist-page.js", out: "pricelist.html",
+    files: ["src/lib/format-catalogue.js", "src/lib/pricelist.js", "src/lib/vat-rates.js", ...SHEET_FILES, "src/pricelist-page.js"],
+    embeds: ["TEMPLATE", "PLANT_TEMPLATE"] },
+  { shell: "src/plant-config.html", script: "plant-config-page.js", out: "plant-config.html",
+    files: ["src/lib/countries.js", ...SHEET_FILES, "src/plant-config-page.js"],
+    embeds: ["PLANT_TEMPLATE"] }
 ];
 
 const IMPORT_STATEMENT = /^import\s[\s\S]*?;\s*$/gm;
@@ -169,7 +175,9 @@ function buildHtml(bundleJs, shellFile = "src/index.html", script = "app.js"){
   const marker = new RegExp(`<script type="module" src="${script.replace(".", "\\.")}"></script>`);
   const matches = shell.match(new RegExp(marker.source, "g")) || [];
   if(matches.length !== 1) throw new Error(`${shellFile}: expected exactly one ${script} module script tag to replace, found ${matches.length}`);
-  return shell.replace(marker, `<script>\n${bundleJs}\n</script>`);
+  return shell
+    .replace(/<link rel="stylesheet" href="([^"]+)">/g, (_, href) => `<style>\n${readFileSync(join(ROOT, "src", href), "utf8")}</style>`)
+    .replace(marker, () => `<script>\n${bundleJs}\n</script>`);
 }
 
 function main(){
@@ -181,23 +189,26 @@ function main(){
   writeFileSync(outPath, html, "utf8");
   const kb = (Buffer.byteLength(html, "utf8") / 1024).toFixed(1);
   console.log(`built ${outPath} (${kb} KB)`);
-  buildPricelistPage(outDir);
+  PAGES.forEach(page => buildPage(outDir, page));
 }
 
-// The staff pricelist editor: its own page, the example list embedded as the
-// starting point (build-time marker, like BUILD_STAMP above).
-const TEMPLATE_MARKER = "const TEMPLATE = null;";
-const PLANT_MARKER = "const PLANT_TEMPLATE = null;";
-function buildPricelistPage(outDir){
-  const js = buildBundle(PRICELIST_FILES);
-  for(const marker of [TEMPLATE_MARKER, PLANT_MARKER]){
-    if(js.split(marker).length !== 2) throw new Error(`build.js: expected exactly one ${marker} in pricelist-page.js`);
+// What a page embeds at build time (the marker `const X = null;` in its script):
+// the starting pricelist, and the plant config the order form is built with
+// (local, else the sample) as its object literal.
+const embedded = {
+  TEMPLATE: () => readFileSync(join(ROOT, "src/pricelist.example.json"), "utf8").trim(),
+  PLANT_TEMPLATE: () => readFileSync(join(ROOT, PLANT_CONFIG), "utf8").match(/export\s+const\s+PLANT_CONFIG\s*=\s*([\s\S]*?);?\s*$/)[1]
+};
+
+function buildPage(outDir, page){
+  let js = buildBundle(page.files);
+  for(const name of page.embeds){
+    const marker = `const ${name} = null;`;
+    if(js.split(marker).length !== 2) throw new Error(`build.js: expected exactly one ${marker} in ${page.script}`);
+    js = js.replace(marker, () => `const ${name} = ${embedded[name]().replace(/<\//g, "<\\/")};`);
   }
-  // The plant config the order form is built with (local, else the sample): its object literal.
-  const plantLiteral = readFileSync(join(ROOT, PLANT_CONFIG), "utf8").match(/export\s+const\s+PLANT_CONFIG\s*=\s*([\s\S]*?);?\s*$/)[1];
-  const example = readFileSync(join(ROOT, "src/pricelist.example.json"), "utf8");
-  const html = buildHtml(js.replace(PLANT_MARKER, `const PLANT_TEMPLATE = ${plantLiteral.replace(/<\//g, "<\\/")};`).replace(TEMPLATE_MARKER, `const TEMPLATE = ${example.trim().replace(/<\//g, "<\\/")};`), "src/pricelist.html", "pricelist-page.js");
-  const outPath = join(outDir, "pricelist.html");
+  const html = buildHtml(js, page.shell, page.script);
+  const outPath = join(outDir, page.out);
   writeFileSync(outPath, html, "utf8");
   console.log(`built ${outPath} (${(Buffer.byteLength(html, "utf8") / 1024).toFixed(1)} KB)`);
 }

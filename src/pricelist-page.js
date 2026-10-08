@@ -1,20 +1,18 @@
 // Pricelist editor: open a pricelist.json, edit prices in a table, save it
-// again. Rows are items, columns the quantities (plus "fixed" for a flat
+// again. The VAT country and rate come from the plant config (plant-config.html):
+// the one the build embeds, or one opened here. Rows are items, columns the quantities (plus "fixed" for a flat
 // price per order); a price applies from its column's quantity up. Shown per
 // piece, the file keeps the price per unit (see lib/pricelist.js). Adding or
 // removing items is `build/pricelist.js generate`'s job — the list comes from config.
 import { validatePricelist, formatPricelist, perPiece, parsePrice, unpriced } from "./lib/pricelist.js";
 import { validatePlant } from "./lib/config-validation.js";
-import { parsePlantConfig, formatPlantConfig } from "./lib/plant-config.js";
-import { standardVatRate } from "./lib/vat-rates.js";
-import { COUNTRIES } from "./lib/countries.js";
+import { parsePlantConfig } from "./lib/plant-config.js";
+import { standardVatRate, vatFor } from "./lib/vat-rates.js";
+import { $, esc, download, onDropFile, installSheetKeys } from "./sheet.js";
 
 // build/build.js embeds src/pricelist.example.json and the plant config here.
 const TEMPLATE = null;
 const PLANT_TEMPLATE = null;
-
-const $ = id => document.getElementById(id);
-const esc = text => String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const KIND = { record: "records", innerSleeve: "inner sleeves", outerCover: "covers", inlay: "inlays", referenceCut: "proofs", testpress: "proofs", extra: "extras" };
 
@@ -22,8 +20,8 @@ let list = null;
 let cols = [];   // the quantity columns, ascending
 let fileName = "pricelist.json";
 let dirty = false;
-let plant = null;   // the plant config being edited
-let plantDirty = false;
+let plant = null;   // the plant config the VAT comes from
+let plantName = "plant.config.local.js";
 
 const priced = item => item.tiers.filter(t => t.price !== null);
 const flat = item => item.unit === "order";
@@ -64,7 +62,7 @@ function render(){
       <td><input type="text" class="valid" data-m="valid" value="${esc(list.valid || "")}"></td>
       <td><input type="text" class="cur" data-m="currency" value="${esc(list.currency)}"></td>
       <td><input type="text" class="vat${plant ? " ro" : ""}" data-m="vatCountry" value="${esc(list.vat.country)}"${plant ? " readonly" : ""}></td>
-      <td><input type="text" class="num vat${vatDerived() ? " ro" : ""}" data-m="vatRate" value="${list.vat.rate}"${vatDerived() ? " readonly" : ""}></td>
+      <td><input type="text" class="num vat${vatDerived() ? " ro" : ""}" data-m="vatRate" value="${list.vat.rate ?? ""}"${vatDerived() ? " readonly" : ""}></td>
     </tr></tbody></table>
     <p class="note">Net prices in € per piece; fixed = flat price per order. A price applies from its column's quantity up. Min = lowest line total.</p>
     <table><thead><tr><th>Item</th><th class="fixed">fixed</th>${heads}<th class="add"><button class="x" data-act="addCol" title="Add quantity column">+</button></th><th>Min total</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -83,137 +81,47 @@ function status(){
   $("file").textContent = list ? fileName : "";
 }
 
-/* ---------------- plant config ---------------- */
+/* ---------------- VAT from the plant config ---------------- */
 
-const IMPRINT = [
-  ["recipientName", "Name"], ["addressLine1", "Address line 1"], ["addressLine2", "Address line 2"],
-  ["addressLine3", "Address line 3"], ["postalCode", "Postal code"], ["city", "City"],
-  ["stateProvince", "State / province"], ["countryCode", "Country"], ["phone", "Phone"],
-  ["email", "Email"], ["vat", "VAT ID"]
-];
-
-// The pricelist's VAT country and rate come from the plant config.
 const vatDerived = () => plant && standardVatRate(plant.imprint.countryCode) !== undefined;
+
+// The country always follows the plant config, a known rate too. An unknown
+// one is cleared when the country changes, and typed by hand otherwise.
 function syncVat(){
   if(!plant || !list) return;
-  const country = plant.imprint.countryCode, rate = standardVatRate(country);
-  if(list.vat.country !== country || (rate !== undefined && list.vat.rate !== rate)){
-    list.vat.country = country;
-    if(rate !== undefined) list.vat.rate = rate;
-    return true;
-  }
+  const vat = vatFor(plant.imprint.countryCode);
+  if(list.vat.country === vat.country && (vat.rate === null || list.vat.rate === vat.rate)) return;
+  list.vat = list.vat.country === vat.country ? { ...list.vat, rate: vat.rate } : vat;
+  return true;
 }
 
-function renderPlant(){
-  if(!plant){
-    $("plant").innerHTML = "<p>Open a plant.config.local.js.</p>";
-    return;
-  }
-  const code = plant.imprint.countryCode;
-  const countries = `<select data-p="imprint.countryCode"><option value=""></option>`
-    + (COUNTRIES.some(([c]) => c === code) || !code ? "" : `<option value="${esc(code)}" selected>${esc(code)}</option>`)
-    + COUNTRIES.map(([c, name]) => `<option value="${c}"${c === code ? " selected" : ""}>${esc(name)} (${c})</option>`).join("") + "</select>";
-  const kv = IMPRINT.map(([key, label]) =>
-    `<tr><th>${label}</th><td>${key === "countryCode" ? countries : `<input type="text" data-p="imprint.${key}" value="${esc(plant.imprint[key])}">`}</td></tr>`).join("");
-  const services = plant.transfer.services.map((sv, i) => `<tr>
-      <td><input type="text" class="n" data-s="${i}" data-f="name" value="${esc(sv.name)}"></td>
-      <td><input type="text" class="u" data-s="${i}" data-f="url" value="${esc(sv.url)}"></td>
-      <td class="chk"><input type="checkbox" data-s="${i}" data-f="direct"${sv.direct ? " checked" : ""}></td>
-      <td><button class="x" data-act="rmService" data-s="${i}" title="Remove service">x</button></td></tr>`).join("");
-  $("plant").innerHTML = `
-    <table class="kv"><thead><tr><th colspan="2">Imprint</th></tr></thead><tbody>${kv}</tbody></table>
-    <table class="kv"><thead><tr><th colspan="2">Transfer</th></tr></thead><tbody>
-      <tr><th>Upload link</th><td><input type="text" data-p="transfer.uploadUrl" value="${esc(plant.transfer.uploadUrl)}"></td></tr>
-      <tr><th>Recipient email</th><td><input type="text" data-p="transfer.uploadEmail" value="${esc(plant.transfer.uploadEmail)}"></td></tr></tbody></table>
-    <table class="sv"><thead><tr><th>Transfer service</th><th>URL</th><th>Direct</th><th class="add"><button class="x" data-act="addService" title="Add service">+</button></th></tr></thead><tbody>${services}</tbody></table>
-    <p class="note">Save, put the file at src/plant.config.local.js and run node build/build.js for the order form.</p>`;
+function plantLine(){
+  $("plantLine").innerHTML = plant
+    ? `VAT country and rate from the plant config ${esc(plantName)} (${esc(plant.imprint.recipientName)}, ${esc(plant.imprint.countryCode)}). <button class="x" id="btnOpenPlant">open another…</button>`
+    : `<button class="x" id="btnOpenPlant">Open a plant config…</button> for the VAT country and rate.`;
 }
-
-function plantStatus(){
-  let error = "";
-  if(plant){
-    try{
-      validatePlant(plant);
-      if(!/^[A-Z]{2}$/.test(plant.imprint.countryCode)) throw new Error("country code must be two capital letters");
-    }catch(e){ error = e.message; }
-  }
-  $("plantStatus").className = error ? "err" : "";
-  $("plantStatus").textContent = error || (plantDirty ? "unsaved changes" : "");
-  $("btnSavePlant").disabled = !plant || !!error;
-  $("plantFile").textContent = plant ? plantName : "";
-}
-
-let plantName = "plant.config.local.js";
-
-function plantEdited(){
-  plantDirty = true;
-  if(syncVat()){
-    dirty = true;
-    render();
-  }
-  plantStatus();
-  status();
-}
-
-$("plant").addEventListener("input", e => {
-  const { p, s, f } = e.target.dataset;
-  if(p){
-    const [section, key] = p.split(".");
-    plant[section][key] = key === "countryCode" ? e.target.value.trim().toUpperCase() : e.target.value.trim();
-  }else if(s !== undefined && f !== "direct") plant.transfer.services[s][f] = e.target.value.trim();
-  else return;
-  plantEdited();
-});
-$("plant").addEventListener("change", e => {
-  const { s, f } = e.target.dataset;
-  if(f !== "direct") return;
-  if(e.target.checked) plant.transfer.services[s].direct = true;
-  else delete plant.transfer.services[s].direct;
-  plantEdited();
-});
-$("plant").addEventListener("click", e => {
-  const { act, s } = e.target.dataset;
-  if(act === "addService") plant.transfer.services.push({ name: "", url: "" });
-  else if(act === "rmService") plant.transfer.services.splice(s, 1);
-  else return;
-  renderPlant();
-  plantEdited();
-});
 
 function loadPlant(text, name){
   try{
     plant = parsePlantConfig(text);
   }catch(error){
-    $("plantStatus").className = "err";
-    $("plantStatus").textContent = `${name}: ${error.message}`;
+    $("status").className = "err";
+    $("status").textContent = `${name}: ${error.message}`;
     return;
   }
   plantName = name;
-  plantDirty = false;
-  syncVat();
-  renderPlant();
-  plantStatus();
+  if(syncVat()) dirty = true;
+  plantLine();
   render();
   status();
 }
 
-$("btnOpenPlant").addEventListener("click", () => $("inputPlant").click());
+$("plantLine").addEventListener("click", e => { if(e.target.id === "btnOpenPlant") $("inputPlant").click(); });
 $("inputPlant").addEventListener("change", async () => {
   const file = $("inputPlant").files[0];
   if(file) loadPlant(await file.text(), file.name);
   $("inputPlant").value = "";
 });
-$("btnSavePlant").addEventListener("click", () => {
-  download(formatPlantConfig(plant), "plant.config.local.js", "text/javascript");
-  plantDirty = false;
-  plantStatus();
-});
-
-function download(text, name, type){
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  Object.assign(document.createElement("a"), { href: url, download: name }).click();
-  URL.revokeObjectURL(url);
-}
 
 function edit(){
   dirty = true;
@@ -252,8 +160,8 @@ $("editor").addEventListener("input", e => {
   const el = e.target, { k, c, f, m } = el.dataset;
   if(m){
     if(m === "vatRate"){
-      const rate = Number(el.value.replace(",", "."));
-      if(setField(el, el.value.trim() !== "" && Number.isFinite(rate))) list.vat.rate = rate;
+      const rate = el.value.trim() === "" ? null : Number(el.value.replace(",", "."));
+      if(setField(el, rate === null || Number.isFinite(rate))) list.vat.rate = rate;
     }else if(m === "vatCountry") list.vat.country = el.value.trim().toUpperCase();
     else list[m] = el.value.trim();
   }else if(c !== undefined){
@@ -318,7 +226,7 @@ function load(text, name){
   }
   cols = [...new Set(Object.values(list.items).filter(i => !flat(i)).flatMap(i => priced(i).map(t => t.from)))].sort((a, b) => a - b);
   fileName = name;
-  dirty = false;
+  dirty = !!syncVat();
   render();
   status();
 }
@@ -329,87 +237,16 @@ $("input").addEventListener("change", async () => {
   if(file) load(await file.text(), file.name);
   $("input").value = "";
 });
-document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("drag"); });
-document.addEventListener("dragleave", () => document.body.classList.remove("drag"));
-document.addEventListener("drop", async e => {
-  e.preventDefault();
-  document.body.classList.remove("drag");
-  const file = e.dataTransfer.files[0];
-  if(!file) return;
-  if(file.name.endsWith(".js")) loadPlant(await file.text(), file.name);
-  else load(await file.text(), file.name);
-});
+onDropFile((text, name) => name.endsWith(".js") ? loadPlant(text, name) : load(text, name));
 
 $("btnSave").addEventListener("click", () => {
   download(formatPricelist(list), fileName, "application/json");
   dirty = false;
   status();
 });
-window.addEventListener("beforeunload", e => { if(dirty || plantDirty) e.preventDefault(); });
+window.addEventListener("beforeunload", e => { if(dirty) e.preventDefault(); });
 
-/* ---------------- sheet keys ---------------- */
-// Arrow keys and Enter move between cells (Left/Right only once the caret is at
-// the edge of the text); a cell entered that way is selected, so copy, cut and
-// typing act on the whole value as in a spreadsheet. Pasting several values
-// (tab/newline separated, e.g. from Excel) fills the cells from the current one.
-
-const fieldIn = td => td && td.querySelector("input[type=text], input[type=checkbox], select");
-
-// The next cell with a field from `el`, one row or one column away.
-function neighbour(el, dRow, dCol){
-  const td = el.closest("td, th"), tr = td.parentElement;
-  if(dCol){
-    for(let n = dCol > 0 ? td.nextElementSibling : td.previousElementSibling; n; n = dCol > 0 ? n.nextElementSibling : n.previousElementSibling){
-      if(fieldIn(n)) return fieldIn(n);
-    }
-    return null;
-  }
-  const rows = [...tr.closest("table").rows];
-  for(let i = rows.indexOf(tr) + dRow; rows[i]; i += dRow){
-    if(fieldIn(rows[i].cells[td.cellIndex])) return fieldIn(rows[i].cells[td.cellIndex]);
-  }
-  return null;
-}
-
-document.addEventListener("keydown", e => {
-  const el = e.target;
-  if(!el.matches || !el.matches("td input, th input, td select") || e.metaKey || e.ctrlKey || e.altKey) return;
-  const text = el.type === "text", select = el.tagName === "SELECT";
-  let to;
-  if((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.shiftKey && !select) to = neighbour(el, e.key === "ArrowDown" ? 1 : -1, 0);
-  else if(e.key === "Enter" && !select) to = neighbour(el, e.shiftKey ? -1 : 1, 0);
-  else if(e.key === "ArrowRight" && !e.shiftKey && !(text && el.selectionEnd !== el.value.length)) to = neighbour(el, 0, 1);
-  else if(e.key === "ArrowLeft" && !e.shiftKey && !(text && el.selectionStart !== 0)) to = neighbour(el, 0, -1);
-  else return;
-  e.preventDefault();
-  if(to){
-    to.focus();
-    if(to.select) to.select();
-  }
-});
-
-function setCell(el, value){
-  if(el.type === "checkbox") return;
-  el.value = value.trim();
-  if(el.tagName === "SELECT" && el.value !== value.trim()) return;
-  el.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
-document.addEventListener("paste", e => {
-  const el = e.target;
-  if(!el.matches || !el.matches("tbody td input[type=text], tbody td select")) return;
-  const text = e.clipboardData.getData("text/plain").replace(/\r/g, "").replace(/\n+$/, "");
-  if(!/[\t\n]/.test(text)) return;   // one value: the browser pastes it
-  e.preventDefault();
-  let start = el;
-  for(const line of text.split("\n")){
-    for(let cell = start, i = 0, values = line.split("\t"); cell && i < values.length; cell = neighbour(cell, 0, 1), i++){
-      setCell(cell, values[i]);
-    }
-    start = neighbour(start, 1, 0);
-    if(!start) break;
-  }
-});
+installSheetKeys();
 
 if(PLANT_TEMPLATE){
   try{
@@ -419,7 +256,6 @@ if(PLANT_TEMPLATE){
 }
 if(TEMPLATE) load(JSON.stringify(TEMPLATE), "pricelist.json");
 else render();
-syncVat();
-renderPlant();
-plantStatus();
+dirty = false;
+plantLine();
 status();

@@ -9,3 +9,6 @@ export const STANDARD_VAT = {
 };
 
 export const standardVatRate = countryCode => STANDARD_VAT[countryCode];
+
+// The pricelist's vat block for a country; rate null = no standard rate known.
+export const vatFor = countryCode => ({ country: countryCode, rate: STANDARD_VAT[countryCode] ?? null });

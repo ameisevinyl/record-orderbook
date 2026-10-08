@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PLANT_CONFIG } from "../src/plant.config.local.example.js";
 import { parsePlantConfig, formatPlantConfig } from "../src/lib/plant-config.js";
-import { standardVatRate } from "../src/lib/vat-rates.js";
+import { standardVatRate, vatFor } from "../src/lib/vat-rates.js";
 
 const sample = readFileSync(new URL("../src/plant.config.local.example.js", import.meta.url), "utf8");
 
@@ -29,4 +29,9 @@ test("standard VAT rate by country", () => {
   assert.equal(standardVatRate("ES"), 21);
   assert.equal(standardVatRate("DE"), 19);
   assert.equal(standardVatRate("JM"), undefined);
+});
+
+test("vat block for a country; unknown rate is null", () => {
+  assert.deepEqual(vatFor("ES"), { country: "ES", rate: 21 });
+  assert.deepEqual(vatFor("JM"), { country: "JM", rate: null });
 });
