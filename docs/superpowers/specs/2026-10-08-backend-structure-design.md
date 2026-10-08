@@ -1,7 +1,8 @@
-# Backend structure: dashboard, staff order view, role views
+# Backend structure: dashboard, staff order view, quote
 
-Status: design, awaiting review. Five sub-projects, each gets its own plan:
-1 server shell, 2 dashboard, 3 staff order view, 4 quote and PRICING, 5 role views.
+Status: design, awaiting review. Four sub-projects, each gets its own plan:
+1 server shell, 2 dashboard (with role presets), 3 staff order view, 4 quote
+and PRICING.
 
 ## Goal
 
@@ -13,10 +14,10 @@ customer page stays one offline file; only the staff side needs the server.
 ## Decisions
 
 - **Access:** no login. Staff mode is read-only for everything the customer
-  sent. God mode is a deliberate toggle (confirmation), every change in it is
-  logged in `history` (field, old, new). This stops accidents, not a determined
-  person on the LAN. A PIN or users can later sit behind the same toggle; the
-  server owns all writes, so the check lives in one place (`/api/project`).
+  sent. God mode is a deliberate toggle (confirmation); every change in it is
+  written to `history` as text. This stops accidents, not a determined person
+  on the LAN. A PIN or users can later sit behind the same toggle; the server
+  owns all writes, so the check lives in one place (`/api/project`).
 - **Column state:** production lines (`CONFIG.lines`, `src/lib/lines.js`),
   derived on every scan from check results and `plant.lines` (append-only log,
   entries count while their files keep their sha256).
@@ -28,70 +29,92 @@ customer page stays one offline file; only the staff side needs the server.
 ## 1 Server shell and helpers
 
 One staff app with a menu: Dashboard, Archive, Pricelist, Plant config, later
-Fixers. Dashboard, order and Archive are hash routes of one page (as the plant
-view now); Pricelist and Plant config stay their own pages (`sheet.css`).
+Fixers. Dashboard and Archive are hash routes of one page (as the plant view
+now). The order view (3), Pricelist and Plant config are pages of their own
+(`/order/<job>`, `sheet.css` pages); a dashboard row click navigates to the
+order page.
 
 - `GET/PUT /api/pricelist` and `/api/plant-config` read and write the real
   files (`src/pricelist.json`, `src/plant.config.local.js`). The page keeps
   parsing, validating and formatting (`lib/pricelist.js`, `lib/plant-config.js`);
   Python writes atomically and refuses with 409 when the file changed since the
-  page read it (same rule as `project.json`). Open/Save-as-download stays for
-  the standalone `dist/` pages.
+  page read it (same rule as `project.json`). Served by the server, the pages
+  read the live `src/` files, no rebuild; Open/Save-as-download stays for the
+  standalone `dist/` pages.
 - Menu holds "Load zip" / "Load folder" (existing `/api/upload*`).
+- Small enough to land as the first commit of 2.
 
 ## 2 Dashboard
 
-- `CONFIG.lines` grows to the columns: audio (master, reference cut, plating),
-  labels, inner sleeves, covers, inlays, press, pack, ship. Each has its
-  `steps` and `after`; an order has a column only for the products it orders.
-- A row per order, stages INBOX to DONE; ARCHIVE is its own view. A cell shows
-  the line's current step as symbol + colour: done, current, waiting (`after`),
-  blocked by a check. The cell title gives the step and the reason.
-- Pure rendering in `src/lib` (replaces `renderBoard`), tested like
-  `plant-board.js`. A row click opens the order.
-- Open: exact steps for press, pack, ship; symbol and colour vocabulary.
+- A row per order, stages INBOX to DONE; ARCHIVE is its own view. Pure
+  rendering in `src/lib` (replaces `renderBoard`), tested like
+  `plant-board.js`. Cells keep today's plain text vocabulary (`✓`, `waiting`,
+  `not checked`, the step name), in line with DESIGN.md's one-alarm rule; no
+  new colours. A row click opens the order.
+- **The real work:** `lineState()` knows only artwork checks (`ROWS` in
+  `lines.js`), and `jobs.board()` reads only `.checks/artwork.json`. Columns
+  are added in two steps:
+  - v1: the artwork lines, one per product (labels, inner sleeves, covers,
+    inlays), plus log-only steps for press, pack and ship (`approve`, `send`,
+    `back` kinds exist). An order has a column only for the products it orders.
+  - v2: audio (master, reference cut, plating) once its step semantics are
+    defined; then `board()` also reads the audio cache and `lines.js` gets
+    audio step kinds.
+- **Role presets** (mastering, pressing, printed) are a menu on the dashboard
+  choosing which line columns show. One renderer, no extra routes. Per-role
+  pages with their own content can follow when they have content of their own.
 
 ## 3 Staff order view
 
-- Served at `/order/<job>`. The page fetches `/api/zip?job=` and gives it to
-  `loadProject(file)` of the customer page (no second loader), with a `staff`
-  flag. The flag disables every customer field and upload.
+- Served at `/order/<job>`, loading `index.html` with a `staff` flag.
+- **Data:** from `/api/job` (project, `projectHash`, file list, `plant`), not
+  from `/api/zip`: the zip strips `plant` (stage, lines, fixes) and would
+  re-zip and stream the whole job, WAVs included, on every open. Files are
+  fetched lazily from `/jobs/<job>/files/<file>`.
+- **Loader:** `loadProject` is coupled to zip bytes. It is split into parse
+  and apply: zip → `{project, fileMap}` for the customer, `/api/job` + lazy
+  `File`s for staff, one apply path.
+- **Lock:** the sheet gets `inert` permanently (what `runProjectAction` already
+  does while it works), which disables every field, button and upload. God
+  mode lifts it.
 - Staff panels (checks, previews, versions, production lines, notes, deadline,
   history) are further `details.panel`s from `src/plant/`, built from the
   existing `plant-overview.js` renderers.
-- God mode: header toggle, confirmation, fields unlock; saves go through
-  `/api/project` with `basedOn` (409) and write a history entry per change.
-- **First step is a spike:** does the job's zip carry the files the slots point
-  at, including `_v<N>`, so `loadProject` re-attaches them? If not, the zip
-  route or the staff loader changes before anything else is built.
+- **God mode:** header toggle with confirmation. A pure helper in
+  `src/lib/project.js` turns old vs. new `project.json` into the free-text
+  history entries (`catalogue: X → Y`), so history keeps one shape
+  (`historyEntry(note, date)`) and the diff is unit-tested. Saves go through
+  `/api/project` with `basedOn` (409); the server stays dumb.
+- **First step is a spike:** split `loadProject` into parse and apply and feed
+  it from `/api/job`. The risk is the coupling to zip bytes (every `apply*`
+  takes a `fileMap` of `File`s), not what the zip contains.
 
 ## 4 Quote and PRICING
 
-- `price_quote.json`: `{created, validUntil, currency, vat, items, discounts:
-  [{key, from?, percent}], order, result}`. `items` is a frozen copy of the
-  pricelist, `order` the input given to `quote()` (`src/lib/quote.js`),
-  `result` its `{lines, net, missing}`. Attachable to any job with enough info.
-  A PDF is made from it later.
+- `price_quote.json`: `{created, validUntil, currency, vat, items, order,
+  result}`. `items` is a frozen copy of the pricelist, `order` the input given
+  to `quote()` (`src/lib/quote.js`), `result` its `{lines, net, missing}`.
+  Attachable to any job with enough info. A PDF is made from it later.
+- **No discounts** in the format (the pricelist spec lists them as "Not yet");
+  both sides are the plant's own code, so a field costs nothing to add later.
+- **Writer:** a button in the staff order view; the page runs `quote()` and
+  PUTs the file with the same 409 rule as `project.json`. The job zip carries
+  the file along (it holds every top-level file).
 - Customer page: if the zip holds the file, a PRICING panel appears: net total,
-  valid until, VAT note, no per-product prices. The plant sends the zip back.
-- Staff: the same panel plus a breakdown panel (lines, `missing`, discounts).
+  valid until, VAT note, no per-product prices. The quote is one-directional:
+  the customer's own re-save (`saveProject` builds the zip from scratch) drops
+  `price_quote.json`; that is intended.
+- Staff: the same panel plus a breakdown panel (lines, `missing`).
 - VAT is stored, not applied (unchanged).
-- Open: how a discount is keyed (item key and quantity tier).
-
-## 5 Role views
-
-Mastering, pressing, printed: for now each shows the checks of its lines from
-the same job data (audio checks, press facts, artwork checks). Chosen from the
-menu; no access control. Fixers get their own page; `fixerStages` auto-fix
-stays until then.
 
 ## Testing
 
-`node --test tests/` for new pure logic (dashboard rows, quote file, staff
-lock); `python -m unittest discover plant` for the new routes (file read/write,
-409); the stub-DOM smoke test for page scripts. Browser checks only on request.
+`node --test tests/` for new pure logic (dashboard rows, god-mode diff, quote
+file); `python -m unittest discover plant` for the new routes (file
+read/write, 409); the stub-DOM smoke test for page scripts. Browser checks only
+on request.
 
 ## Order and risk
 
-1 → 2 → 3 → 4 → 5. The one real risk is the zip → `loadProject` spike in 3; do
-it before the plan for 3 is fixed, because it may change what the server serves.
+1 → 2 → 3 → 4. The one real risk is the loader split in 3; spike it before the
+plan for 3 is fixed.
