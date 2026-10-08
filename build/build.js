@@ -46,6 +46,7 @@ const FILES = [
   PLANT_CONFIG,
   "src/config.js",
   "src/lib/time.js",
+  "src/lib/staff-mode.js",
   "src/lib/zip.js",
   "src/lib/audio-duration.js",
   "src/lib/playing-time.js",

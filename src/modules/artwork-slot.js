@@ -9,6 +9,7 @@
 
 import { sniffFileKind, parseJpegArtwork, parseTiffArtwork, parsePdfArtwork, buildChecklistRows, CHECKLIST_ICON, pdfPreviewSrc, pageOptionsHtml, pdfSinglePageView } from "../lib/print-artwork.js";
 import { isDebugMode } from "../lib/debug-mode.js";
+import { reselectNote } from "../lib/staff-mode.js";
 
 function blankSlotState(){
   return {
@@ -180,7 +181,7 @@ export function createArtworkSlot(id, {size, onChange}){
     }
     clear();
     state.storedFileName = fileName || null;
-    if(fileName) renderMeta(fileName, originalFileName, "please re-select this file (not stored in the order file)");
+    if(fileName) renderMeta(fileName, originalFileName, reselectNote() || null);
   }
 
   // The package entries for this slot: the file under nameOf(file), and

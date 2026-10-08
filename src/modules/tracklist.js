@@ -24,6 +24,7 @@ import { collectPrintedPartFiles, collectPrintedParts, applyPrintedParts, printe
 import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
 import { collectProofs, applyProofs, proofIssues } from "./proofs.js";
 import { collectShippingBilling, applyShippingBilling } from "./shipping-billing.js";
+import { storedFileText } from "../lib/staff-mode.js";
 
 // Renders "file: <current name> — <status>", plus a tight second line
 // with the original filename when it differs from the current one —
@@ -1027,7 +1028,12 @@ async function loadProject(file){
     }
     fileMap.set(name, new File([e.data], name, {type: mimeType(fileExt(name))}));
   }
+  await applyProject(p, fileMap);
+}
 
+// Fills the form from a prepared project (prepareProject) and the files by
+// package name. The staff's order view (src/staff.js) calls it with no files.
+export async function applyProject(p, fileMap){
   projectHistory = p.history;
   document.getElementById("catalogue").value = p.catalogue || "";
   ensureFormatOption(p.format);
@@ -1074,7 +1080,8 @@ async function loadProject(file){
       } else if(t.fileName){
         const m = r.querySelector(".filemeta");
         m.classList.remove("empty");
-        m.textContent = "file: " + t.fileName + " — please re-select this file (not stored in the order file)";
+        m.textContent = storedFileText(t.fileName);
+        m.dataset.stored = t.fileName;
       }
     });
     if(!s.tracks || !s.tracks.length) addTrack(side);
@@ -1101,8 +1108,9 @@ async function loadProject(file){
     if(contFile){
       attachContinuousFile(side, contFile, s.continuousOriginalFileName || s.continuousFileName);
     } else if(s.continuousFileName){
-      document.getElementById("contfilemeta-"+side).textContent =
-        "file: " + s.continuousFileName + " — please re-select this file (not stored in the order file)";
+      const contMeta = document.getElementById("contfilemeta-"+side);
+      contMeta.textContent = storedFileText(s.continuousFileName);
+      contMeta.dataset.stored = s.continuousFileName;
     }
     const tracklistFile = s.tracklistFileName && fileMap.get(s.tracklistFileName);
     if(tracklistFile){
@@ -1110,7 +1118,7 @@ async function loadProject(file){
     } else if(s.tracklistFileName){
       const meta = document.getElementById("tracklistmeta-"+side);
       meta.classList.remove("empty");
-      meta.textContent = "file: " + s.tracklistFileName + " — please re-select this file (not stored in the order file)";
+      meta.textContent = storedFileText(s.tracklistFileName);
     }
     if(side === "B"){
       document.getElementById("blankB").checked = !!s.blank;
