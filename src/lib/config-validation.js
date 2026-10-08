@@ -187,6 +187,7 @@ function validateLines(lines, partners){
     const path = `CONFIG.lines.${name}`;
     object(line, path);
     array(line.parts, `${path}.parts`).forEach((p, i) => string(p, `${path}.parts[${i}]`));
+    if(line.stage !== undefined) string(line.stage, `${path}.stage`);
     array(line.steps, `${path}.steps`).forEach((step, i) => {
       const [kind, arg] = String(step).split(":");
       if(!(CHECK_STEPS.includes(step) || step === "approve" || ((kind === "back" || kind === "send") && arg))){
@@ -195,6 +196,14 @@ function validateLines(lines, partners){
       if(kind === "send" && !Array.isArray(partners[arg])) fail(`${path}.steps[${i}]`, `${step} needs CONFIG.partners.${arg}`);
     });
     (line.after || []).forEach((other, i) => { if(!lines[other] || other === name) fail(`${path}.after[${i}]`, "must name a line"); });
+  }
+}
+
+function validateViews(views, lines){
+  for(const [name, names] of Object.entries(object(views, "CONFIG.dashboardViews"))){
+    array(names, `CONFIG.dashboardViews.${name}`).forEach((line, i) => {
+      if(!lines[line]) fail(`CONFIG.dashboardViews.${name}[${i}]`, "must name a line");
+    });
   }
 }
 
@@ -296,6 +305,7 @@ export function validateConfig(config){
   validateProofs(config.proofs);
   validatePrintProfiles(config.printProfiles);
   validateLines(config.lines, config.partners);
+  validateViews(config.dashboardViews, config.lines);
   array(config.fixerStages, "CONFIG.fixerStages").forEach((s, i) => string(s, `CONFIG.fixerStages[${i}]`));
 
   string(config.locale, "CONFIG.locale");

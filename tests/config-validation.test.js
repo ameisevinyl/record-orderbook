@@ -233,7 +233,7 @@ test("validates production lines and partners", () => {
   assert.throws(() => validateConfig(partner), /send:courier needs CONFIG\.partners\.courier/);
 
   const after = copy();
-  after.lines.labels.after = ["press"];
+  after.lines.labels.after = ["polish"];
   assert.throws(() => validateConfig(after), /CONFIG\.lines\.labels\.after\[0\] must name a line/);
 
   assert.deepEqual(CONFIG.lines.labels.steps.at(-1), "back:printed");
@@ -260,4 +260,24 @@ test("requires uniquely identified label products", () => {
   const labels = duplicate.formats[0].printableParts.label.products;
   labels.push({ ...labels[0] });
   assert.throws(() => validateConfig(duplicate), /label\.products contains duplicate ID/);
+});
+
+test("validates line stages and dashboard views; the plant's lines and presets", () => {
+  const stage = copy();
+  stage.lines.labels.stage = 5;
+  assert.throws(() => validateConfig(stage), /CONFIG\.lines\.labels\.stage must be a non-empty string/);
+
+  const view = copy();
+  view.dashboardViews.printed = ["labels", "polish"];
+  assert.throws(() => validateConfig(view), /CONFIG\.dashboardViews\.printed\[1\] must name a line/);
+
+  const missing = copy();
+  delete missing.dashboardViews;
+  assert.throws(() => validateConfig(missing), /CONFIG\.dashboardViews must be an object/);
+
+  assert.deepEqual(Object.keys(CONFIG.lines), ["labels", "innerSleeve", "outerCover", "inlay", "press", "pack", "ship"]);
+  assert.deepEqual(CONFIG.lines.press.after, ["labels"]);
+  assert.deepEqual(CONFIG.lines.pack.after, ["press", "innerSleeve", "outerCover", "inlay"]);
+  assert.deepEqual(CONFIG.dashboardViews, {
+    printed: ["labels", "innerSleeve", "outerCover", "inlay"], pressing: ["press", "pack", "ship"]});
 });

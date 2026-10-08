@@ -26,6 +26,9 @@ import { PLANT_CONFIG } from "./plant.config.local.example.js";
 const ISO_COATED_V2 = { name: "ISO Coated v2 (ECI)", conditionId: "FOGRA39",
   url: "https://eci.org/lib/exe/eci_offset_2009.zip", file: "ISOcoated_v2_eci.icc" };
 
+// A printed part's line: the artwork checks, approval, then the printer.
+const PRINTED_STEPS = ["size", "resolution", "pdf", "bleed", "colour", "approve", "send:printer", "back:printed"];
+
 export const CONFIG = {
   // Plant identity (imprint + transfer) — the sample comes from
   // plant.config.local.example.js; build/build.js swaps in
@@ -450,12 +453,29 @@ export const CONFIG = {
     labels: ISO_COATED_V2, innerSleeve: ISO_COATED_V2, outerCover: ISO_COATED_V2, inlay: ISO_COATED_V2
   },
 
-  // Production lines (src/lib/lines.js): per product, its steps in order.
-  // Check steps (size, resolution, pdf, bleed, colour) pass by the
-  // artwork checks; approve, send:<partners list> and back:<what> are
-  // confirmed by staff. after: lines that must be through first.
+  // Production lines (src/lib/lines.js), in dashboard column order: per
+  // product its steps in order. Check steps (size, resolution, pdf, bleed,
+  // colour) pass by the artwork checks; approve, send:<partners list> and
+  // back:<what> are confirmed by staff. parts: the printed parts whose
+  // files the line checks; an order without any of them printed doesn't
+  // have the line, and none at all = a line of hand-confirmed steps for
+  // every order. after: lines that must be through first. stage: the stage
+  // folder the line belongs to (the job page suggests moving on when all
+  // lines of its stage are through).
   lines: {
-    labels: { parts: ["labels"], steps: ["size", "resolution", "pdf", "bleed", "colour", "approve", "send:printer", "back:printed"] }
+    labels:      { parts: ["labels"],      stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
+    innerSleeve: { parts: ["innerSleeve"], stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
+    outerCover:  { parts: ["outerCover"],  stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
+    inlay:       { parts: ["inlay"],       stage: "10_ORDERS/10_PREPRESS", steps: PRINTED_STEPS },
+    press: { parts: [], stage: "10_ORDERS/20_PRESS", steps: ["approve", "back:pressed"], after: ["labels"] },
+    pack:  { parts: [], stage: "10_ORDERS/20_PRESS", steps: ["back:packed"], after: ["press", "innerSleeve", "outerCover", "inlay"] },
+    ship:  { parts: [], stage: "10_ORDERS/20_PRESS", steps: ["back:shipped"], after: ["pack"] }
+  },
+  // The dashboard's column presets (#/view/<name>): which lines show; the
+  // default shows all of them. A mastering preset joins with the audio lines.
+  dashboardViews: {
+    printed: ["labels", "innerSleeve", "outerCover", "inlay"],
+    pressing: ["press", "pack", "ship"]
   },
   // Stages in which fixers run by themselves when a job is opened; in the
   // others (press, done, archive) opening a job only looks.
