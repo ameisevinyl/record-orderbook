@@ -40,6 +40,10 @@ test("VAT: the billing country, the ID and what VIES said, the proposal, the ove
   const open = renderQuotePanel({...base, vatId: {id: "FR1234", status: "unchecked", name: "", checked: ""},
     proposal: {case: "plus-vat", rate: 19, needsCheck: true}});
   assert.ok(open.includes("not checked") && open.includes("check this"));
+  const why = renderQuotePanel({...base, vatId: {id: "DE1", status: "unchecked", name: "", checked: "", reason: "MS_UNAVAILABLE <x>"}});
+  assert.ok(why.includes("not checked — MS_UNAVAILABLE &lt;x&gt;"));
+  const refused = renderQuotePanel({...base, vatId: {id: "US1", status: "invalid", name: "", checked: "2026-10-09", reason: "not an EU VAT ID"}});
+  assert.ok(refused.includes("not valid on VIES (2026-10-09) — not an EU VAT ID"));
   assert.ok(open.includes('<button type="button" data-staff data-act="vatCheck">check on VIES</button>'));
   assert.ok(!renderQuotePanel(base).includes("data-act=\"vatCheck\""), "no ID, nothing to check");
   assert.ok(renderQuotePanel({...base, chosen: "export"}).includes('<option value="export" selected>'));

@@ -34,8 +34,10 @@ export function renderQuotePanel(s){
     html += `<p class="manual">can't be quoted: ${escapeHtml(built.reason)}${built.missing.length ? `: ${built.missing.map(escapeHtml).join(", ")}` : ""}</p>`;
   }
 
+  // What VIES said (the name and the day), and its own words when there was no answer.
   const status = ID_STATUS[vatId.status] + (vatId.status === "valid" || vatId.status === "invalid"
-    ? ` (${[vatId.name, vatId.checked].filter(Boolean).map(escapeHtml).join(", ")})` : "");
+    ? ` (${[vatId.name, vatId.checked].filter(Boolean).map(escapeHtml).join(", ")})` : "")
+    + (vatId.reason ? ` — ${escapeHtml(vatId.reason)}` : "");
   const options = ['<option value="">as proposed</option>', ...VAT_CASES.map(kind =>
     `<option value="${kind}"${kind === s.chosen ? " selected" : ""}>${CASE_LABEL[kind]}</option>`)].join("");
   html += `<h3>VAT</h3><p>Billing country <b>${escapeHtml(s.billingCountry || "?")}</b> · VAT ID `
