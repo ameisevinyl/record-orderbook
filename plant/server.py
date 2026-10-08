@@ -298,7 +298,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/zip")
         self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(folder.name)}.zip")
         self.end_headers()  # no length: HTTP/1.0 ends the body by closing
-        jobs.write_zip(folder, self.wfile, project)
+        priced = read_quote(folder)[0]
+        jobs.write_zip(folder, self.wfile, project, quote=jobs.customer_quote(priced) if priced else False)
 
     def upload(self):
         """The zip in the body lands in the inbox, like a synced one."""

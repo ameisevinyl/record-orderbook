@@ -559,14 +559,30 @@ def upload_done(root, folder):
         part.rename(target)
 
 
-def write_zip(folder, out, project=None):
+def customer_quote(quote):
+    """What the customer may read of a price_quote.json: the totals and the
+    VAT line, never the lines, the order or the VAT ID check."""
+    keep = ("version", "created", "validUntil", "currency", "net", "copies", "perCopy")
+    vat = quote.get("vat") or {}
+    return {**{key: quote[key] for key in keep if key in quote},
+            "vat": {key: vat[key] for key in ("case", "rate", "amount", "gross", "note") if key in vat}}
+
+
+def write_zip(folder, out, project=None, quote=None):
     """The job as a customer-page package: every file but dot names,
     nested under the job's folder name; project replaces project.json when
-    given. out: a writable binary stream (need not seek)."""
+    given. quote: customer_quote() of the job's price_quote.json, written in
+    its place, or False to leave that file out (None: the file as it is, for
+    the plant's own archive). out: a writable binary stream (need not seek)."""
     with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as zf:
         if project is None:
             zf.write(folder / "project.json", f"{folder.name}/project.json")
         else:
             zf.writestr(f"{folder.name}/project.json", json.dumps(project, indent=2, ensure_ascii=False))
         for entry in files(folder):
-            zf.write(folder / entry["name"], f"{folder.name}/{entry['name']}")
+            name = f"{folder.name}/{entry['name']}"
+            if entry["name"] == "price_quote.json" and quote is not None:
+                if quote:
+                    zf.writestr(name, json.dumps(quote, indent=2, ensure_ascii=False))
+            else:
+                zf.write(folder / entry["name"], name)

@@ -127,8 +127,11 @@ no god mode yet, and it writes nothing.
 - **What the customer sees:** a Pricing panel (`src/modules/pricing.js`) when
   the project zip the plant sent back holds `price_quote.json`: the net price,
   the net price per copy, the VAT line (with amount and total where VAT is
-  charged), valid until — never a product line. A customer's own re-save
-  drops the file. Staff see every line in the Quote panel.
+  charged), valid until — never a product line. The zip the plant
+  downloads (`/api/zip`) carries only that customer copy of the file
+  (`jobs.customer_quote`: totals and the VAT line, no lines, order or VAT ID
+  check); the plant's own file stays whole. A customer's own re-save drops
+  it. Staff see every line in the Quote panel.
 - **VAT** (`src/lib/vat-case.js`, plant in the EU; by the billing address,
   staff can override the proposal): same country = plus VAT (domestic); another
   EU country with a VAT ID that VIES found valid, from a member state other

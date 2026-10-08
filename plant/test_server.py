@@ -194,6 +194,22 @@ class HttpTest(unittest.TestCase):
         self.assertNotEqual(job["quoteHash"], "")
         self.assertEqual(self.post("/api/quote", {"job": "j", "quote": {"net": 1}, "basedOn": job["quoteHash"]})[0], 200)
 
+    def test_the_zip_download_carries_the_customer_quote_only(self):
+        folder = self.root / "10_ORDERS" / "10_PREPRESS" / "j"
+        folder.mkdir(parents=True)
+        (folder / "project.json").write_text('{"catalogue": "X"}')
+        self.post("/api/quote", {"job": "j", "basedOn": "", "quote": {"net": 810, "perCopy": 2.7, "lines": [{"key": "k"}], "order": {},
+                                                                  "vat": {"case": "export", "note": "n", "vatId": {"id": "US1"}}}})
+        status, data = self.request("GET", "/api/zip?job=j")
+        self.assertEqual(status, 200)
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            quote = json.loads(zf.read("j/price_quote.json"))
+        self.assertEqual((quote["net"], "lines" in quote, "order" in quote, "vatId" in quote["vat"]), (810, False, False, False))
+        self.assertIn("lines", json.loads((folder / "price_quote.json").read_text()), "the plant's own file is whole")
+        (folder / "price_quote.json").write_text("{")
+        with zipfile.ZipFile(io.BytesIO(self.request("GET", "/api/zip?job=j")[1])) as zf:
+            self.assertNotIn("j/price_quote.json", zf.namelist())
+
     def test_vat_check_asks_vies_through_the_server(self):
         with mock.patch.object(vies, "fetch", lambda country, number: {"isValid": True, "name": "Acme"}):
             status, result = self.post("/api/vat-check", {"vatId": "de 123456789"})

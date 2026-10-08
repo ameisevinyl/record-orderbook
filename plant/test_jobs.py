@@ -113,6 +113,27 @@ class JobsTest(Tree):
         (self.root / "99_ARCHIVE").rmdir()
         self.assertEqual(jobs.archived(self.root), [])
 
+    def test_the_customer_zip_gets_a_quote_without_the_lines(self):
+        full = {"version": 1, "created": "2026-10-09", "validUntil": "2026-12-31", "currency": "EUR", "net": 810, "copies": 300,
+                "perCopy": 2.7, "order": {"format": "7"}, "lines": [{"key": "7/record/setup", "amount": 100}],
+                "vat": {"case": "reverse-charge", "rate": 0, "amount": 0, "gross": 810, "note": "no VAT",
+                        "vatId": {"id": "FR1", "status": "valid", "name": "Acme", "checked": "2026-10-09"}}}
+        folder = self.job("20_DONE", "j")
+        (folder / "price_quote.json").write_text(json.dumps(full))
+
+        def quote_in(**kwargs):
+            buf = io.BytesIO()
+            jobs.write_zip(folder, buf, **kwargs)
+            with zipfile.ZipFile(buf) as zf:
+                name = "j/price_quote.json"
+                return json.loads(zf.read(name)) if name in zf.namelist() else None
+
+        customer = quote_in(quote=jobs.customer_quote(full))
+        self.assertEqual(sorted(customer), ["copies", "created", "currency", "net", "perCopy", "validUntil", "vat", "version"])
+        self.assertEqual(customer["vat"], {"case": "reverse-charge", "rate": 0, "amount": 0, "gross": 810, "note": "no VAT"})
+        self.assertEqual(quote_in(), full, "inside the plant the file is whole (archive)")
+        self.assertIsNone(quote_in(quote=False), "no usable quote: none in the zip")
+
     def test_move_renames_and_logs(self):
         self.job("00_INBOX", "j", {"plant": {"stage": "00_INBOX"}})
         jobs.move(self.root, "j", "10_ORDERS/10_PREPRESS")
