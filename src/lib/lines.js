@@ -36,6 +36,19 @@ function ordered(project, config, part){
   return !!product && product.kind === "printed";
 }
 
+// The slots the order has printed but nobody filled yet, as titles: what artworkSlots
+// can't show, since it lists only slots with a file (the same slots completeness.js asks for).
+function emptySlots(project, config, lineName){
+  const sleeve = project.coverSleeve;
+  return config.lines[lineName].parts.filter(part => ordered(project, config, part)).flatMap(part => ({
+    labels: () => ["A", "B"].filter(side => !project.labels.sides[side].whitelabel && !project.labels.sides[side].fileName)
+      .map(side => `Label ${side}`),
+    innerSleeve: () => sleeve.innerSleeve.fileName ? [] : ["Inner sleeve"],
+    outerCover: () => sleeve.cover.fileName ? [] : ["Cover"],
+    inlay: () => ["front", "back"].filter(face => !sleeve.inlay[face].fileName).map(face => `Inlay ${face}`)
+  }[part]()));
+}
+
 // A line with no parts is every order's; one with parts only when an order has one of them printed.
 export function lineNeeded(project, config, lineName){
   const {parts} = config.lines[lineName];
@@ -69,9 +82,10 @@ export function lineState(project, config, lineName, checkResults){
     return {line: lineName, steps, step: null, why: "", ready: true, done: true, waiting: false, checking: false, needed: false};
   }
   const files = lineFiles(project, config, lineName);
+  const empty = emptySlots(project, config, lineName);
   const waiting = (line.after || []).some(other => !lineState(project, config, other, checkResults).done);
   // Only check steps need the artwork check results; a line of hand-confirmed steps doesn't.
-  if(!checkResults && steps.some(s => s.kind === "check")){
+  if(!checkResults && files.length && steps.some(s => s.kind === "check")){
     return {line: lineName, steps, step: null, why: "checking", ready: false, done: false, waiting, checking: true, needed: true};
   }
   const results = checkResults || {};
@@ -83,9 +97,9 @@ export function lineState(project, config, lineName, checkResults){
   for(const s of steps){
     let done;
     if(s.kind === "check"){
-      const reasons = !files.length ? ["no file uploaded yet"]
-        : files.map(f => results[f.name] ? failing(s.step, results[f.name], f.slot, printCheck)
-          : `${f.slot.title}: not checked yet`).filter(Boolean);
+      const reasons = [...empty.map(title => `${title}: no file uploaded yet`),
+        ...files.map(f => results[f.name] ? failing(s.step, results[f.name], f.slot, printCheck)
+          : `${f.slot.title}: not checked yet`).filter(Boolean)];
       done = !reasons.length || logged(s.step);
       if(!done && at === null) why = reasons[0];
     } else {

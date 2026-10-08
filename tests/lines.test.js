@@ -126,3 +126,16 @@ test("lines of a stage, and when they are all ready to move on", () => {
   assert.equal(stageReady(CONFIG, "10_ORDERS/10_PREPRESS", [{line: "labels", ...notReady}]), false);
   assert.equal(stageReady(CONFIG, "20_DONE", [{line: "labels", ...ready}]), false, "no lines in the stage, no hint");
 });
+
+test("a printed part with a slot still empty stops the line at size, with and without results", () => {
+  const half = order({labels: {A: {fileName: "K_labels_A_v1.pdf"}, B: {}}});
+  const s = lineState(half, CONFIG, "labels", {"K_labels_A_v1.pdf": good("a1")});
+  assert.deepEqual([s.step, s.why], ["size", "Label B: no file uploaded yet"]);
+  const inlay = order({sleeve: {inlay: {productId: "inlay-printed", front: {fileName: "K_inlay_front_v1.pdf"}}}});
+  assert.equal(lineState(inlay, CONFIG, "inlay", {}).why, "Inlay back: no file uploaded yet");
+  // Nothing uploaded at all needs no check results to say so.
+  const none = lineState(order({sleeve: {cover: {productId: "cover-printed"}}}), CONFIG, "outerCover", null);
+  assert.deepEqual([none.checking, none.step, none.why], [false, "size", "Cover: no file uploaded yet"]);
+  // Files there but unchecked: still waiting for the check.
+  assert.equal(lineState(order(), CONFIG, "labels", null).checking, true);
+});

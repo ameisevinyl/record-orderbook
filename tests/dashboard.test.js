@@ -72,3 +72,10 @@ test("render: a table per the chosen columns, stage rows with counts, empty stag
   assert.ok(some.includes('<td colspan="4" class="stop">'));
   assert.ok(renderDashboard([{stage: "20_DONE", rows: []}], ["labels"], "", views).includes("No orders."));
 });
+
+test("a printed part nobody uploaded is a stopped cell, not 'not checked'", () => {
+  const nofile = {projectVersion: 1, format: "7", catalogue: "N"};
+  const groups = dashboardRows({stages: [{stage: "00_INBOX", jobs: [
+    {job: "N", catalogue: "N", title: "", project: nofile, artwork: {}}]}]}, CONFIG);
+  assert.deepEqual(groups[0].rows[0].cells.labels, {text: "size", cls: "stop", title: "Label A: no file uploaded yet"});
+});
