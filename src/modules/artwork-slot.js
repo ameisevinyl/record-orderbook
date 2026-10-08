@@ -50,6 +50,11 @@ export function createArtworkSlot(id, {size, onChange}){
   function renderChecklist(parsed, kind, page){
     const {targetMm, trimMm, printCheck} = size();
     const rows = buildChecklistRows(parsed, kind, targetMm, trimMm, printCheck, isDebugMode(), page);
+    fillChecklist(rows);
+    return rows;
+  }
+
+  function fillChecklist(rows){
     warnings.innerHTML = "<thead><tr><th></th><th>Check</th><th>Detected</th><th>Expected</th></tr></thead>";
     const tbody = document.createElement("tbody");
     for(const row of rows){
@@ -63,7 +68,6 @@ export function createArtworkSlot(id, {size, onChange}){
       tbody.appendChild(tr);
     }
     warnings.appendChild(tbody);
-    return rows;
   }
 
   // Checklist, preview and page picker for the attached file and its
@@ -184,6 +188,19 @@ export function createArtworkSlot(id, {size, onChange}){
     if(fileName) renderMeta(fileName, originalFileName, reselectNote() || null);
   }
 
+  // The plant's checks for the stored file (the staff's order view): its
+  // rows in place of the browser's own, the plant's preview image (a URL).
+  function showChecks({rows, preview: src, status}){
+    fillChecklist(rows);
+    if(src){
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = "plant preview";
+      preview.replaceChildren(img);
+    } else preview.innerHTML = `<div class="label-placeholder">preview not available</div>`;
+    if(state.storedFileName) renderMeta(state.storedFileName, null, status);
+  }
+
   // The package entries for this slot: the file under nameOf(file), and
   // the plant preview image when there is one.
   function files(nameOf, previewName){
@@ -209,7 +226,7 @@ export function createArtworkSlot(id, {size, onChange}){
     onChange();
   });
 
-  return {state, setFile, clear, applyFile, files};
+  return {state, setFile, clear, applyFile, files, showChecks};
 }
 
 // A multi-page PDF in the first slot while the second is still open:

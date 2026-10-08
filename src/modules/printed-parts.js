@@ -208,3 +208,14 @@ export function collectPrintedPartFiles(){
     part.variants.flatMap(variant => part.slots[variant].files(file => partFileName(part, variant, file), partPreviewName(part, variant)))
   );
 }
+
+// Same for the sleeve, cover and inlay slots.
+export function showPartChecks(byName){
+  for(const part of PRINTED_PARTS){
+    for(const variant of part.variants){
+      const slot = part.slots[variant];
+      const hit = byName.get(slot.state.storedFileName);
+      if(hit) slot.showChecks(hit);
+    }
+  }
+}

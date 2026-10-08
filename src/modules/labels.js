@@ -212,3 +212,12 @@ export function collectLabelFiles(forSend = false){
   return SIDES.filter(side => labelIncluded(side, forSend))
     .flatMap(side => labelSlots[side].files(file => labelFileName(side, file), labelPreviewName(side)));
 }
+
+// The plant's checks in the place of the browser's own (the staff's order
+// view): byName maps a stored file name to {rows, preview, status}.
+export function showLabelChecks(byName){
+  for(const side of SIDES){
+    const hit = byName.get(labelSlots[side].state.storedFileName);
+    if(hit) labelSlots[side].showChecks(hit);
+  }
+}

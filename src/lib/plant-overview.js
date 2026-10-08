@@ -159,7 +159,7 @@ export function renderProduction(states, partners){
 
 // --- 2 Artwork -------------------------------------------------------
 
-const VERDICT = {ok: "OK", review: "review", customer: "needs customer"};
+export const VERDICT = {ok: "OK", review: "review", customer: "needs customer"};
 
 // Trim and a label's center hole, dashed, in page millimetres; the SVG
 // stretches over the preview, so the lines sit where the cut and the
