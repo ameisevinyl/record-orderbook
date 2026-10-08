@@ -4,7 +4,7 @@
 import { validatePlant } from "./lib/config-validation.js";
 import { parsePlantConfig, formatPlantConfig } from "./lib/plant-config.js";
 import { COUNTRIES } from "./lib/countries.js";
-import { $, esc, download, onDropFile, installSheetKeys } from "./sheet.js";
+import { $, esc, download, onDropFile, installSheetKeys, serverFile, saveServerFile, installMenu } from "./sheet.js";
 
 // build/build.js embeds the plant config the order form is built with here.
 const PLANT_TEMPLATE = null;
@@ -12,6 +12,8 @@ const PLANT_TEMPLATE = null;
 let plant = null;
 let plantName = "plant.config.local.js";
 let dirty = false;
+const DISK = "src/plant.config.local.js";
+let remote = null;   // {hash} while the plant server holds the file
 
 const IMPRINT = [
   ["recipientName", "Name"], ["addressLine1", "Address line 1"], ["addressLine2", "Address line 2"],
@@ -46,7 +48,7 @@ function renderPlant(){
       <table class="sv"><thead><tr><th>Service</th><th>URL</th><th class="add"><button class="x" data-act="addService" title="Add service">+</button></th></tr></thead><tbody>${services}</tbody></table>
       <p class="note">Used when there is no upload link: the customer picks a service and sends the zip to the recipient email.</p>
     </div>
-    <p class="note">Save, put the file at src/plant.config.local.js and run node build/build.js for the order form.</p>`;
+    <p class="note">${remote ? `Saved to ${DISK}; run node build/build.js for the order form.` : "Save, put the file at src/plant.config.local.js and run node build/build.js for the order form."}</p>`;
 }
 
 function plantStatus(){
@@ -87,7 +89,7 @@ $("editor").addEventListener("click", e => {
   plantEdited();
 });
 
-function loadPlant(text, name){
+function loadPlant(text, name, fromDisk = false){
   try{
     plant = parsePlantConfig(text);
   }catch(error){
@@ -95,7 +97,7 @@ function loadPlant(text, name){
     $("status").textContent = `${name}: ${error.message}`;
     return;
   }
-  plantName = name;
+  plantName = remote && !fromDisk ? `${name} → ${DISK}` : name;
   dirty = false;
   renderPlant();
   plantStatus();
@@ -107,10 +109,20 @@ $("input").addEventListener("change", async () => {
   if(file) loadPlant(await file.text(), file.name);
   $("input").value = "";
 });
-$("btnSave").addEventListener("click", () => {
-  download(formatPlantConfig(plant), "plant.config.local.js", "text/javascript");
+$("btnSave").addEventListener("click", async () => {
+  const text = formatPlantConfig(plant);
+  if(remote){
+    try{
+      remote.hash = await saveServerFile("plant-config", text, remote.hash);
+    }catch(error){
+      $("status").className = "err";
+      $("status").textContent = `couldn't save: ${error.message}`;
+      return;
+    }
+  }else download(text, "plant.config.local.js", "text/javascript");
   dirty = false;
   plantStatus();
+  if(remote) $("status").textContent = "saved to disk";
 });
 
 
@@ -118,11 +130,22 @@ onDropFile(loadPlant);
 window.addEventListener("beforeunload", e => { if(dirty) e.preventDefault(); });
 installSheetKeys();
 
-if(PLANT_TEMPLATE){
-  try{
-    validatePlant(PLANT_TEMPLATE);
-    plant = structuredClone(PLANT_TEMPLATE);
-  }catch(error){ console.error(error); }
+async function start(){
+  const disk = await serverFile("plant-config");
+  if(disk){
+    remote = { hash: disk.hash };
+    installMenu("/src/plant-config.html");
+    renderPlant();   // the "open a file" placeholder, if the file on disk doesn't parse
+    loadPlant(disk.text, disk.exists ? DISK : `${DISK} (new, from the example)`, true);
+    return;
+  }
+  if(PLANT_TEMPLATE){
+    try{
+      validatePlant(PLANT_TEMPLATE);
+      plant = structuredClone(PLANT_TEMPLATE);
+    }catch(error){ console.error(error); }
+  }
+  renderPlant();
+  plantStatus();
 }
-renderPlant();
-plantStatus();
+start();

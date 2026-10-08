@@ -80,7 +80,7 @@ const FILES = [
 ];
 
 // The staff editors: own page each, sharing sheet.css and sheet.js.
-const SHEET_FILES = ["src/lib/config-validation.js", "src/lib/plant-config.js", "src/sheet.js"];
+const SHEET_FILES = ["src/lib/config-validation.js", "src/lib/plant-config.js", "src/lib/menu.js", "src/sheet.js"];
 const PAGES = [
   { shell: "src/pricelist.html", script: "pricelist-page.js", out: "pricelist.html",
     files: ["src/lib/format-catalogue.js", "src/lib/pricelist.js", "src/lib/vat-rates.js", ...SHEET_FILES, "src/pricelist-page.js"],

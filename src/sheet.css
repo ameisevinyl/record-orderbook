@@ -30,6 +30,9 @@
   }
   .btn:hover{ background:var(--field); border-color:var(--ink); }
   .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  #menu{ display:flex; gap:14px; margin-bottom:12px; font-size:12px; }
+  #menu a{ color:var(--ink-dim); }
+  #menu a[aria-current]{ color:var(--ink); font-weight:600; text-decoration:none; }
   header.top{ display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
   /* Buttons on top, file name and status below them. */
   .actions{ display:flex; flex-direction:column; align-items:flex-end; gap:4px; }

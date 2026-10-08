@@ -1,5 +1,7 @@
 // Shared by the staff editors (pricelist.html, plant-config.html).
 
+import { menuHtml } from "./lib/menu.js";
+
 export const $ = id => document.getElementById(id);
 export const esc = text => String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -7,6 +9,29 @@ export function download(text, name, type){
   const url = URL.createObjectURL(new Blob([text], { type }));
   Object.assign(document.createElement("a"), { href: url, download: name }).click();
   URL.revokeObjectURL(url);
+}
+
+// Served by the plant server, the editors work on the files on disk
+// (/api/staff-file). Opened as a file, or from dist/ (GitHub Pages answers
+// 404), there is no server: null, and the page keeps working on downloads.
+export async function serverFile(name){
+  try{
+    const res = await fetch(`/api/staff-file?name=${name}`);
+    return res.ok ? await res.json() : null;
+  }catch{ return null; }
+}
+
+// The new hash; a refusal (409: changed on disk meanwhile) throws its message.
+export async function saveServerFile(name, text, basedOn){
+  const res = await fetch("/api/staff-file", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, text, basedOn }) });
+  if(!res.ok) throw new Error(await res.text());
+  return (await res.json()).hash;
+}
+
+// The staff app's menu above the sheet, only where the server is.
+export function installMenu(current){
+  document.querySelector(".sheet").insertAdjacentHTML("afterbegin", `<nav id="menu">${menuHtml(current)}</nav>`);
 }
 
 // A file dropped anywhere on the page.
