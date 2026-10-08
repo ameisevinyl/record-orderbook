@@ -17,6 +17,7 @@ import { renderBasic, renderProduction, renderArtwork, renderAudio, renderShippi
 import { renderAttention, renderJobBar, renderInbox, renderArchive } from "../lib/plant-board.js";
 import { placeCards, dashboardStats, renderBoard } from "../lib/dashboard.js";
 import { parsePlantConfig } from "../lib/plant-config.js";
+import { readStream } from "../lib/stream.js";
 import { lineState, logEntry, stageReady } from "../lib/lines.js";
 import { dropdownHtml } from "../lib/menu.js";
 
@@ -74,26 +75,6 @@ function busy(text){
 // One step of a check: "checking audio     A1.wav  2/3  47 %".
 function stepText({step, file, index, count, progress}){
   return `${step.padEnd(18)}${file}  ${index}/${count}` + (progress === undefined ? "" : `  ${progress} %`);
-}
-
-// A check streams one JSON object per line: its steps, then
-// {"result": …} or {"error": …}.
-async function readStream(res, onStep){
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = "";
-  for(;;){
-    const {done, value} = await reader.read();
-    buffer += value || "";
-    const lines = buffer.split("\n");
-    buffer = lines.pop();
-    for(const line of lines.filter(Boolean)){
-      const msg = JSON.parse(line);
-      if("result" in msg) return msg.result;
-      if(msg.error) throw new Error(msg.error);
-      onStep(msg);
-    }
-    if(done) throw new Error("the check ended without a result");
-  }
 }
 
 // --- Routes: #/ · #/archive · #/inbox/<item> · #/job/<job>[/<section>]
