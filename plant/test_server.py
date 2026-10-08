@@ -7,6 +7,7 @@ import threading
 import unittest
 import zipfile
 from http.server import ThreadingHTTPServer
+from unittest import mock
 from pathlib import Path
 
 import jobs
@@ -80,6 +81,41 @@ class HttpTest(unittest.TestCase):
         done = next(c for c in board["stages"] if c["stage"] == "20_DONE")
         self.assertEqual(done["jobs"][0]["job"], "p")
         self.assertEqual(board["inbox"], [])
+
+    def staff_files(self, tmp):
+        tmp = Path(tmp)
+        (tmp / "pricelist.example.json").write_text('{"version": 1}')
+        (tmp / "plant.config.local.example.js").write_text("export const PLANT_CONFIG = {};\n")
+        return mock.patch.object(server, "STAFF_FILES", {
+            "pricelist": (tmp / "pricelist.json", tmp / "pricelist.example.json"),
+            "plant-config": (tmp / "plant.config.local.js", tmp / "plant.config.local.example.js")})
+
+    def test_staff_file_read_write_and_conflict(self):
+        with tempfile.TemporaryDirectory() as tmp, self.staff_files(tmp):
+            self.assertEqual(self.get("/api/staff-file?name=pricelist"),
+                             (200, {"text": '{"version": 1}', "hash": "", "exists": False}))
+            body = {"name": "pricelist", "text": '{"a": 1}', "basedOn": ""}
+            status, saved = self.post("/api/staff-file", body)
+            self.assertEqual(status, 200)
+            self.assertEqual((Path(tmp) / "pricelist.json").read_text(), '{"a": 1}')
+            # A second page still holding the example is stale now.
+            self.assertEqual(self.post("/api/staff-file", body)[0], 409)
+            self.assertEqual(self.get("/api/staff-file?name=pricelist"),
+                             (200, {"text": '{"a": 1}', "hash": saved["hash"], "exists": True}))
+            self.assertEqual(self.post("/api/staff-file", {**body, "text": '{"a": 2}', "basedOn": saved["hash"]})[0], 200)
+            self.assertEqual(self.post("/api/staff-file", {**body, "text": '{"a": 3}', "basedOn": saved["hash"]})[0], 409)
+            self.assertEqual((Path(tmp) / "pricelist.json").read_text(), '{"a": 2}')
+
+    def test_staff_file_refuses_what_is_not_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp, self.staff_files(tmp):
+            self.assertEqual(self.get("/api/staff-file?name=jobs")[0], 400)
+            self.assertEqual(self.post("/api/staff-file", {"name": "../x", "text": "{}", "basedOn": ""})[0], 400)
+            self.assertEqual(self.post("/api/staff-file", {"name": "pricelist", "text": "[1]", "basedOn": ""})[0], 400)
+            self.assertEqual(self.post("/api/staff-file", {"name": "pricelist", "text": 5, "basedOn": ""})[0], 400)
+            self.assertEqual(self.post("/api/staff-file", {"name": "plant-config", "text": "x = 1", "basedOn": ""})[0], 400)
+            self.assertEqual(self.request("POST", "/api/staff-file", b"{}")[0], 415)
+            self.assertFalse((Path(tmp) / "pricelist.json").exists())
+            self.assertFalse((Path(tmp) / "plant.config.local.js").exists())
 
     def test_inbox_lists_jobs_with_the_same_catalogue(self):
         folder = self.root / "20_DONE" / "old"

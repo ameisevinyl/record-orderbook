@@ -22,6 +22,7 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import jobs
+import staff_files
 from jobs import JobError, Conflict
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,6 +31,11 @@ SRC = ROOT / "src"
 # The jobs tree; --jobs changes it.
 JOBS = ROOT / "plant" / "jobs"
 INDEX = SRC / "plant" / "index.html"
+# The staff editors' files: name -> (the plant's own file, the committed example).
+STAFF_FILES = {
+    "pricelist": (SRC / "pricelist.json", SRC / "pricelist.example.json"),
+    "plant-config": (SRC / "plant.config.local.js", SRC / "plant.config.local.example.js"),
+}
 TYPES = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
@@ -162,7 +168,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         route = urlsplit(self.path).path
         api = {"/api/board": self.get_board, "/api/job": self.get_job, "/api/job/stamp": self.get_stamp,
-               "/api/inbox": self.get_inbox, "/api/zip": self.get_zip}.get(route)
+               "/api/inbox": self.get_inbox, "/api/zip": self.get_zip,
+               "/api/staff-file": self.get_staff_file}.get(route)
         if api:
             return self.answer(api)
         target = static_target(self.path)
@@ -177,7 +184,8 @@ class Handler(BaseHTTPRequestHandler):
                "/api/check/audio": self.check_audio, "/api/check/artwork": self.check_artwork,
                "/api/spectrum": self.spectrum, "/api/profiles": self.profiles,
                "/api/fix": self.fix, "/api/proof": self.proof,
-               "/api/trash": self.trash, "/api/project": self.save_project}.get(self.path)
+               "/api/trash": self.trash, "/api/project": self.save_project,
+               "/api/staff-file": self.save_staff_file}.get(self.path)
         if api is None:
             return self.reply(404, "not found")
         # A JSON content type makes browsers ask first (CORS preflight,
@@ -371,6 +379,23 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(r.get("project"), dict):
             raise JobError("project must be an object")
         self.json({"projectHash": jobs.write_project(folder, r["project"], r["basedOn"])})
+
+    def staff_file(self, name):
+        if name not in STAFF_FILES:
+            raise JobError(f"no staff file {name!r}")
+        return STAFF_FILES[name]
+
+    def get_staff_file(self):
+        path, example = self.staff_file(self.query("name"))
+        self.json(staff_files.read(path, example))
+
+    def save_staff_file(self):
+        """The pricelist or plant config as the editor decided it; refused
+        with 409 when the file changed since the page read it."""
+        r = self.body()
+        path = self.staff_file(r["name"])[0]
+        staff_files.check(r["name"], r["text"])
+        self.json({"hash": staff_files.write(path, r["text"], r["basedOn"])})
 
     def fix_paths(self, r):
         """(source, target) of a fix in the job: the source must exist, the
