@@ -25,6 +25,7 @@ import { collectVinylColor, applyVinylColor } from "./vinyl-color.js";
 import { collectProofs, applyProofs, proofIssues } from "./proofs.js";
 import { collectShippingBilling, applyShippingBilling } from "./shipping-billing.js";
 import { storedFileText } from "../lib/staff-mode.js";
+import { showPricing } from "./pricing.js";
 import { audioFactsText } from "../lib/audio-facts.js";
 
 // Renders "file: <current name> — <status>", plus a tight second line
@@ -1029,7 +1030,14 @@ async function loadProject(file){
     }
     fileMap.set(name, new File([e.data], name, {type: mimeType(fileExt(name))}));
   }
+  // The plant's quote, when it sent one back with the project.
+  let quote = null;
+  const quoteFile = fileMap.get("price_quote.json");
+  if(quoteFile){
+    try{ quote = JSON.parse(await quoteFile.text()); }catch{ quote = null; }
+  }
   await applyProject(p, fileMap);
+  showPricing(quote);
 }
 
 // Fills the form from a prepared project (prepareProject) and the files by
